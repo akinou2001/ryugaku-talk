@@ -1,24 +1,54 @@
 /* [project]/src/app/globals.css [app-client] (css) */
 :root {
-  --background: #fff;
+  --background: #f7fafd;
   --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background) ; --color-foreground: var(--foreground) ; --font-sans: var(--font-geist-sans) ; --font-mono: var(--font-geist-mono) ;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --card-bg: rgba(255, 255, 255, .85);
+  --card-border: rgba(200, 200, 255, .18);
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --shadow: 0 8px 32px 0 rgba(31, 38, 135, .18);
+  --radius: 1.5rem;
+  --font-sans: "Inter", "Geist", "Arial", sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  letter-spacing: .01em;
+  min-height: 100vh;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1.5px solid var(--card-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  margin: 1.5rem 0;
+  padding: 2rem;
+  transition: box-shadow .2s;
+}
+
+.card:hover {
+  box-shadow: 0 12px 40px rgba(31, 38, 135, .22);
+}
+
+.button-accent {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 9999px;
+  padding: .75rem 2rem;
+  font-weight: 600;
+  transition: background .2s, box-shadow .2s;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, .12);
+}
+
+.button-accent:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 4px 16px rgba(59, 130, 246, .18);
 }
 
 /*# sourceMappingURL=src_app_globals_css_e59ae46c._.single.css.map*/
