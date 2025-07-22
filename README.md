@@ -2,7 +2,7 @@
 
 
 ## ディレクトリ構成
-ryugaku-talk/
+my-matching-app/
 ├── public/                  # 画像・ロゴ・静的ファイル
 │   └── logo.png
 ├── src/
