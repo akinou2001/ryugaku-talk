@@ -21,12 +21,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // 初期セッション取得
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error('Error getting session:', error)
+        setLoading(false)
+        return
+      }
       if (session?.user) {
         fetchUserProfile(session.user.id)
       } else {
         setLoading(false)
       }
+    }).catch((error) => {
+      console.error('Error in getSession:', error)
+      setLoading(false)
     })
 
     // 認証状態の変更を監視
@@ -34,14 +42,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
       async (event, session) => {
         if (session?.user) {
           // プロフィールが存在するかチェック
-          const { data: existingProfile } = await supabase
+          const { data: existingProfile, error: profileCheckError } = await supabase
             .from('profiles')
             .select('id')
             .eq('id', session.user.id)
             .single()
 
+          // エラーが発生した場合（プロフィールが存在しない場合もエラーになる）
+          if (profileCheckError && profileCheckError.code !== 'PGRST116') {
+            console.error('Error checking profile:', profileCheckError)
+          }
+
           // プロフィールが存在しない場合は作成
-          if (!existingProfile) {
+          if (!existingProfile && profileCheckError?.code === 'PGRST116') {
             console.log('Creating profile for user:', session.user.id)
             console.log('User email:', session.user.email)
             console.log('Auth UID:', session.user.id)

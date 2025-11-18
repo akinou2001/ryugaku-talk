@@ -4,18 +4,62 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
-import { MessageCircle, Heart, MessageSquare, Clock, Search, Filter, Plus } from 'lucide-react'
+import { MessageCircle, Heart, MessageSquare, Clock, Search, Filter, Plus, MapPin, GraduationCap } from 'lucide-react'
 
 export default function Board() {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
+  const [selectedCountry, setSelectedCountry] = useState('all')
+  const [selectedUniversity, setSelectedUniversity] = useState('all')
   const [sortBy, setSortBy] = useState('newest')
+  const [availableCountries, setAvailableCountries] = useState<string[]>([])
+  const [availableUniversities, setAvailableUniversities] = useState<string[]>([])
 
   useEffect(() => {
     fetchPosts()
-  }, [selectedCategory, sortBy])
+    fetchFilterOptions()
+  }, [selectedCategory, selectedCountry, selectedUniversity, sortBy])
+
+  const fetchFilterOptions = async () => {
+    try {
+      // 利用可能な国を取得
+      const { data: countryData, error: countryError } = await supabase
+        .from('posts')
+        .select('study_abroad_destination')
+        .not('study_abroad_destination', 'is', null)
+
+      // 利用可能な大学を取得
+      const { data: universityData, error: universityError } = await supabase
+        .from('posts')
+        .select('university')
+        .not('university', 'is', null)
+
+      if (countryError) {
+        console.error('Error fetching countries:', countryError)
+      }
+
+      if (universityError) {
+        console.error('Error fetching universities:', universityError)
+      }
+
+      const countries = Array.from(new Set(
+        (countryData || []).map(item => item.study_abroad_destination).filter(Boolean) as string[]
+      )).sort()
+
+      const universities = Array.from(new Set(
+        (universityData || []).map(item => item.university).filter(Boolean) as string[]
+      )).sort()
+
+      setAvailableCountries(countries)
+      setAvailableUniversities(universities)
+    } catch (error) {
+      console.error('Error fetching filter options:', error)
+      setAvailableCountries([])
+      setAvailableUniversities([])
+    }
+  }
 
   const fetchPosts = async () => {
     try {
@@ -30,12 +74,26 @@ export default function Board() {
         query = query.eq('category', selectedCategory)
       }
 
+      if (selectedCountry !== 'all') {
+        query = query.eq('study_abroad_destination', selectedCountry)
+      }
+
+      if (selectedUniversity !== 'all') {
+        query = query.eq('university', selectedUniversity)
+      }
+
       if (searchTerm) {
         query = query.or(`title.ilike.%${searchTerm}%,content.ilike.%${searchTerm}%`)
       }
 
+      // 並び替え
+      if (sortBy === 'popular') {
+        query = query.order('likes_count', { ascending: false })
+      } else {
+        query = query.order('created_at', { ascending: sortBy === 'oldest' })
+      }
+
       const { data, error } = await query
-        .order('created_at', { ascending: sortBy === 'oldest' })
 
       if (error) {
         console.error('Error fetching posts:', error)
@@ -133,13 +191,13 @@ export default function Board() {
           </button>
         </form>
 
-        <div className="flex flex-col md:flex-row gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="flex items-center space-x-2">
             <Filter className="h-5 w-5 text-gray-400" />
             <select
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
-              className="input-field"
+              className="input-field flex-1"
             >
               <option value="all">すべてのカテゴリ</option>
               <option value="question">質問</option>
@@ -149,10 +207,42 @@ export default function Board() {
           </div>
 
           <div className="flex items-center space-x-2">
+            <MapPin className="h-5 w-5 text-gray-400" />
+            <select
+              value={selectedCountry}
+              onChange={(e) => setSelectedCountry(e.target.value)}
+              className="input-field flex-1"
+            >
+              <option value="all">すべての国</option>
+              {availableCountries.map((country) => (
+                <option key={country} value={country}>
+                  {country}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <GraduationCap className="h-5 w-5 text-gray-400" />
+            <select
+              value={selectedUniversity}
+              onChange={(e) => setSelectedUniversity(e.target.value)}
+              className="input-field flex-1"
+            >
+              <option value="all">すべての大学</option>
+              {availableUniversities.map((university) => (
+                <option key={university} value={university}>
+                  {university}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center space-x-2">
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="input-field"
+              className="input-field flex-1"
             >
               <option value="newest">新しい順</option>
               <option value="oldest">古い順</option>
@@ -160,6 +250,22 @@ export default function Board() {
             </select>
           </div>
         </div>
+
+        {/* フィルターリセット */}
+        {(selectedCategory !== 'all' || selectedCountry !== 'all' || selectedUniversity !== 'all') && (
+          <div className="mt-4">
+            <button
+              onClick={() => {
+                setSelectedCategory('all')
+                setSelectedCountry('all')
+                setSelectedUniversity('all')
+              }}
+              className="text-sm text-primary-600 hover:text-primary-800 font-medium"
+            >
+              フィルターをリセット
+            </button>
+          </div>
+        )}
       </div>
 
       {/* 投稿一覧 */}

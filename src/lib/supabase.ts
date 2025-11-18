@@ -1,9 +1,26 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// 環境変数の検証
+if (!supabaseUrl || !supabaseAnonKey) {
+  if (typeof window === 'undefined') {
+    // サーバーサイドでのエラー
+    console.error('Supabase環境変数が設定されていません')
+    console.error('NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl ? '設定済み' : '未設定')
+    console.error('NEXT_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? '設定済み' : '未設定')
+  } else {
+    // クライアントサイドでの警告
+    console.warn('Supabase環境変数が設定されていません')
+  }
+}
+
+// 空の文字列でもクライアントを作成（エラーを防ぐため）
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder-key'
+)
 
 // 型定義
 export interface User {
@@ -30,7 +47,7 @@ export interface Post {
   study_abroad_destination?: string
   major?: string
   author_id: string
-  author: User
+  author?: User
   likes_count: number
   comments_count: number
   is_pinned: boolean
@@ -44,7 +61,7 @@ export interface Comment {
   content: string
   post_id: string
   author_id: string
-  author: User
+  author?: User
   likes_count: number
   is_solution: boolean
   created_at: string

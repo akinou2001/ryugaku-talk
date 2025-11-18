@@ -48,14 +48,19 @@ export default function PostDetail() {
       
       // いいね状態を確認
       if (user) {
-        const { data: likeData } = await supabase
-          .from('likes')
-          .select('id')
-          .eq('post_id', postId)
-          .eq('user_id', user.id)
-          .single()
-        
-        setLiked(!!likeData)
+        try {
+          const { data: likeData } = await supabase
+            .from('likes')
+            .select('id')
+            .eq('post_id', postId)
+            .eq('user_id', user.id)
+            .single()
+          
+          setLiked(!!likeData)
+        } catch (likeError) {
+          // いいねが存在しない場合はエラーになるが、これは正常
+          setLiked(false)
+        }
       }
     } catch (error: any) {
       setError(error.message || '投稿の取得に失敗しました')

@@ -78,18 +78,22 @@ export default function ChatList() {
       // 会話相手のプロフィール情報を取得
       const otherUserIds = Array.from(conversationMap.keys())
       if (otherUserIds.length > 0) {
-        const { data: users, error: usersError } = await supabase
-          .from('profiles')
-          .select('*')
-          .in('id', otherUserIds)
+        try {
+          const { data: users, error: usersError } = await supabase
+            .from('profiles')
+            .select('*')
+            .in('id', otherUserIds)
 
-        if (!usersError && users) {
-          users.forEach((profile) => {
-            const conversation = conversationMap.get(profile.id)
-            if (conversation) {
-              conversation.otherUser = profile
-            }
-          })
+          if (!usersError && users && users.length > 0) {
+            users.forEach((profile) => {
+              const conversation = conversationMap.get(profile.id)
+              if (conversation) {
+                conversation.otherUser = profile
+              }
+            })
+          }
+        } catch (error) {
+          console.error('Error fetching user profiles:', error)
         }
       }
 
