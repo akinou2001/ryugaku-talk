@@ -29,44 +29,44 @@
 
 ## 📋 セットアップ手順
 
-### 1. リポジトリのクローン
-```bash
-git clone <repository-url>
-cd RyugakuTalk
-```
+### クイックスタート
 
-### 2. 依存関係のインストール
-```bash
-npm install
-```
+詳細なセットアップ手順は以下のガイドを参照してください：
 
-### 3. 環境変数の設定
-`.env.local`ファイルを作成し、以下の環境変数を設定してください：
+- **[SETUP_STEP_BY_STEP.md](./SETUP_STEP_BY_STEP.md)** - ステップバイステップガイド（推奨）
+- **[COMPLETE_SETUP_GUIDE.md](./COMPLETE_SETUP_GUIDE.md)** - 完全版セットアップガイド
+- **[SETUP_QUICK_REFERENCE.md](./SETUP_QUICK_REFERENCE.md)** - クイックリファレンス
 
-```env
-# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+### 基本的な流れ
 
-# Next.js Configuration
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=your_nextauth_secret
-```
+1. **Supabaseプロジェクトの作成**
+   - [Supabase](https://supabase.com)でプロジェクトを作成
+   - API Keysを取得
 
-### 4. Supabaseプロジェクトの設定
+2. **環境変数の設定**
+   - `.env.local`ファイルを作成
+   - 環境変数を設定
 
-1. [Supabase](https://supabase.com)でプロジェクトを作成
-2. プロジェクトのURLとAPIキーを取得
-3. `supabase-schema.sql`の内容をSupabaseのSQLエディタで実行
-4. 認証設定でGoogle OAuthを有効化（必要に応じて）
+3. **データベーススキーマの実行**
+   - `supabase-schema.sql` を実行
+   - `supabase-schema-organization-accounts.sql` を実行
+   - `supabase-schema-admin.sql` を実行
 
-### 5. 開発サーバーの起動
-```bash
-npm run dev
-```
+4. **認証設定**
+   - Site URLを設定
+   - メール確認を無効化（開発環境）
 
-ブラウザで [http://localhost:3000](http://localhost:3000) を開いてアプリケーションを確認してください。
+5. **管理者アカウントの作成**
+   - 通常通りアカウントを作成
+   - SQLで管理者権限を付与
+
+6. **開発サーバーの起動**
+   ```bash
+   npm install
+   npm run dev
+   ```
+
+詳細は [SETUP_STEP_BY_STEP.md](./SETUP_STEP_BY_STEP.md) を参照してください。
 
 ## 📁 プロジェクト構造
 

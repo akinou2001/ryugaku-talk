@@ -16,12 +16,18 @@ export default function NewPost() {
   const [formData, setFormData] = useState({
     title: '',
     content: '',
-    category: 'question' as 'question' | 'diary' | 'information',
+    category: 'question' as 'question' | 'diary' | 'information' | 'official',
     tags: '',
     university: '',
     study_abroad_destination: '',
-    major: ''
+    major: '',
+    is_official: false,
+    official_category: ''
   })
+
+  const isVerifiedOrganization = user && 
+    user.account_type !== 'individual' && 
+    user.verification_status === 'verified'
 
   useEffect(() => {
     const category = searchParams.get('category')
@@ -46,18 +52,22 @@ export default function NewPost() {
     try {
       const tagsArray = formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
       
+      const postData: any = {
+        title: formData.title,
+        content: formData.content,
+        category: formData.category,
+        tags: tagsArray,
+        university: formData.university || null,
+        study_abroad_destination: formData.study_abroad_destination || null,
+        major: formData.major || null,
+        author_id: user.id,
+        is_official: isVerifiedOrganization && formData.is_official,
+        official_category: isVerifiedOrganization && formData.is_official ? formData.official_category : null
+      }
+
       const { data, error } = await supabase
         .from('posts')
-        .insert({
-          title: formData.title,
-          content: formData.content,
-          category: formData.category,
-          tags: tagsArray,
-          university: formData.university || null,
-          study_abroad_destination: formData.study_abroad_destination || null,
-          major: formData.major || null,
-          author_id: user.id
-        })
+        .insert(postData)
         .select()
         .single()
 
@@ -167,8 +177,55 @@ export default function NewPost() {
               <option value="question">質問</option>
               <option value="diary">留学日記</option>
               <option value="information">情報共有</option>
+              {isVerifiedOrganization && (
+                <option value="official">公式投稿</option>
+              )}
             </select>
           </div>
+
+          {/* 組織アカウント用の公式投稿オプション */}
+          {isVerifiedOrganization && formData.category === 'official' && (
+            <>
+              <div>
+                <label className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_official}
+                    onChange={(e) => setFormData(prev => ({ ...prev, is_official: e.target.checked }))}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    公式投稿として公開する
+                  </span>
+                </label>
+                <p className="text-xs text-gray-500 mt-1">
+                  公式投稿は認証済みの組織アカウントからの情報として表示されます
+                </p>
+              </div>
+
+              {formData.is_official && (
+                <div>
+                  <label htmlFor="official_category" className="block text-sm font-medium text-gray-700 mb-2">
+                    公式投稿カテゴリ
+                  </label>
+                  <select
+                    id="official_category"
+                    name="official_category"
+                    value={formData.official_category}
+                    onChange={handleChange}
+                    className="input-field"
+                  >
+                    <option value="">選択してください</option>
+                    <option value="scholarship">奨学金情報</option>
+                    <option value="event">イベント情報</option>
+                    <option value="program">プログラム情報</option>
+                    <option value="announcement">お知らせ</option>
+                    <option value="other">その他</option>
+                  </select>
+                </div>
+              )}
+            </>
+          )}
 
           {/* タイトル */}
           <div>

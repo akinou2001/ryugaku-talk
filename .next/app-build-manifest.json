@@ -11,6 +11,26 @@
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
     ],
+    "/board/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/board/page.js"
+    ],
+    "/posts/[id]/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/posts/[id]/page.js"
+    ],
+    "/diary/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/diary/page.js"
+    ],
+    "/profile/[id]/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/profile/[id]/page.js"
+    ],
     "/posts/new/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -21,45 +41,20 @@
       "static/chunks/main-app.js",
       "static/chunks/app/auth/signin/page.js"
     ],
-    "/auth/signup/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/auth/signup/page.js"
-    ],
-    "/board/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/board/page.js"
-    ],
-    "/diary/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/diary/page.js"
-    ],
-    "/posts/[id]/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/posts/[id]/page.js"
-    ],
-    "/profile/[id]/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/profile/[id]/page.js"
-    ],
     "/chat/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/chat/page.js"
     ],
-    "/profile/[id]/edit/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/profile/[id]/edit/page.js"
-    ],
     "/chat/[userId]/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/chat/[userId]/page.js"
+    ],
+    "/auth/signup/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/auth/signup/page.js"
     ],
     "/not-found": [
       "static/chunks/webpack.js",

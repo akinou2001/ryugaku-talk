@@ -8,7 +8,20 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string, name: string) => Promise<void>
+  signUp: (
+    email: string, 
+    password: string, 
+    name: string,
+    accountType?: 'individual' | 'educational' | 'company' | 'government',
+    organizationData?: {
+      organization_name?: string
+      organization_type?: string
+      organization_url?: string
+      contact_person_name?: string
+      contact_person_email?: string
+      contact_person_phone?: string
+    }
+  ) => Promise<void>
   signOut: () => Promise<void>
   signInWithGoogle: () => Promise<void>
 }
@@ -65,8 +78,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 id: session.user.id,
                 email: session.user.email || '',
                 name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'ユーザー',
+                account_type: 'individual',
                 contribution_score: 0,
-                languages: []
+                languages: [],
+                verification_status: 'unverified'
               })
             if (profileError) {
               console.error('Error creating profile:', profileError)
@@ -117,7 +132,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
     if (error) throw error
   }
 
-  const signUp = async (email: string, password: string, name: string) => {
+  const signUp = async (
+    email: string, 
+    password: string, 
+    name: string,
+    accountType: 'individual' | 'educational' | 'company' | 'government' = 'individual',
+    organizationData?: {
+      organization_name?: string
+      organization_type?: string
+      organization_url?: string
+      contact_person_name?: string
+      contact_person_email?: string
+      contact_person_phone?: string
+    }
+  ) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -126,15 +154,31 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
     // プロフィール作成
     if (data.user) {
+      const profileData: any = {
+        id: data.user.id,
+        email,
+        name,
+        account_type: accountType,
+        contribution_score: 0,
+        languages: [],
+        verification_status: accountType === 'individual' ? 'unverified' : 'pending',
+        is_admin: false,
+        is_active: true
+      }
+
+      // 組織アカウントの場合、組織情報を追加
+      if (accountType !== 'individual' && organizationData) {
+        profileData.organization_name = organizationData.organization_name
+        profileData.organization_type = organizationData.organization_type
+        profileData.organization_url = organizationData.organization_url
+        profileData.contact_person_name = organizationData.contact_person_name
+        profileData.contact_person_email = organizationData.contact_person_email
+        profileData.contact_person_phone = organizationData.contact_person_phone
+      }
+
       const { error: profileError } = await supabase
         .from('profiles')
-        .insert({
-          id: data.user.id,
-          email,
-          name,
-          contribution_score: 0,
-          languages: []
-        })
+        .insert(profileData)
       if (profileError) throw profileError
     }
   }

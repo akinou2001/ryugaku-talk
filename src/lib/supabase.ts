@@ -23,25 +23,64 @@ export const supabase = createClient(
 )
 
 // 型定義
+export type AccountType = 'individual' | 'educational' | 'company' | 'government'
+export type VerificationStatus = 'unverified' | 'pending' | 'verified' | 'rejected'
+
 export interface User {
   id: string
   email: string
   name: string
+  account_type: AccountType
   university?: string
   study_abroad_destination?: string
   major?: string
   bio?: string
   languages: string[]
   contribution_score: number
+  // 組織アカウント用フィールド
+  organization_name?: string
+  organization_type?: string
+  organization_url?: string
+  verification_status: VerificationStatus
+  verification_documents?: string
+  contact_person_name?: string
+  contact_person_email?: string
+  contact_person_phone?: string
+  // 管理者・アカウント管理用フィールド
+  is_admin: boolean
+  is_active: boolean
+  suspended_until?: string
+  suspension_reason?: string
   created_at: string
   updated_at: string
+}
+
+export interface OrganizationVerificationRequest {
+  id: string
+  profile_id: string
+  account_type: 'educational' | 'company' | 'government'
+  organization_name: string
+  organization_type?: string
+  organization_url?: string
+  contact_person_name: string
+  contact_person_email: string
+  contact_person_phone?: string
+  verification_documents?: string
+  request_reason?: string
+  status: 'pending' | 'approved' | 'rejected'
+  reviewed_by?: string
+  reviewed_at?: string
+  review_notes?: string
+  created_at: string
+  updated_at: string
+  profile?: User
 }
 
 export interface Post {
   id: string
   title: string
   content: string
-  category: 'question' | 'diary' | 'information'
+  category: 'question' | 'diary' | 'information' | 'official'
   tags: string[]
   university?: string
   study_abroad_destination?: string
@@ -52,6 +91,8 @@ export interface Post {
   comments_count: number
   is_pinned: boolean
   is_resolved: boolean
+  is_official: boolean
+  official_category?: string
   created_at: string
   updated_at: string
 }

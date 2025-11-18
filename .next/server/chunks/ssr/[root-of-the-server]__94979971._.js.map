@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 6, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"","debugId":null}},
-    {"offset": {"line": 18, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/akino/ryugaku-talk/src/app/page.tsx"],"sourcesContent":["\r\n\r\n// ホームページのコンポーネント\r\n// src/app/page.tsx\r\nexport default function Home() {\r\n  return (\r\n    <main className=\"flex flex-col items-center justify-center min-h-screen gap-6 p-8\">\r\n      <p className=\"text-center max-w-md\">\r\n        エヴァ活したい留学生が集まるSNS\r\n      </p>\r\n      <div className=\"flex gap-4\">\r\n        <a href=\"/consult\" className=\"bg-blue-600 text-white px-4 py-2 rounded\">相談一覧を見る</a>\r\n        <a href=\"/consult/new\" className=\"bg-green-600 text-white px-4 py-2 rounded\">相談を投稿する</a>\r\n      </div>\r\n    </main>\r\n  );\r\n}\r\n"],"names":[],"mappings":"AAEA,iBAAiB;AACjB,mBAAmB;;;;;;AACJ,SAAS;IACtB,qBACE,8OAAC;QAAK,WAAU;;0BACd,8OAAC;gBAAE,WAAU;0BAAuB;;;;;;0BAGpC,8OAAC;gBAAI,WAAU;;kCACb,8OAAC;wBAAE,MAAK;wBAAW,WAAU;kCAA2C;;;;;;kCACxE,8OAAC;wBAAE,MAAK;wBAAe,WAAU;kCAA4C;;;;;;;;;;;;;;;;;;AAIrF","debugId":null}}]
-}

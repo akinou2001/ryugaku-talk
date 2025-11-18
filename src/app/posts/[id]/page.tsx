@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase'
 import type { Post, Comment } from '@/lib/supabase'
 import { Heart, MessageSquare, Share, Flag, Clock, User, MapPin, GraduationCap } from 'lucide-react'
 import Link from 'next/link'
+import { AccountBadge } from '@/components/AccountBadge'
 
 export default function PostDetail() {
   const { user } = useAuth()
@@ -35,7 +36,7 @@ export default function PostDetail() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, university, study_abroad_destination, major)
+          author:profiles(name, university, study_abroad_destination, major, account_type, verification_status, organization_name)
         `)
         .eq('id', postId)
         .single()
@@ -253,7 +254,7 @@ export default function PostDetail() {
           <h1 className="text-3xl font-bold text-gray-900 mb-4">{post.title}</h1>
 
           {/* 投稿者情報 */}
-          <div className="flex items-center space-x-4 mb-6">
+          <div className="flex items-center space-x-4 mb-6 flex-wrap">
             <div className="flex items-center space-x-2">
               <User className="h-5 w-5 text-gray-400" />
               {post.author_id ? (
@@ -265,6 +266,14 @@ export default function PostDetail() {
                 </Link>
               ) : (
                 <span className="font-medium">{post.author?.name || '匿名'}</span>
+              )}
+              {post.author && (
+                <AccountBadge 
+                  accountType={post.author.account_type} 
+                  verificationStatus={post.author.verification_status}
+                  organizationName={post.author.organization_name}
+                  size="sm"
+                />
               )}
             </div>
             {post.author?.university && (

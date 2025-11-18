@@ -5,8 +5,9 @@ import { useParams } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import type { User, Post } from '@/lib/supabase'
-import { User as UserIcon, MapPin, GraduationCap, Calendar, MessageSquare, Heart, Edit, Settings, Send } from 'lucide-react'
+import { User as UserIcon, MapPin, GraduationCap, Calendar, MessageSquare, Heart, Edit, Settings, Send, Building2 } from 'lucide-react'
 import Link from 'next/link'
+import { AccountBadge } from '@/components/AccountBadge'
 
 export default function Profile() {
   const { user: currentUser } = useAuth()
@@ -140,7 +141,15 @@ export default function Profile() {
                 <UserIcon className="h-10 w-10 text-primary-600" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">{profile.name}</h1>
+                <div className="flex items-center space-x-2 mb-1">
+                  <h1 className="text-2xl font-bold text-gray-900">{profile.name}</h1>
+                  <AccountBadge 
+                    accountType={profile.account_type} 
+                    verificationStatus={profile.verification_status}
+                    organizationName={profile.organization_name}
+                    size="md"
+                  />
+                </div>
                 <p className="text-gray-600">{profile.email}</p>
               </div>
             </div>
@@ -169,6 +178,49 @@ export default function Profile() {
           {/* 基本情報 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div className="space-y-4">
+              {/* 組織アカウント情報 */}
+              {profile.account_type !== 'individual' && (
+                <>
+                  {profile.organization_name && (
+                    <div className="flex items-center space-x-2">
+                      <Building2 className="h-5 w-5 text-gray-400" />
+                      <span className="text-gray-600">組織名: </span>
+                      <span className="font-medium">{profile.organization_name}</span>
+                    </div>
+                  )}
+                  {profile.organization_type && (
+                    <div className="flex items-center space-x-2">
+                      <Building2 className="h-5 w-5 text-gray-400" />
+                      <span className="text-gray-600">組織種別: </span>
+                      <span className="font-medium">{profile.organization_type}</span>
+                    </div>
+                  )}
+                  {profile.organization_url && (
+                    <div className="flex items-center space-x-2">
+                      <Building2 className="h-5 w-5 text-gray-400" />
+                      <span className="text-gray-600">URL: </span>
+                      <a 
+                        href={profile.organization_url} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="font-medium text-primary-600 hover:text-primary-800"
+                      >
+                        {profile.organization_url}
+                      </a>
+                    </div>
+                  )}
+                  {profile.verification_status === 'pending' && (
+                    <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg text-sm">
+                      認証審査中です。通常1-3営業日で完了します。
+                    </div>
+                  )}
+                  {profile.verification_status === 'rejected' && (
+                    <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
+                      認証が拒否されました。詳細はお問い合わせください。
+                    </div>
+                  )}
+                </>
+              )}
               {profile.university && (
                 <div className="flex items-center space-x-2">
                   <GraduationCap className="h-5 w-5 text-gray-400" />

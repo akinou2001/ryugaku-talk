@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
 import { MessageCircle, Heart, MessageSquare, Clock, Search, Filter, Plus, MapPin, GraduationCap } from 'lucide-react'
+import { AccountBadge } from '@/components/AccountBadge'
 
 export default function Board() {
   const [posts, setPosts] = useState<Post[]>([])
@@ -67,7 +68,7 @@ export default function Board() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name)
+          author:profiles(name, account_type, verification_status, organization_name)
         `)
 
       if (selectedCategory !== 'all') {
@@ -297,7 +298,7 @@ export default function Board() {
               </p>
               
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4 text-sm text-gray-500">
+                <div className="flex items-center space-x-4 text-sm text-gray-500 flex-wrap">
                   <span>by </span>
                   {post.author_id ? (
                     <Link 
@@ -309,6 +310,14 @@ export default function Board() {
                     </Link>
                   ) : (
                     <span>{post.author?.name || '匿名'}</span>
+                  )}
+                  {post.author && (
+                    <AccountBadge 
+                      accountType={post.author.account_type} 
+                      verificationStatus={post.author.verification_status}
+                      organizationName={post.author.organization_name}
+                      size="sm"
+                    />
                   )}
                   {post.university && (
                     <span>{post.university}</span>

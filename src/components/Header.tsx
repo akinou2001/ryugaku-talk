@@ -1,16 +1,32 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from './Providers'
-import { Menu, X, User, LogOut, Settings, MessageCircle } from 'lucide-react'
+import { Menu, X, User, LogOut, Settings, MessageCircle, Shield } from 'lucide-react'
+import { isAdmin } from '@/lib/admin'
 
 export function Header() {
   const { user, signOut } = useAuth()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
+  const [isAdminUser, setIsAdminUser] = useState(false)
   const router = useRouter()
+
+  useEffect(() => {
+    if (user) {
+      checkAdminStatus()
+    } else {
+      setIsAdminUser(false)
+    }
+  }, [user])
+
+  const checkAdminStatus = async () => {
+    if (!user) return
+    const admin = await isAdmin(user.id)
+    setIsAdminUser(admin)
+  }
 
   const handleSignOut = async () => {
     try {
@@ -69,6 +85,16 @@ export function Header() {
                       <User className="h-4 w-4 mr-2" />
                       プロフィール
                     </Link>
+                    {isAdminUser && (
+                      <Link
+                        href="/admin"
+                        className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50"
+                        onClick={() => setIsUserMenuOpen(false)}
+                      >
+                        <Shield className="h-4 w-4 mr-2" />
+                        管理者ダッシュボード
+                      </Link>
+                    )}
                     <Link
                       href="/settings"
                       className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50"
@@ -130,6 +156,11 @@ export function Header() {
                   <Link href={`/profile/${user.id}`} className="block text-gray-700 hover:text-primary-600 transition-colors mb-2">
                     プロフィール
                   </Link>
+                  {isAdminUser && (
+                    <Link href="/admin" className="block text-gray-700 hover:text-primary-600 transition-colors mb-2">
+                      管理者ダッシュボード
+                    </Link>
+                  )}
                   <Link href="/settings" className="block text-gray-700 hover:text-primary-600 transition-colors mb-2">
                     設定
                   </Link>

@@ -1,9 +1,8 @@
 {
-  "/board/page": "app/board/page.js",
-  "/profile/[id]/page": "app/profile/[id]/page.js",
   "/page": "app/page.js",
-  "/favicon.ico/route": "app/favicon.ico/route.js",
   "/auth/signin/page": "app/auth/signin/page.js",
-  "/chat/page": "app/chat/page.js",
-  "/auth/signup/page": "app/auth/signup/page.js"
+  "/diary/page": "app/diary/page.js",
+  "/board/page": "app/board/page.js",
+  "/posts/new/page": "app/posts/new/page.js",
+  "/chat/page": "app/chat/page.js"
 }
