@@ -330,7 +330,7 @@ export default function Profile() {
             </div>
           ) : (
             <div className="space-y-4">
-              {posts.map((post: Post) => (
+              {posts.map((post) => (
                 <Link key={post.id} href={`/posts/${post.id}`} className="block p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                   <div className="flex items-center justify-between mb-2">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(post.category)}`}>

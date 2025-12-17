@@ -58,9 +58,6 @@ export function Header() {
             <Link href="/chat" className="text-gray-700 hover:text-primary-600 transition-colors">
               チャット
             </Link>
-            <Link href="/ai" className="text-gray-700 hover:text-primary-600 transition-colors">
-              AI検索
-            </Link>
             <Link href="/posts/new" className="text-gray-700 hover:text-primary-600 transition-colors">
               投稿する
             </Link>
@@ -149,9 +146,6 @@ export function Header() {
               </Link>
               <Link href="/chat" className="text-gray-700 hover:text-primary-600 transition-colors">
                 チャット
-              </Link>
-              <Link href="/ai" className="text-gray-700 hover:text-primary-600 transition-colors">
-                AI検索
               </Link>
               <Link href="/posts/new" className="text-gray-700 hover:text-primary-600 transition-colors">
                 投稿する

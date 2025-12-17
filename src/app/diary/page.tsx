@@ -46,11 +46,11 @@ export default function Diary() {
       }
 
       const countries = Array.from(new Set(
-        (countryData || []).map((item: any) => item.study_abroad_destination).filter(Boolean) as string[]
+        (countryData || []).map(item => item.study_abroad_destination).filter(Boolean) as string[]
       )).sort()
 
       const universities = Array.from(new Set(
-        (universityData || []).map((item: any) => item.university).filter(Boolean) as string[]
+        (universityData || []).map(item => item.university).filter(Boolean) as string[]
       )).sort()
 
       setAvailableCountries(countries)
@@ -183,7 +183,7 @@ export default function Diary() {
               className="input-field flex-1"
             >
               <option value="all">すべての国</option>
-              {availableCountries.map((country: string) => (
+              {availableCountries.map((country) => (
                 <option key={country} value={country}>
                   {country}
                 </option>
@@ -199,7 +199,7 @@ export default function Diary() {
               className="input-field flex-1"
             >
               <option value="all">すべての大学</option>
-              {availableUniversities.map((university: string) => (
+              {availableUniversities.map((university) => (
                 <option key={university} value={university}>
                   {university}
                 </option>
@@ -248,7 +248,7 @@ export default function Diary() {
         </div>
       ) : (
         <div className="space-y-6">
-          {posts.map((post: Post) => (
+          {posts.map((post) => (
             <Link key={post.id} href={`/posts/${post.id}`} className="card hover:shadow-md transition-shadow block">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center space-x-2">
@@ -271,7 +271,7 @@ export default function Diary() {
               {/* タグ */}
               {post.tags && post.tags.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-4">
-                  {post.tags.slice(0, 3).map((tag: string, index: number) => (
+                  {post.tags.slice(0, 3).map((tag, index) => (
                     <span
                       key={index}
                       className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm"
