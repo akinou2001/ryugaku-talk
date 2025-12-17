@@ -1,8 +1,8 @@
 {
+  "/not-found": "app/not-found.js",
   "/page": "app/page.js",
-  "/auth/signin/page": "app/auth/signin/page.js",
-  "/diary/page": "app/diary/page.js",
+  "/posts/[id]/page": "app/posts/[id]/page.js",
+  "/chat/page": "app/chat/page.js",
   "/board/page": "app/board/page.js",
-  "/posts/new/page": "app/posts/new/page.js",
-  "/chat/page": "app/chat/page.js"
+  "/ai/page": "app/ai/page.js"
 }

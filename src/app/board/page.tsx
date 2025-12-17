@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
@@ -11,6 +11,8 @@ export default function Board() {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [useSemanticSearch, setUseSemanticSearch] = useState(false)
+  const [aiSearching, setAiSearching] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [selectedCountry, setSelectedCountry] = useState('all')
   const [selectedUniversity, setSelectedUniversity] = useState('all')
@@ -46,11 +48,11 @@ export default function Board() {
       }
 
       const countries = Array.from(new Set(
-        (countryData || []).map(item => item.study_abroad_destination).filter(Boolean) as string[]
+        (countryData || []).map((item: any) => item.study_abroad_destination).filter(Boolean) as string[]
       )).sort()
 
       const universities = Array.from(new Set(
-        (universityData || []).map(item => item.university).filter(Boolean) as string[]
+        (universityData || []).map((item: any) => item.university).filter(Boolean) as string[]
       )).sort()
 
       setAvailableCountries(countries)
@@ -84,7 +86,37 @@ export default function Board() {
       }
 
       if (searchTerm) {
-        query = query.or(`title.ilike.%${searchTerm}%,content.ilike.%${searchTerm}%`)
+        if (useSemanticSearch) {
+          // call server route to get expanded keywords
+          try {
+            setAiSearching(true)
+            const res = await fetch('/api/ai-query-expand', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query: searchTerm }),
+            })
+            const json = await res.json()
+            const keywords: string[] = (json?.keywords || [searchTerm]).slice(0, 6)
+            // build OR clauses like title.ilike.%k% , content.ilike.%k%
+            const clauses: string[] = []
+            keywords.forEach((k) => {
+              const safe = String(k).replace(/%/g, '')
+              if (!safe) return
+              clauses.push(`title.ilike.%${safe}%`)
+              clauses.push(`content.ilike.%${safe}%`)
+            })
+            if (clauses.length > 0) {
+              query = query.or(clauses.join(','))
+            }
+          } catch (err) {
+            console.error('AI query expand failed, falling back to simple search:', err)
+            query = query.or(`title.ilike.%${searchTerm}%,content.ilike.%${searchTerm}%`)
+          } finally {
+            setAiSearching(false)
+          }
+        } else {
+          query = query.or(`title.ilike.%${searchTerm}%,content.ilike.%${searchTerm}%`)
+        }
       }
 
       // 並び替え
@@ -187,9 +219,20 @@ export default function Board() {
               className="input-field pl-10"
             />
           </div>
-          <button type="submit" className="btn-primary">
-            検索
-          </button>
+          <div className="flex items-center space-x-2">
+            <label className="flex items-center space-x-2 text-sm">
+              <input
+                type="checkbox"
+                checked={useSemanticSearch}
+                onChange={(e) => setUseSemanticSearch(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <span>AI 検索 (Qwen)</span>
+            </label>
+            <button type="submit" className="btn-primary" disabled={aiSearching}>
+              {aiSearching ? '検索中...' : '検索'}
+            </button>
+          </div>
         </form>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -215,11 +258,11 @@ export default function Board() {
               className="input-field flex-1"
             >
               <option value="all">すべての国</option>
-              {availableCountries.map((country) => (
-                <option key={country} value={country}>
-                  {country}
-                </option>
-              ))}
+              {availableCountries.map((country: string) => (
+                  <option key={country} value={country}>
+                    {country}
+                  </option>
+                ))}
             </select>
           </div>
 
@@ -231,7 +274,7 @@ export default function Board() {
               className="input-field flex-1"
             >
               <option value="all">すべての大学</option>
-              {availableUniversities.map((university) => (
+              {availableUniversities.map((university: string) => (
                 <option key={university} value={university}>
                   {university}
                 </option>
@@ -277,7 +320,7 @@ export default function Board() {
         </div>
       ) : (
         <div className="space-y-6">
-          {posts.map((post) => (
+          {posts.map((post: Post) => (
             <Link key={post.id} href={`/posts/${post.id}`} className="card hover:shadow-md transition-shadow block">
               <div className="flex items-center justify-between mb-3">
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(post.category)}`}>
@@ -303,7 +346,7 @@ export default function Board() {
                   {post.author_id ? (
                     <Link 
                       href={`/profile/${post.author_id}`}
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e: React.MouseEvent) => e.stopPropagation()}
                       className="text-primary-600 hover:text-primary-800 font-medium"
                     >
                       {post.author?.name || '匿名'}
