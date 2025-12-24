@@ -125,11 +125,21 @@ export function Providers({ children }: { children: React.ReactNode }) {
   }
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-    if (error) throw error
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      if (error) {
+        console.error('Sign in error:', error)
+        throw new Error(error.message || 'ログインに失敗しました。メールアドレスとパスワードを確認してください。')
+      }
+    } catch (error: any) {
+      if (error.message) {
+        throw error
+      }
+      throw new Error('ネットワークエラーが発生しました。接続を確認してください。')
+    }
   }
 
   const signUp = async (
@@ -146,40 +156,69 @@ export function Providers({ children }: { children: React.ReactNode }) {
       contact_person_phone?: string
     }
   ) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-    })
-    if (error) throw error
-
-    // プロフィール作成
-    if (data.user) {
-      const profileData: any = {
-        id: data.user.id,
-        email,
-        name,
-        account_type: accountType,
-        contribution_score: 0,
-        languages: [],
-        verification_status: accountType === 'individual' ? 'unverified' : 'pending',
-        is_admin: false,
-        is_active: true
+    try {
+      // メールアドレスの正規化（前後の空白を削除、小文字に変換）
+      const normalizedEmail = email.trim().toLowerCase()
+      
+      // メールアドレスのバリデーション
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(normalizedEmail)) {
+        throw new Error('有効なメールアドレスを入力してください（例: user@example.com）')
       }
 
-      // 組織アカウントの場合、組織情報を追加
-      if (accountType !== 'individual' && organizationData) {
-        profileData.organization_name = organizationData.organization_name
-        profileData.organization_type = organizationData.organization_type
-        profileData.organization_url = organizationData.organization_url
-        profileData.contact_person_name = organizationData.contact_person_name
-        profileData.contact_person_email = organizationData.contact_person_email
-        profileData.contact_person_phone = organizationData.contact_person_phone
+      const { data, error } = await supabase.auth.signUp({
+        email: normalizedEmail,
+        password,
+      })
+      if (error) {
+        console.error('Sign up error:', error)
+        // より詳細なエラーメッセージ
+        if (error.message.includes('invalid') || error.message.includes('Email')) {
+          throw new Error('メールアドレスの形式が正しくありません。有効なメールアドレスを入力してください。')
+        }
+        throw new Error(error.message || 'アカウント作成に失敗しました。')
       }
 
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert(profileData)
-      if (profileError) throw profileError
+      // プロフィール作成
+      if (data.user) {
+        const profileData: any = {
+          id: data.user.id,
+          email: normalizedEmail,
+          name,
+          account_type: accountType,
+          contribution_score: 0,
+          languages: [],
+          verification_status: accountType === 'individual' ? 'unverified' : 'pending',
+          is_admin: false,
+          is_active: true
+        }
+
+        // 組織アカウントの場合、組織情報を追加
+        if (accountType !== 'individual' && organizationData) {
+          profileData.organization_name = organizationData.organization_name
+          profileData.organization_type = organizationData.organization_type
+          profileData.organization_url = organizationData.organization_url
+          profileData.contact_person_name = organizationData.contact_person_name
+          profileData.contact_person_email = organizationData.contact_person_email
+          profileData.contact_person_phone = organizationData.contact_person_phone
+        }
+
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert(profileData)
+        if (profileError) {
+          console.error('Profile creation error:', profileError)
+          throw new Error(profileError.message || 'プロフィールの作成に失敗しました。データベースの設定を確認してください。')
+        }
+
+        // 組織アカウントの場合、認証申請は手動で提出する必要がある
+        // ユーザーは /verification/request から申請フォームを提出する
+      }
+    } catch (error: any) {
+      if (error.message) {
+        throw error
+      }
+      throw new Error('ネットワークエラーが発生しました。接続を確認してください。')
     }
   }
 

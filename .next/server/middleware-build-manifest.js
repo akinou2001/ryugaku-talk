@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 globalThis.__BUILD_MANIFEST = {
   "pages": {
     "/_app": []
@@ -20,3 +21,6 @@ globalThis.__BUILD_MANIFEST.lowPriorityFiles = [
 "/static/" + process.env.__NEXT_BUILD_ID + "/_buildManifest.js",
 "/static/" + process.env.__NEXT_BUILD_ID + "/_ssgManifest.js"
 ];
+=======
+self.__BUILD_MANIFEST={"polyfillFiles":["static/chunks/polyfills.js"],"devFiles":[],"ampDevFiles":[],"lowPriorityFiles":["static/development/_buildManifest.js","static/development/_ssgManifest.js"],"rootMainFiles":["static/chunks/webpack.js","static/chunks/main-app.js"],"pages":{"/_app":[]},"ampFirstPages":[]}
+>>>>>>> 7e65338 (community)

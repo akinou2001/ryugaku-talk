@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
-import { isAdmin, getVerificationRequests, approveVerificationRequest, rejectVerificationRequest, getUsers, getAdminStats } from '@/lib/admin'
+import { isAdmin, getVerificationRequests, approveVerificationRequest, rejectVerificationRequest, getUsers, getAdminStats, updateVerificationStatus } from '@/lib/admin'
 import type { User, OrganizationVerificationRequest } from '@/lib/supabase'
 import { Shield, Users, FileCheck, AlertCircle, CheckCircle, XCircle, Search, Filter, BarChart3, UserCheck, UserX } from 'lucide-react'
 
@@ -390,39 +390,70 @@ export default function AdminDashboard() {
 
             {/* ユーザー一覧 */}
             <div className="space-y-4">
-              {users.map((user) => (
-                <div key={user.id} className="card">
+              {users.map((targetUser) => (
+                <div key={targetUser.id} className="card">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-2 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900">{user.name}</h3>
-                        {!user.is_active && (
+                        <h3 className="text-lg font-semibold text-gray-900">{targetUser.name}</h3>
+                        {!targetUser.is_active && (
                           <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">
                             停止中
                           </span>
                         )}
-                        {user.is_admin && (
+                        {targetUser.is_admin && (
                           <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
                             管理者
                           </span>
                         )}
                       </div>
                       <div className="space-y-1 text-sm text-gray-600">
-                        <p><strong>メール:</strong> {user.email}</p>
-                        {user.organization_name && (
-                          <p><strong>組織:</strong> {user.organization_name}</p>
+                        <p><strong>メール:</strong> {targetUser.email}</p>
+                        {targetUser.organization_name && (
+                          <p><strong>組織:</strong> {targetUser.organization_name}</p>
                         )}
-                        <p><strong>登録日:</strong> {new Date(user.created_at).toLocaleDateString('ja-JP')}</p>
+                        <p><strong>登録日:</strong> {new Date(targetUser.created_at).toLocaleDateString('ja-JP')}</p>
                       </div>
                     </div>
                     <div className="flex space-x-2">
                       <a
-                        href={`/profile/${user.id}`}
+                        href={`/profile/${targetUser.id}`}
                         className="btn-secondary text-sm"
                         target="_blank"
                       >
                         プロフィール
                       </a>
+                      {targetUser.account_type !== 'individual' && (
+                        <div className="relative">
+                          <select
+                            value={targetUser.verification_status}
+                            onChange={async (e) => {
+                              const newStatus = e.target.value as 'pending' | 'verified' | 'rejected'
+                              if (confirm(`認証状態を「${newStatus === 'verified' ? '認証済み' : newStatus === 'rejected' ? '拒否' : '審査中'}」に変更しますか？`)) {
+                                if (!user) {
+                                  alert('管理者情報が取得できません')
+                                  return
+                                }
+                                const result = await updateVerificationStatus(targetUser.id, newStatus, user.id, '')
+                                if (result.success) {
+                                  alert('認証状態を更新しました')
+                                  loadData()
+                                } else {
+                                  alert(`エラー: ${result.error}`)
+                                }
+                              } else {
+                                // キャンセルされた場合は元の値に戻す
+                                e.target.value = targetUser.verification_status
+                              }
+                            }}
+                            className="input-field text-sm"
+                          >
+                            <option value="pending">審査中</option>
+                            <option value="verified">認証済み</option>
+                            <option value="rejected">拒否</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

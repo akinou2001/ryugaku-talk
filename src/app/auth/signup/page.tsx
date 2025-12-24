@@ -21,7 +21,6 @@ export default function SignUp() {
   // 組織アカウント用フィールド
   const [organizationName, setOrganizationName] = useState('')
   const [organizationType, setOrganizationType] = useState('')
-  const [organizationUrl, setOrganizationUrl] = useState('')
   const [contactPersonName, setContactPersonName] = useState('')
   const [contactPersonEmail, setContactPersonEmail] = useState('')
   const [contactPersonPhone, setContactPersonPhone] = useState('')
@@ -30,6 +29,12 @@ export default function SignUp() {
   const router = useRouter()
 
   const isOrganizationAccount = accountType !== 'individual'
+
+  // メールアドレスのバリデーション
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    return emailRegex.test(email)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -48,20 +53,39 @@ export default function SignUp() {
       return
     }
 
-    // 組織アカウントのバリデーション
-    if (isOrganizationAccount) {
-      if (!organizationName.trim()) {
-        setError('組織名を入力してください')
+    // 個人アカウントのバリデーション
+    if (!isOrganizationAccount) {
+      if (!email.trim()) {
+        setError('メールアドレスを入力してください')
         setLoading(false)
         return
       }
+      if (!validateEmail(email)) {
+        setError('有効なメールアドレスを入力してください（例: user@example.com）')
+        setLoading(false)
+        return
+      }
+    }
+
+    // 組織アカウントのバリデーション
+    if (isOrganizationAccount) {
       if (!contactPersonName.trim()) {
         setError('担当者名を入力してください')
         setLoading(false)
         return
       }
+      if (!organizationName.trim()) {
+        setError('組織名を入力してください')
+        setLoading(false)
+        return
+      }
       if (!contactPersonEmail.trim()) {
         setError('担当者メールアドレスを入力してください')
+        setLoading(false)
+        return
+      }
+      if (!validateEmail(contactPersonEmail)) {
+        setError('有効な担当者メールアドレスを入力してください（例: contact@example.com）')
         setLoading(false)
         return
       }
@@ -71,14 +95,23 @@ export default function SignUp() {
       const organizationData = isOrganizationAccount ? {
         organization_name: organizationName,
         organization_type: organizationType,
-        organization_url: organizationUrl,
         contact_person_name: contactPersonName,
         contact_person_email: contactPersonEmail,
         contact_person_phone: contactPersonPhone
       } : undefined
 
-      await signUp(email, password, name, accountType, organizationData)
-      router.push('/')
+      // 組織アカウントの場合は担当者メールアドレスをログイン用メールアドレスとして使用
+      const loginEmail = isOrganizationAccount ? contactPersonEmail : email
+      const loginName = isOrganizationAccount ? contactPersonName : name
+
+      await signUp(loginEmail, password, loginName, accountType, organizationData)
+      
+      // 組織アカウントの場合は認証申請ページにリダイレクト
+      if (isOrganizationAccount) {
+        router.push('/verification/request')
+      } else {
+        router.push('/')
+      }
     } catch (error: any) {
       setError(error.message || 'アカウント作成に失敗しました')
     } finally {
@@ -179,31 +212,79 @@ export default function SignUp() {
           </div>
 
           <div className="space-y-4">
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                {isOrganizationAccount ? '担当者名' : 'お名前'}
-              </label>
-              <div className="mt-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <User className="h-5 w-5 text-gray-400" />
+            {/* 個人アカウント用フィールド */}
+            {!isOrganizationAccount && (
+              <>
+                <div>
+                  <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                    お名前
+                  </label>
+                  <div className="mt-1 relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <User className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      id="name"
+                      name="name"
+                      type="text"
+                      autoComplete="name"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="input-field pl-10"
+                      placeholder="山田太郎"
+                    />
+                  </div>
                 </div>
-                <input
-                  id="name"
-                  name="name"
-                  type="text"
-                  autoComplete="name"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="input-field pl-10"
-                  placeholder={isOrganizationAccount ? "山田太郎" : "山田太郎"}
-                />
-              </div>
-            </div>
+
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                    メールアドレス
+                  </label>
+                  <div className="mt-1 relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Mail className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      id="email"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="input-field pl-10"
+                      placeholder="your@email.com"
+                    />
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* 組織アカウント用フィールド */}
             {isOrganizationAccount && (
               <>
+                <div>
+                  <label htmlFor="contactPersonName" className="block text-sm font-medium text-gray-700">
+                    担当者名 <span className="text-red-500">*</span>
+                  </label>
+                  <div className="mt-1 relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <User className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      id="contactPersonName"
+                      name="contactPersonName"
+                      type="text"
+                      required
+                      value={contactPersonName}
+                      onChange={(e) => setContactPersonName(e.target.value)}
+                      className="input-field pl-10"
+                      placeholder="山田太郎"
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label htmlFor="organizationName" className="block text-sm font-medium text-gray-700">
                     組織名 <span className="text-red-500">*</span>
@@ -241,50 +322,24 @@ export default function SignUp() {
                 </div>
 
                 <div>
-                  <label htmlFor="organizationUrl" className="block text-sm font-medium text-gray-700">
-                    組織URL
-                  </label>
-                  <input
-                    id="organizationUrl"
-                    name="organizationUrl"
-                    type="url"
-                    value={organizationUrl}
-                    onChange={(e) => setOrganizationUrl(e.target.value)}
-                    className="input-field"
-                    placeholder="https://example.com"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="contactPersonName" className="block text-sm font-medium text-gray-700">
-                    担当者名 <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    id="contactPersonName"
-                    name="contactPersonName"
-                    type="text"
-                    required
-                    value={contactPersonName}
-                    onChange={(e) => setContactPersonName(e.target.value)}
-                    className="input-field"
-                    placeholder="山田太郎"
-                  />
-                </div>
-
-                <div>
                   <label htmlFor="contactPersonEmail" className="block text-sm font-medium text-gray-700">
                     担当者メールアドレス <span className="text-red-500">*</span>
                   </label>
-                  <input
-                    id="contactPersonEmail"
-                    name="contactPersonEmail"
-                    type="email"
-                    required
-                    value={contactPersonEmail}
-                    onChange={(e) => setContactPersonEmail(e.target.value)}
-                    className="input-field"
-                    placeholder="contact@example.com"
-                  />
+                  <div className="mt-1 relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Mail className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      id="contactPersonEmail"
+                      name="contactPersonEmail"
+                      type="email"
+                      required
+                      value={contactPersonEmail}
+                      onChange={(e) => setContactPersonEmail(e.target.value)}
+                      className="input-field pl-10"
+                      placeholder="contact@example.com"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -303,28 +358,6 @@ export default function SignUp() {
                 </div>
               </>
             )}
-
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                メールアドレス
-              </label>
-              <div className="mt-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="input-field pl-10"
-                  placeholder="your@email.com"
-                />
-              </div>
-            </div>
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">

@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
   "/_global-error/page": "app/_global-error/page.js",
   "/_not-found/page": "app/_not-found/page.js",
   "/admin/page": "app/admin/page.js",
@@ -19,4 +20,11 @@
   "/posts/new/page": "app/posts/new/page.js",
   "/profile/[id]/edit/page": "app/profile/[id]/edit/page.js",
   "/profile/[id]/page": "app/profile/[id]/page.js"
+=======
+  "/page": "app/page.js",
+  "/chat/page": "app/chat/page.js",
+  "/diary/page": "app/diary/page.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/posts/new/page": "app/posts/new/page.js"
+>>>>>>> 7e65338 (community)
 }

@@ -259,6 +259,91 @@ export async function unsuspendUser(userId: string) {
 }
 
 /**
+ * 組織アカウントの認証状態を直接更新
+ */
+export async function updateVerificationStatus(
+  userId: string,
+  status: 'pending' | 'verified' | 'rejected',
+  adminId: string,
+  reviewNotes?: string
+) {
+  try {
+    // プロフィールの認証ステータスを更新
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({
+        verification_status: status,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+
+    if (profileError) {
+      throw profileError
+    }
+
+    // 認証申請が存在する場合は更新、存在しない場合は作成
+    const { data: existingRequest } = await supabase
+      .from('organization_verification_requests')
+      .select('id')
+      .eq('profile_id', userId)
+      .single()
+
+    if (existingRequest) {
+      // 既存の申請を更新
+      const { error: updateError } = await supabase
+        .from('organization_verification_requests')
+        .update({
+          status: status === 'verified' ? 'approved' : status === 'rejected' ? 'rejected' : 'pending',
+          reviewed_by: adminId,
+          reviewed_at: new Date().toISOString(),
+          review_notes: reviewNotes
+        })
+        .eq('id', existingRequest.id)
+
+      if (updateError) {
+        console.error('Error updating verification request:', updateError)
+        // 申請の更新に失敗しても、プロフィールの更新は成功しているので続行
+      }
+    } else {
+      // 認証申請が存在しない場合は作成（管理者が直接認証した場合）
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('account_type, organization_name, organization_type, organization_url, contact_person_name, contact_person_email, contact_person_phone')
+        .eq('id', userId)
+        .single()
+
+      if (profile && profile.account_type !== 'individual') {
+        const { error: createError } = await supabase
+          .from('organization_verification_requests')
+          .insert({
+            profile_id: userId,
+            account_type: profile.account_type,
+            organization_name: profile.organization_name || '',
+            organization_type: profile.organization_type || null,
+            organization_url: profile.organization_url || null,
+            contact_person_name: profile.contact_person_name || '',
+            contact_person_email: profile.contact_person_email || '',
+            contact_person_phone: profile.contact_person_phone || null,
+            status: status === 'verified' ? 'approved' : status === 'rejected' ? 'rejected' : 'pending',
+            reviewed_by: adminId,
+            reviewed_at: new Date().toISOString(),
+            review_notes: reviewNotes
+          })
+
+        if (createError) {
+          console.error('Error creating verification request:', createError)
+          // 申請の作成に失敗しても、プロフィールの更新は成功しているので続行
+        }
+      }
+    }
+
+    return { success: true, error: null }
+  } catch (error: any) {
+    return { success: false, error: error.message || '認証状態の更新に失敗しました' }
+  }
+}
+
+/**
  * 統計情報を取得
  */
 export async function getAdminStats() {
