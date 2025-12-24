@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from './Providers'
-import { Menu, X, User, LogOut, Settings, MessageCircle, Shield } from 'lucide-react'
+import { Menu, X, User, LogOut, Settings, MessageCircle, Shield, Users, Building2 } from 'lucide-react'
 import { isAdmin } from '@/lib/admin'
 
 export function Header() {
@@ -61,6 +61,18 @@ export function Header() {
             <Link href="/posts/new" className="text-gray-700 hover:text-primary-600 transition-colors">
               投稿する
             </Link>
+            {user && user.account_type !== 'individual' && (
+              <>
+                <Link href="/communities" className="text-gray-700 hover:text-primary-600 transition-colors">
+                  コミュニティ
+                </Link>
+                {user.verification_status === 'verified' && (
+                  <Link href="/communities/new" className="text-gray-700 hover:text-primary-600 transition-colors">
+                    コミュニティ作成
+                  </Link>
+                )}
+              </>
+            )}
           </nav>
 
           {/* ユーザーメニュー */}
@@ -85,6 +97,38 @@ export function Header() {
                       <User className="h-4 w-4 mr-2" />
                       プロフィール
                     </Link>
+                    {user.account_type !== 'individual' && (
+                      <>
+                        <Link
+                          href="/communities"
+                          className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50"
+                          onClick={() => setIsUserMenuOpen(false)}
+                        >
+                          <Users className="h-4 w-4 mr-2" />
+                          コミュニティ
+                        </Link>
+                        {user.verification_status === 'verified' && (
+                          <Link
+                            href="/communities/new"
+                            className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50"
+                            onClick={() => setIsUserMenuOpen(false)}
+                          >
+                            <Building2 className="h-4 w-4 mr-2" />
+                            コミュニティ作成
+                          </Link>
+                        )}
+                        {(user.verification_status === 'unverified' || user.verification_status === 'pending' || user.verification_status === 'rejected') && (
+                          <Link
+                            href="/verification/request"
+                            className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50"
+                            onClick={() => setIsUserMenuOpen(false)}
+                          >
+                            <Building2 className="h-4 w-4 mr-2" />
+                            {user.verification_status === 'pending' ? '認証申請を確認' : '認証申請をする'}
+                          </Link>
+                        )}
+                      </>
+                    )}
                     {isAdminUser && (
                       <Link
                         href="/admin"
@@ -150,12 +194,39 @@ export function Header() {
               <Link href="/posts/new" className="text-gray-700 hover:text-primary-600 transition-colors">
                 投稿する
               </Link>
+              {user && user.account_type !== 'individual' && (
+                <>
+                  <Link href="/communities" className="text-gray-700 hover:text-primary-600 transition-colors">
+                    コミュニティ
+                  </Link>
+                  {user.verification_status === 'verified' && (
+                    <Link href="/communities/new" className="text-gray-700 hover:text-primary-600 transition-colors">
+                      コミュニティ作成
+                    </Link>
+                  )}
+                  {(user.verification_status === 'unverified' || user.verification_status === 'pending' || user.verification_status === 'rejected') && (
+                    <Link href="/verification/request" className="text-gray-700 hover:text-primary-600 transition-colors">
+                      {user.verification_status === 'pending' ? '認証申請を確認' : '認証申請'}
+                    </Link>
+                  )}
+                </>
+              )}
               
               {user ? (
                 <div className="border-t border-gray-200 pt-4">
                   <Link href={`/profile/${user.id}`} className="block text-gray-700 hover:text-primary-600 transition-colors mb-2">
                     プロフィール
                   </Link>
+                  {user.account_type !== 'individual' && (
+                    <>
+                      {user.verification_status === 'pending' && (
+                        <div className="text-xs text-yellow-600 mb-2">
+                          <Building2 className="h-4 w-4 inline mr-1" />
+                          認証審査中
+                        </div>
+                      )}
+                    </>
+                  )}
                   {isAdminUser && (
                     <Link href="/admin" className="block text-gray-700 hover:text-primary-600 transition-colors mb-2">
                       管理者ダッシュボード

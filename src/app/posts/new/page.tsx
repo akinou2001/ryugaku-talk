@@ -112,24 +112,22 @@ export default function NewPost() {
   if (!user) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="max-w-2xl mx-auto">
-          <div className="card text-center">
-            <h1 className="text-2xl font-bold text-gray-900 mb-4">ログインが必要です</h1>
-            <p className="text-gray-600 mb-6">投稿するにはログインしてください。</p>
-            <div className="flex space-x-4 justify-center">
-              <button
-                onClick={() => router.push('/auth/signin')}
-                className="btn-primary"
-              >
-                ログイン
-              </button>
-              <button
-                onClick={() => router.push('/auth/signup')}
-                className="btn-secondary"
-              >
-                新規登録
-              </button>
-            </div>
+        <div className="max-w-4xl mx-auto text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">ログインが必要です</h1>
+          <p className="text-gray-600 mb-6">投稿するにはログインしてください。</p>
+          <div className="flex space-x-4 justify-center">
+            <button
+              onClick={() => router.push('/auth/signin')}
+              className="btn-primary"
+            >
+              ログイン
+            </button>
+            <button
+              onClick={() => router.push('/auth/signup')}
+              className="btn-secondary"
+            >
+              新規登録
+            </button>
           </div>
         </div>
       </div>

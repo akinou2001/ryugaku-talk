@@ -29,7 +29,8 @@ CREATE INDEX IF NOT EXISTS idx_posts_official_category ON posts(official_categor
 
 -- 組織アカウントのRLSポリシー（既存のポリシーに追加）
 -- 組織アカウントは自分のプロフィールを更新可能（認証済みの場合）
-CREATE POLICY IF NOT EXISTS "組織アカウントは自分のプロフィールを更新可能" 
+DROP POLICY IF EXISTS "組織アカウントは自分のプロフィールを更新可能" ON profiles;
+CREATE POLICY "組織アカウントは自分のプロフィールを更新可能" 
 ON profiles FOR UPDATE 
 USING (
   auth.uid() = id OR 
@@ -37,7 +38,8 @@ USING (
 );
 
 -- 組織アカウントは公式投稿を作成可能
-CREATE POLICY IF NOT EXISTS "認証済み組織アカウントは公式投稿を作成可能" 
+DROP POLICY IF EXISTS "認証済み組織アカウントは公式投稿を作成可能" ON posts;
+CREATE POLICY "認証済み組織アカウントは公式投稿を作成可能" 
 ON posts FOR INSERT 
 WITH CHECK (
   auth.uid() = author_id AND 
@@ -57,7 +59,8 @@ WITH CHECK (
 
 -- 通報：既存のポリシーで問題なし
 
--- 組織アカウント認証申請テーブル（オプション：管理用）
+-- 組織アカウント認証申請テーブル
+-- 管理者はSupabase Dashboardで直接statusを変更可能
 CREATE TABLE IF NOT EXISTS organization_verification_requests (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   profile_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
@@ -65,11 +68,11 @@ CREATE TABLE IF NOT EXISTS organization_verification_requests (
   organization_name TEXT NOT NULL,
   organization_type TEXT,
   organization_url TEXT,
-  contact_person_name TEXT NOT NULL,
-  contact_person_email TEXT NOT NULL,
+  contact_person_name TEXT,
+  contact_person_email TEXT NOT NULL, -- 公式メールアドレス
   contact_person_phone TEXT,
   verification_documents TEXT,
-  request_reason TEXT,
+  request_reason TEXT, -- 申請理由・メッセージ
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
   reviewed_by UUID REFERENCES profiles(id),
   reviewed_at TIMESTAMP WITH TIME ZONE,
@@ -85,15 +88,21 @@ CREATE INDEX IF NOT EXISTS idx_verification_requests_status ON organization_veri
 -- 認証申請のRLSポリシー
 ALTER TABLE organization_verification_requests ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "認証申請は申請者のみ閲覧可能" 
+DROP POLICY IF EXISTS "認証申請は申請者のみ閲覧可能" ON organization_verification_requests;
+CREATE POLICY "認証申請は申請者のみ閲覧可能" 
 ON organization_verification_requests FOR SELECT 
 USING (auth.uid() = profile_id);
 
-CREATE POLICY IF NOT EXISTS "認証ユーザーは認証申請を作成可能" 
+DROP POLICY IF EXISTS "認証ユーザーは認証申請を作成可能" ON organization_verification_requests;
+CREATE POLICY "認証ユーザーは認証申請を作成可能" 
 ON organization_verification_requests FOR INSERT 
 WITH CHECK (auth.uid() = profile_id);
 
-CREATE POLICY IF NOT EXISTS "申請者は自分の申請を更新可能" 
+DROP POLICY IF EXISTS "申請者は自分の申請を更新可能" ON organization_verification_requests;
+CREATE POLICY "申請者は自分の申請を更新可能" 
 ON organization_verification_requests FOR UPDATE 
 USING (auth.uid() = profile_id AND status = 'pending');
+
+-- 注意: 管理者はSupabase Dashboardで直接statusを変更できます
+-- RLSポリシーでstatusの変更を制限しないことで、管理者がDashboardから操作可能にします
 

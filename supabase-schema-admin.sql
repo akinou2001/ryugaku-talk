@@ -13,7 +13,8 @@ CREATE INDEX IF NOT EXISTS idx_profiles_is_admin ON profiles(is_admin);
 CREATE INDEX IF NOT EXISTS idx_profiles_is_active ON profiles(is_active);
 
 -- 管理者は全ユーザーのプロフィールを閲覧可能
-CREATE POLICY IF NOT EXISTS "管理者は全ユーザーのプロフィールを閲覧可能" 
+DROP POLICY IF EXISTS "管理者は全ユーザーのプロフィールを閲覧可能" ON profiles;
+CREATE POLICY "管理者は全ユーザーのプロフィールを閲覧可能" 
 ON profiles FOR SELECT 
 USING (
   auth.uid() = id OR 
@@ -25,7 +26,8 @@ USING (
 );
 
 -- 管理者は全ユーザーのプロフィールを更新可能
-CREATE POLICY IF NOT EXISTS "管理者は全ユーザーのプロフィールを更新可能" 
+DROP POLICY IF EXISTS "管理者は全ユーザーのプロフィールを更新可能" ON profiles;
+CREATE POLICY "管理者は全ユーザーのプロフィールを更新可能" 
 ON profiles FOR UPDATE 
 USING (
   auth.uid() = id OR 
@@ -37,7 +39,8 @@ USING (
 );
 
 -- 管理者は組織アカウントの認証ステータスを更新可能
-CREATE POLICY IF NOT EXISTS "管理者は認証ステータスを更新可能" 
+DROP POLICY IF EXISTS "管理者は認証ステータスを更新可能" ON profiles;
+CREATE POLICY "管理者は認証ステータスを更新可能" 
 ON profiles FOR UPDATE 
 USING (
   EXISTS (
@@ -55,7 +58,8 @@ WITH CHECK (
 );
 
 -- 管理者は認証申請を閲覧可能
-CREATE POLICY IF NOT EXISTS "管理者は認証申請を閲覧可能" 
+DROP POLICY IF EXISTS "管理者は認証申請を閲覧可能" ON organization_verification_requests;
+CREATE POLICY "管理者は認証申請を閲覧可能" 
 ON organization_verification_requests FOR SELECT 
 USING (
   auth.uid() = profile_id OR 
@@ -67,7 +71,8 @@ USING (
 );
 
 -- 管理者は認証申請を更新可能（承認・拒否）
-CREATE POLICY IF NOT EXISTS "管理者は認証申請を更新可能" 
+DROP POLICY IF EXISTS "管理者は認証申請を更新可能" ON organization_verification_requests;
+CREATE POLICY "管理者は認証申請を更新可能" 
 ON organization_verification_requests FOR UPDATE 
 USING (
   EXISTS (
@@ -85,7 +90,8 @@ WITH CHECK (
 );
 
 -- 管理者は投稿を削除可能
-CREATE POLICY IF NOT EXISTS "管理者は投稿を削除可能" 
+DROP POLICY IF EXISTS "管理者は投稿を削除可能" ON posts;
+CREATE POLICY "管理者は投稿を削除可能" 
 ON posts FOR DELETE 
 USING (
   auth.uid() = author_id OR 
@@ -97,7 +103,8 @@ USING (
 );
 
 -- 管理者はコメントを削除可能
-CREATE POLICY IF NOT EXISTS "管理者はコメントを削除可能" 
+DROP POLICY IF EXISTS "管理者はコメントを削除可能" ON comments;
+CREATE POLICY "管理者はコメントを削除可能" 
 ON comments FOR DELETE 
 USING (
   auth.uid() = author_id OR 
@@ -109,7 +116,8 @@ USING (
 );
 
 -- 管理者は通報を閲覧・更新可能
-CREATE POLICY IF NOT EXISTS "管理者は通報を閲覧可能" 
+DROP POLICY IF EXISTS "管理者は通報を閲覧可能" ON reports;
+CREATE POLICY "管理者は通報を閲覧可能" 
 ON reports FOR SELECT 
 USING (
   auth.uid() = reporter_id OR 
@@ -120,7 +128,8 @@ USING (
   )
 );
 
-CREATE POLICY IF NOT EXISTS "管理者は通報を更新可能" 
+DROP POLICY IF EXISTS "管理者は通報を更新可能" ON reports;
+CREATE POLICY "管理者は通報を更新可能" 
 ON reports FOR UPDATE 
 USING (
   EXISTS (

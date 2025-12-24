@@ -209,14 +209,50 @@ export default function Profile() {
                       </a>
                     </div>
                   )}
+                  {profile.verification_status === 'unverified' && isOwnProfile && (
+                    <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg text-sm">
+                      <div className="font-semibold mb-1">認証申請が必要です</div>
+                      <div className="text-xs mb-2">
+                        組織アカウントとして認証を受けることで、コミュニティ作成や公式投稿などの機能がご利用いただけます。
+                      </div>
+                      <Link href="/verification/request" className="btn-primary text-sm inline-block">
+                        認証申請をする
+                      </Link>
+                    </div>
+                  )}
                   {profile.verification_status === 'pending' && (
                     <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg text-sm">
-                      認証審査中です。通常1-3営業日で完了します。
+                      <div className="font-semibold mb-1">認証審査中</div>
+                      <div className="text-xs">
+                        組織アカウントの認証審査中です。通常1-3営業日で完了します。
+                        認証が完了すると、コミュニティ作成などの組織用機能がご利用いただけます。
+                      </div>
+                      {isOwnProfile && (
+                        <Link href="/verification/request" className="text-xs text-yellow-700 hover:text-yellow-900 underline mt-2 inline-block">
+                          申請内容を確認・更新
+                        </Link>
+                      )}
                     </div>
                   )}
                   {profile.verification_status === 'rejected' && (
                     <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg text-sm">
-                      認証が拒否されました。詳細はお問い合わせください。
+                      <div className="font-semibold mb-1">認証が拒否されました</div>
+                      <div className="text-xs mb-2">
+                        組織アカウントの認証が拒否されました。詳細はお問い合わせください。
+                      </div>
+                      {isOwnProfile && (
+                        <Link href="/verification/request" className="btn-secondary text-sm inline-block">
+                          再申請する
+                        </Link>
+                      )}
+                    </div>
+                  )}
+                  {profile.verification_status === 'verified' && (
+                    <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg text-sm">
+                      <div className="font-semibold mb-1">認証済み</div>
+                      <div className="text-xs">
+                        組織アカウントとして認証されています。コミュニティ作成などの組織用機能をご利用いただけます。
+                      </div>
                     </div>
                   )}
                 </>

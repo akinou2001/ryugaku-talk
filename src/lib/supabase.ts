@@ -126,4 +126,128 @@ export interface Message {
   created_at: string
 }
 
+// コミュニティ機能の型定義
+export type CommunityVisibility = 'public' | 'private'
+export type MemberStatus = 'pending' | 'approved' | 'rejected' | 'banned'
+export type MemberRole = 'member' | 'moderator' | 'admin'
+export type RoomMemberPermission = 'auto' | 'request'
+export type EventParticipantStatus = 'registered' | 'attended' | 'cancelled'
+
+export interface Community {
+  id: string
+  name: string
+  description?: string
+  cover_image_url?: string
+  icon_url?: string
+  owner_id: string
+  owner?: User
+  visibility: CommunityVisibility
+  created_at: string
+  updated_at: string
+  // 集計情報（クエリ時に追加）
+  member_count?: number
+  is_member?: boolean
+  member_status?: MemberStatus
+  member_role?: MemberRole
+}
+
+export interface CommunityMember {
+  id: string
+  community_id: string
+  community?: Community
+  user_id: string
+  user?: User
+  status: MemberStatus
+  role: MemberRole
+  joined_at?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CommunityRoom {
+  id: string
+  community_id: string
+  community?: Community
+  name: string
+  description?: string
+  created_by?: string
+  creator?: User
+  member_permission: RoomMemberPermission
+  created_at: string
+  updated_at: string
+  // 集計情報
+  message_count?: number
+  is_joined?: boolean
+}
+
+export interface CommunityRoomMessage {
+  id: string
+  room_id: string
+  room?: CommunityRoom
+  sender_id: string
+  sender?: User
+  content: string
+  created_at: string
+}
+
+export interface Announcement {
+  id: string
+  community_id: string
+  community?: Community
+  title: string
+  content: string
+  image_url?: string
+  attachment_url?: string
+  attachment_filename?: string
+  created_by?: string
+  creator?: User
+  created_at: string
+  updated_at: string
+}
+
+export interface FAQ {
+  id: string
+  community_id: string
+  community?: Community
+  question: string
+  answer: string
+  category?: string
+  order_index: number
+  created_by?: string
+  creator?: User
+  created_at: string
+  updated_at: string
+}
+
+export interface Event {
+  id: string
+  community_id: string
+  community?: Community
+  title: string
+  description: string
+  event_date: string
+  location?: string
+  online_url?: string
+  registration_deadline?: string
+  capacity?: number
+  created_by?: string
+  creator?: User
+  created_at: string
+  updated_at: string
+  // 集計情報
+  participant_count?: number
+  is_registered?: boolean
+  registration_status?: EventParticipantStatus
+}
+
+export interface EventParticipant {
+  id: string
+  event_id: string
+  event?: Event
+  user_id: string
+  user?: User
+  status: EventParticipantStatus
+  registered_at: string
+}
+
 
