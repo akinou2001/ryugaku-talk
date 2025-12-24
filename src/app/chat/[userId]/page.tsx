@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import type { User, Message } from '@/lib/supabase'
-import { ArrowLeft, Send, User as UserIcon, Clock } from 'lucide-react'
+import { ArrowLeft, Send, User as UserIcon, Clock, Flame } from 'lucide-react'
 import Link from 'next/link'
 
 export default function ChatDetail() {
@@ -19,12 +19,15 @@ export default function ChatDetail() {
   const [newMessage, setNewMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [canSendCandle, setCanSendCandle] = useState(false)
+  const [candleSent, setCandleSent] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (user && userId) {
       fetchUserProfile()
       fetchMessages()
+      checkCandleSendAvailability()
       
       // リアルタイムでメッセージを監視
       const channel = supabase
@@ -293,7 +296,18 @@ export default function ChatDetail() {
 
         {/* メッセージ入力 */}
         <form onSubmit={handleSend} className="card">
-          <div className="flex space-x-4">
+          <div className="flex space-x-2">
+            {canSendCandle && !candleSent && (
+              <button
+                type="button"
+                onClick={handleSendCandle}
+                className="btn-secondary flex items-center"
+                title="週に1回、キャンドルを送れます"
+              >
+                <Flame className="h-4 w-4 mr-1" />
+                <span className="text-sm">🕯️</span>
+              </button>
+            )}
             <input
               type="text"
               value={newMessage}
@@ -311,6 +325,11 @@ export default function ChatDetail() {
               {sending ? '送信中...' : '送信'}
             </button>
           </div>
+          {!canSendCandle && !candleSent && (
+            <p className="text-xs text-gray-500 mt-2">
+              今週は既にキャンドルを送信済みです（週1回まで）
+            </p>
+          )}
         </form>
       </div>
     </div>

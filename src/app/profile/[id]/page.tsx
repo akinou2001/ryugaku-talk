@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
-import type { User, Post } from '@/lib/supabase'
-import { User as UserIcon, MapPin, GraduationCap, Calendar, MessageSquare, Heart, Edit, Settings, Send, Building2 } from 'lucide-react'
+import type { User, Post, UserScore } from '@/lib/supabase'
+import { getUserScore } from '@/lib/quest'
+import { User as UserIcon, MapPin, GraduationCap, Calendar, MessageSquare, Flame, Edit, Settings, Send, Building2, Candle, Torch } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 
@@ -16,6 +17,7 @@ export default function Profile() {
 
   const [profile, setProfile] = useState<User | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
+  const [userScore, setUserScore] = useState<UserScore | null>(null)
   const [loading, setLoading] = useState(true)
   const [postsLoading, setPostsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -24,6 +26,7 @@ export default function Profile() {
     if (userId) {
       fetchProfile()
       fetchUserPosts()
+      fetchUserScore()
     }
   }, [userId])
 
@@ -71,6 +74,15 @@ export default function Profile() {
     }
   }
 
+  const fetchUserScore = async () => {
+    try {
+      const score = await getUserScore(userId)
+      setUserScore(score)
+    } catch (error: any) {
+      console.error('Error fetching user score:', error)
+    }
+  }
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return date.toLocaleDateString('ja-JP', {
@@ -83,8 +95,9 @@ export default function Profile() {
   const getCategoryLabel = (category: string) => {
     switch (category) {
       case 'question': return '質問'
-      case 'diary': return '留学日記'
-      case 'information': return '情報共有'
+      case 'diary': return '日記'
+      case 'chat': return 'つぶやき'
+      case 'information': return 'つぶやき' // 後方互換性
       default: return category
     }
   }
@@ -93,7 +106,8 @@ export default function Profile() {
     switch (category) {
       case 'question': return 'bg-blue-100 text-blue-800'
       case 'diary': return 'bg-green-100 text-green-800'
-      case 'information': return 'bg-purple-100 text-purple-800'
+      case 'chat': return 'bg-purple-100 text-purple-800'
+      case 'information': return 'bg-purple-100 text-purple-800' // 後方互換性
       default: return 'bg-gray-100 text-gray-800'
     }
   }
@@ -150,7 +164,6 @@ export default function Profile() {
                     size="md"
                   />
                 </div>
-                <p className="text-gray-600">{profile.email}</p>
               </div>
             </div>
             
@@ -257,25 +270,11 @@ export default function Profile() {
                   )}
                 </>
               )}
-              {profile.university && (
-                <div className="flex items-center space-x-2">
-                  <GraduationCap className="h-5 w-5 text-gray-400" />
-                  <span className="text-gray-600">大学: </span>
-                  <span className="font-medium">{profile.university}</span>
-                </div>
-              )}
               {profile.study_abroad_destination && (
                 <div className="flex items-center space-x-2">
                   <MapPin className="h-5 w-5 text-gray-400" />
                   <span className="text-gray-600">留学先: </span>
                   <span className="font-medium">{profile.study_abroad_destination}</span>
-                </div>
-              )}
-              {profile.major && (
-                <div className="flex items-center space-x-2">
-                  <GraduationCap className="h-5 w-5 text-gray-400" />
-                  <span className="text-gray-600">専攻: </span>
-                  <span className="font-medium">{profile.major}</span>
                 </div>
               )}
             </div>
@@ -286,11 +285,25 @@ export default function Profile() {
                 <span className="text-gray-600">参加日: </span>
                 <span className="font-medium">{formatDate(profile.created_at)}</span>
               </div>
-              <div className="flex items-center space-x-2">
-                <Heart className="h-5 w-5 text-gray-400" />
-                <span className="text-gray-600">貢献度: </span>
-                <span className="font-medium">{profile.contribution_score}pt</span>
-              </div>
+              {userScore && (
+                <div className="flex items-center space-x-4 flex-wrap">
+                  <div className="flex items-center space-x-1">
+                    <Flame className="h-5 w-5 text-orange-500" />
+                    <span className="text-gray-600">火: </span>
+                    <span className="font-medium">{userScore.flame_count || 0}</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-xl">🕯️</span>
+                    <span className="text-gray-600">キャンドル: </span>
+                    <span className="font-medium">{userScore.candle_count || 0}</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-xl">🔥</span>
+                    <span className="text-gray-600">トーチ: </span>
+                    <span className="font-medium">{userScore.torch_count || 0}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -307,14 +320,16 @@ export default function Profile() {
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">使用言語</h3>
               <div className="flex flex-wrap gap-2">
-                {profile.languages.map((language, index) => (
-                  <span
-                    key={index}
-                    className="px-3 py-1 bg-primary-100 text-primary-800 rounded-full text-sm"
-                  >
-                    {language}
-                  </span>
-                ))}
+                {profile.languages
+                  .filter((language: string) => !language.startsWith('purpose:') && !language.startsWith('detail:'))
+                  .map((language, index) => (
+                    <span
+                      key={index}
+                      className="px-3 py-1 bg-primary-100 text-primary-800 rounded-full text-sm"
+                    >
+                      {language}
+                    </span>
+                  ))}
               </div>
             </div>
           )}
@@ -325,18 +340,38 @@ export default function Profile() {
               <div className="text-2xl font-bold text-primary-600">{posts.length}</div>
               <div className="text-sm text-gray-600">投稿数</div>
             </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{profile.contribution_score}</div>
-              <div className="text-sm text-gray-600">貢献度</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">0</div>
-              <div className="text-sm text-gray-600">コメント数</div>
-            </div>
-            <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">0</div>
-              <div className="text-sm text-gray-600">いいね数</div>
-            </div>
+            {userScore && (
+              <>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-orange-600">{userScore.flame_count || 0}</div>
+                  <div className="text-sm text-gray-600">🔥 火</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-yellow-600">{userScore.candle_count || 0}</div>
+                  <div className="text-sm text-gray-600">🕯️ キャンドル</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-red-600">{userScore.torch_count || 0}</div>
+                  <div className="text-sm text-gray-600">🔥 トーチ</div>
+                </div>
+              </>
+            )}
+            {!userScore && (
+              <>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">{profile.contribution_score || 0}</div>
+                  <div className="text-sm text-gray-600">貢献度</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">0</div>
+                  <div className="text-sm text-gray-600">コメント数</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-purple-600">0</div>
+                  <div className="text-sm text-gray-600">いいね数</div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -379,7 +414,7 @@ export default function Profile() {
                   <div className="flex items-center justify-between text-sm text-gray-500">
                     <div className="flex items-center space-x-4">
                       <span className="flex items-center">
-                        <Heart className="h-4 w-4 mr-1" />
+                        <Flame className="h-4 w-4 mr-1 text-orange-500" />
                         {post.likes_count}
                       </span>
                       <span className="flex items-center">

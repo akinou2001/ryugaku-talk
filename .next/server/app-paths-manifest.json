@@ -1,30 +1,12 @@
 {
-<<<<<<< HEAD
-  "/_global-error/page": "app/_global-error/page.js",
-  "/_not-found/page": "app/_not-found/page.js",
-  "/admin/page": "app/admin/page.js",
+  "/communities/page": "app/communities/page.js",
   "/ai/page": "app/ai/page.js",
-  "/api/route": "app/api/route.js",
+  "/timeline/page": "app/timeline/page.js",
+  "/page": "app/page.js",
+  "/settings/page": "app/settings/page.js",
   "/auth/signin/page": "app/auth/signin/page.js",
   "/auth/signup/page": "app/auth/signup/page.js",
-  "/board/page": "app/board/page.js",
-  "/chat/[userId]/page": "app/chat/[userId]/page.js",
-  "/chat/page": "app/chat/page.js",
-  "/consult/[id]/page": "app/consult/[id]/page.js",
-  "/consult/new/page": "app/consult/new/page.js",
-  "/consult/page": "app/consult/page.js",
-  "/diary/page": "app/diary/page.js",
-  "/favicon.ico/route": "app/favicon.ico/route.js",
-  "/page": "app/page.js",
-  "/posts/[id]/page": "app/posts/[id]/page.js",
   "/posts/new/page": "app/posts/new/page.js",
-  "/profile/[id]/edit/page": "app/profile/[id]/edit/page.js",
-  "/profile/[id]/page": "app/profile/[id]/page.js"
-=======
-  "/page": "app/page.js",
   "/chat/page": "app/chat/page.js",
-  "/diary/page": "app/diary/page.js",
-  "/favicon.ico/route": "app/favicon.ico/route.js",
-  "/posts/new/page": "app/posts/new/page.js"
->>>>>>> 7e65338 (community)
+  "/communities/[id]/page": "app/communities/[id]/page.js"
 }

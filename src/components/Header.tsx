@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from './Providers'
 import { Menu, X, User, LogOut, Settings, MessageCircle, Shield, Users, Building2 } from 'lucide-react'
 import { isAdmin } from '@/lib/admin'
+import { TopTabNavigation } from './TopTabNavigation'
 
 export function Header() {
   const { user, signOut } = useAuth()
@@ -38,6 +39,7 @@ export function Header() {
   }
 
   return (
+    <>
     <header className="bg-white shadow-sm">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
@@ -49,29 +51,21 @@ export function Header() {
 
           {/* デスクトップナビゲーション */}
           <nav className="hidden md:flex items-center space-x-8">
-            <Link href="/board" className="text-gray-700 hover:text-primary-600 transition-colors">
-              掲示板
+            <Link href="/timeline" className="text-gray-700 hover:text-primary-600 transition-colors">
+              タイムライン
             </Link>
-            <Link href="/diary" className="text-gray-700 hover:text-primary-600 transition-colors">
-              留学日記
+            <Link href="/ai" className="text-gray-700 hover:text-primary-600 transition-colors">
+              AI検索
             </Link>
-            <Link href="/chat" className="text-gray-700 hover:text-primary-600 transition-colors">
-              チャット
-            </Link>
-            <Link href="/posts/new" className="text-gray-700 hover:text-primary-600 transition-colors">
-              投稿する
-            </Link>
-            {user && user.account_type !== 'individual' && (
-              <>
-                <Link href="/communities" className="text-gray-700 hover:text-primary-600 transition-colors">
-                  コミュニティ
-                </Link>
-                {user.verification_status === 'verified' && (
-                  <Link href="/communities/new" className="text-gray-700 hover:text-primary-600 transition-colors">
-                    コミュニティ作成
-                  </Link>
-                )}
-              </>
+            {user && (
+              <Link href="/communities" className="text-gray-700 hover:text-primary-600 transition-colors">
+                コミュニティ
+              </Link>
+            )}
+            {user && user.account_type !== 'individual' && user.verification_status === 'verified' && (
+              <Link href="/communities/new" className="text-gray-700 hover:text-primary-600 transition-colors">
+                コミュニティ作成
+              </Link>
             )}
           </nav>
 
@@ -182,34 +176,26 @@ export function Header() {
         {isMenuOpen && (
           <div className="md:hidden border-t border-gray-200 py-4">
             <nav className="flex flex-col space-y-4">
-              <Link href="/board" className="text-gray-700 hover:text-primary-600 transition-colors">
-                掲示板
+              <Link href="/timeline" className="text-gray-700 hover:text-primary-600 transition-colors">
+                タイムライン
               </Link>
-              <Link href="/diary" className="text-gray-700 hover:text-primary-600 transition-colors">
-                留学日記
+              <Link href="/ai" className="text-gray-700 hover:text-primary-600 transition-colors">
+                AI検索
               </Link>
-              <Link href="/chat" className="text-gray-700 hover:text-primary-600 transition-colors">
-                チャット
-              </Link>
-              <Link href="/posts/new" className="text-gray-700 hover:text-primary-600 transition-colors">
-                投稿する
-              </Link>
-              {user && user.account_type !== 'individual' && (
-                <>
-                  <Link href="/communities" className="text-gray-700 hover:text-primary-600 transition-colors">
-                    コミュニティ
-                  </Link>
-                  {user.verification_status === 'verified' && (
-                    <Link href="/communities/new" className="text-gray-700 hover:text-primary-600 transition-colors">
-                      コミュニティ作成
-                    </Link>
-                  )}
-                  {(user.verification_status === 'unverified' || user.verification_status === 'pending' || user.verification_status === 'rejected') && (
-                    <Link href="/verification/request" className="text-gray-700 hover:text-primary-600 transition-colors">
-                      {user.verification_status === 'pending' ? '認証申請を確認' : '認証申請'}
-                    </Link>
-                  )}
-                </>
+              {user && (
+                <Link href="/communities" className="text-gray-700 hover:text-primary-600 transition-colors">
+                  コミュニティ
+                </Link>
+              )}
+              {user && user.account_type !== 'individual' && user.verification_status === 'verified' && (
+                <Link href="/communities/new" className="text-gray-700 hover:text-primary-600 transition-colors">
+                  コミュニティ作成
+                </Link>
+              )}
+              {user && user.account_type !== 'individual' && (user.verification_status === 'unverified' || user.verification_status === 'pending' || user.verification_status === 'rejected') && (
+                <Link href="/verification/request" className="text-gray-700 hover:text-primary-600 transition-colors">
+                  {user.verification_status === 'pending' ? '認証申請を確認' : '認証申請'}
+                </Link>
               )}
               
               {user ? (
@@ -254,5 +240,7 @@ export function Header() {
         )}
       </div>
     </header>
+      <TopTabNavigation />
+    </>
   )
 }

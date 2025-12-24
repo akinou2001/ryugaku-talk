@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
-import { MessageCircle, Heart, MessageSquare, Clock } from 'lucide-react'
+import { MessageCircle, Flame, MessageSquare, Clock } from 'lucide-react'
 
 export function RecentPosts() {
   const [posts, setPosts] = useState<Post[]>([])
@@ -22,6 +22,7 @@ export function RecentPosts() {
           *,
           author:profiles(name)
         `)
+        .is('community_id', null) // コミュニティ限定投稿は除外
         .order('created_at', { ascending: false })
         .limit(6)
 
@@ -52,8 +53,9 @@ export function RecentPosts() {
   const getCategoryLabel = (category: string) => {
     switch (category) {
       case 'question': return '質問'
-      case 'diary': return '留学日記'
-      case 'information': return '情報共有'
+      case 'diary': return '日記'
+      case 'chat': return 'つぶやき'
+      case 'information': return 'つぶやき' // 後方互換性
       default: return category
     }
   }
@@ -62,7 +64,8 @@ export function RecentPosts() {
     switch (category) {
       case 'question': return 'bg-blue-100 text-blue-800'
       case 'diary': return 'bg-green-100 text-green-800'
-      case 'information': return 'bg-purple-100 text-purple-800'
+      case 'chat': return 'bg-purple-100 text-purple-800'
+      case 'information': return 'bg-purple-100 text-purple-800' // 後方互換性
       default: return 'bg-gray-100 text-gray-800'
     }
   }
@@ -124,7 +127,7 @@ export function RecentPosts() {
                 <span>by {post.author?.name || '匿名'}</span>
                 <div className="flex items-center space-x-4">
                   <span className="flex items-center">
-                    <Heart className="h-4 w-4 mr-1" />
+                    <Flame className="h-4 w-4 mr-1 text-orange-500" />
                     {post.likes_count}
                   </span>
                   <span className="flex items-center">

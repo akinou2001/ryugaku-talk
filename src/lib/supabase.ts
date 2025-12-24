@@ -80,7 +80,7 @@ export interface Post {
   id: string
   title: string
   content: string
-  category: 'question' | 'diary' | 'information' | 'official'
+  category: 'question' | 'diary' | 'chat' | 'information' | 'official' // 'information'は後方互換性のため残す
   tags: string[]
   university?: string
   study_abroad_destination?: string
@@ -93,6 +93,7 @@ export interface Post {
   is_resolved: boolean
   is_official: boolean
   official_category?: string
+  community_id?: string // コミュニティ限定投稿用
   created_at: string
   updated_at: string
 }
@@ -142,6 +143,7 @@ export interface Community {
   owner_id: string
   owner?: User
   visibility: CommunityVisibility
+  community_type?: 'guild' | 'official' // ギルド or 公式コミュニティ
   created_at: string
   updated_at: string
   // 集計情報（クエリ時に追加）
@@ -248,6 +250,72 @@ export interface EventParticipant {
   user?: User
   status: EventParticipantStatus
   registered_at: string
+}
+
+// クエスト機能の型定義
+export type QuestStatus = 'active' | 'completed' | 'cancelled'
+export type QuestRewardType = 'candle' | 'torch'
+export type QuestCompletionStatus = 'pending' | 'approved' | 'rejected'
+
+export interface Quest {
+  id: string
+  community_id: string
+  community?: Community
+  title: string
+  description?: string
+  created_by: string
+  creator?: User
+  creator_profile?: any // 作成者のプロフィール情報（スナップショット）
+  status: QuestStatus
+  reward_type: QuestRewardType
+  reward_amount: number
+  created_at: string
+  updated_at: string
+  // 集計情報
+  completion_count?: number
+  user_completion_status?: QuestCompletionStatus
+}
+
+export interface QuestCompletion {
+  id: string
+  quest_id: string
+  quest?: Quest
+  user_id: string
+  user?: User
+  completed_by: string // クリア判定を行ったユーザー（通常はクエスト作成者）
+  completed_by_user?: User
+  status: QuestCompletionStatus
+  proof_text?: string
+  proof_url?: string
+  reward_given: boolean
+  created_at: string
+  updated_at: string
+}
+
+// スコアシステムの型定義
+export interface UserScore {
+  id: string
+  user_id: string
+  user?: User
+  flame_count: number // 通常のいいねや質問への回答で獲得
+  candle_count: number // ギルドのクエストクリアで獲得
+  torch_count: number // 公式コミュニティのクエストクリアで獲得
+  candles_received_count: number // 週1回のキャンドル送信で受け取った数
+  last_candle_sent_at?: string // 最後にキャンドルを送った日時
+  created_at: string
+  updated_at: string
+}
+
+export interface CandleSend {
+  id: string
+  sender_id: string
+  sender?: User
+  receiver_id: string
+  receiver?: User
+  message_id?: string
+  message?: Message
+  sent_at: string
+  week_start: string // 週の開始日（月曜日）
 }
 
 

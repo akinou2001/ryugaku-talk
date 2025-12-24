@@ -4,6 +4,7 @@ import './globals.css'
 import { Providers } from '@/components/Providers'
 import { Header } from '@/components/Header'
 import { Footer } from '@/components/Footer'
+import { FloatingActionButton } from '@/components/FloatingActionButton'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -27,6 +28,7 @@ export default function RootLayout({
               {children}
             </main>
             <Footer />
+            <FloatingActionButton />
           </div>
         </Providers>
       </body>

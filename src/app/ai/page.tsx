@@ -42,7 +42,7 @@ export default function AiPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8 pb-24">
       <div className="max-w-3xl mx-auto">
         <h1 className="text-2xl font-bold mb-4">AI検索beta</h1>
 

@@ -33,18 +33,18 @@ export function Footer() {
             <h3 className="font-semibold text-gray-900 mb-4">サービス</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/board" className="text-gray-600 hover:text-primary-600 transition-colors">
-                  掲示板
+                <Link href="/timeline" className="text-gray-600 hover:text-primary-600 transition-colors">
+                  タイムライン
                 </Link>
               </li>
               <li>
-                <Link href="/diary" className="text-gray-600 hover:text-primary-600 transition-colors">
-                  留学日記
+                <Link href="/ai" className="text-gray-600 hover:text-primary-600 transition-colors">
+                  AI検索
                 </Link>
               </li>
               <li>
-                <Link href="/posts/new" className="text-gray-600 hover:text-primary-600 transition-colors">
-                  投稿する
+                <Link href="/communities" className="text-gray-600 hover:text-primary-600 transition-colors">
+                  コミュニティ
                 </Link>
               </li>
             </ul>

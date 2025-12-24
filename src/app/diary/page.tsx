@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
-import { BookOpen, Heart, MessageSquare, Clock, Search, Filter, Plus, Calendar, MapPin, GraduationCap } from 'lucide-react'
+import { BookOpen, Flame, MessageSquare, Clock, Search, Filter, Plus, Calendar, MapPin, GraduationCap } from 'lucide-react'
 
 export default function Diary() {
   const [posts, setPosts] = useState<Post[]>([])
@@ -70,6 +70,7 @@ export default function Diary() {
           *,
           author:profiles(name, university, study_abroad_destination)
         `)
+        .is('community_id', null) // コミュニティ限定投稿は除外
         .eq('category', 'diary')
 
       if (selectedCountry !== 'all') {
@@ -302,7 +303,7 @@ export default function Diary() {
                 
                 <div className="flex items-center space-x-4 text-sm text-gray-500">
                   <span className="flex items-center">
-                    <Heart className="h-4 w-4 mr-1" />
+                    <Flame className="h-4 w-4 mr-1 text-orange-500" />
                     {post.likes_count}
                   </span>
                   <span className="flex items-center">

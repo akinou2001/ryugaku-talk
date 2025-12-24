@@ -85,9 +85,9 @@ export default function CommunitiesPage() {
         </div>
 
         {/* 検索・フィルター */}
-        <div className="card mb-8">
-          <form onSubmit={handleSearch} className="mb-4">
-            <div className="flex flex-col md:flex-row gap-4">
+        <div className="card mb-6">
+          <form onSubmit={handleSearch} className="space-y-4">
+            <div className="flex flex-col md:flex-row gap-3">
               <div className="flex-1 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Search className="h-5 w-5 text-gray-400" />
@@ -96,23 +96,42 @@ export default function CommunitiesPage() {
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="コミュニティを検索..."
+                  placeholder="コミュニティ名や説明で検索..."
                   className="input-field pl-10"
                 />
               </div>
               <select
                 value={visibilityFilter}
-                onChange={(e) => setVisibilityFilter(e.target.value as 'all' | 'public' | 'private')}
-                className="input-field"
+                onChange={(e) => {
+                  setVisibilityFilter(e.target.value as 'all' | 'public' | 'private')
+                }}
+                className="input-field md:w-48"
               >
-                <option value="all">すべて</option>
-                <option value="public">公開</option>
-                <option value="private">非公開</option>
+                <option value="all">すべての公開設定</option>
+                <option value="public">公開のみ</option>
+                <option value="private">非公開のみ</option>
               </select>
-              <button type="submit" className="btn-primary">
+              <button type="submit" className="btn-primary whitespace-nowrap">
                 検索
               </button>
             </div>
+            {user && (
+              <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                <span className="text-sm text-gray-600">
+                  {user.account_type === 'individual' 
+                    ? '個人アカウント: ギルドを作成できます' 
+                    : user.verification_status === 'verified'
+                    ? '組織アカウント: 公式コミュニティを作成できます'
+                    : '組織アカウント: 認証後に公式コミュニティを作成できます'}
+                </span>
+                {user.account_type === 'individual' && (
+                  <Link href="/communities/new" className="btn-secondary text-sm flex items-center">
+                    <Plus className="h-4 w-4 mr-1" />
+                    ギルドを作成
+                  </Link>
+                )}
+              </div>
+            )}
           </form>
         </div>
 

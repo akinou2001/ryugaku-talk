@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, Save, X } from 'lucide-react'
+import { getUserCommunities } from '@/lib/community'
+import { ArrowLeft, Save, X, Search, ChevronLeft, ChevronRight } from 'lucide-react'
 
 export default function NewPost() {
   const { user } = useAuth()
@@ -16,14 +17,163 @@ export default function NewPost() {
   const [formData, setFormData] = useState({
     title: '',
     content: '',
-    category: 'question' as 'question' | 'diary' | 'information' | 'official',
-    tags: '',
-    university: '',
-    study_abroad_destination: '',
-    major: '',
+    category: 'question' as 'question' | 'diary' | 'chat' | 'information' | 'official',
+    tags: [] as string[],
+    study_abroad_destinations: [] as string[],
     is_official: false,
-    official_category: ''
+    official_category: '',
+    community_id: '' as string | undefined
   })
+  const [userCommunities, setUserCommunities] = useState<Array<{id: string, name: string}>>([])
+  const [countrySearch, setCountrySearch] = useState('')
+  const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set())
+  const countryScrollRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const [profileLoaded, setProfileLoaded] = useState(false)
+  
+  // タイムラインのチップで使っているタグ
+  const availableTags = [
+    '正規留学',
+    '語学留学',
+    '交換留学',
+    '研究室交流',
+    'ワーホリ',
+    '駐在',
+    '現地採用',
+    'ボランティア',
+    'インターンシップ',
+    'ノマド',
+    '中学・高校',
+    'サマースクール',
+    'スポーツ',
+    '大学',
+    '大学院',
+    '現役留学生',
+    '留学経験者',
+    '留学志願者'
+  ]
+  
+  // 国を地域で分類
+  const countriesByRegion = {
+    'north-america': {
+      label: '北アメリカ',
+      countries: [
+        { code: 'US', name: 'アメリカ', flag: '🇺🇸' },
+        { code: 'CA', name: 'カナダ', flag: '🇨🇦' },
+        { code: 'MX', name: 'メキシコ', flag: '🇲🇽' }
+      ]
+    },
+    'asia': {
+      label: 'アジア',
+      countries: [
+        { code: 'JP', name: '日本', flag: '🇯🇵' },
+        { code: 'KR', name: '韓国', flag: '🇰🇷' },
+        { code: 'CN', name: '中国', flag: '🇨🇳' },
+        { code: 'TW', name: '台湾', flag: '🇹🇼' },
+        { code: 'SG', name: 'シンガポール', flag: '🇸🇬' },
+        { code: 'HK', name: '香港', flag: '🇭🇰' },
+        { code: 'TH', name: 'タイ', flag: '🇹🇭' },
+        { code: 'MY', name: 'マレーシア', flag: '🇲🇾' },
+        { code: 'ID', name: 'インドネシア', flag: '🇮🇩' },
+        { code: 'PH', name: 'フィリピン', flag: '🇵🇭' },
+        { code: 'VN', name: 'ベトナム', flag: '🇻🇳' },
+        { code: 'IN', name: 'インド', flag: '🇮🇳' }
+      ]
+    },
+    'europe': {
+      label: 'ヨーロッパ',
+      countries: [
+        { code: 'GB', name: 'イギリス', flag: '🇬🇧' },
+        { code: 'DE', name: 'ドイツ', flag: '🇩🇪' },
+        { code: 'FR', name: 'フランス', flag: '🇫🇷' },
+        { code: 'ES', name: 'スペイン', flag: '🇪🇸' },
+        { code: 'IT', name: 'イタリア', flag: '🇮🇹' },
+        { code: 'NL', name: 'オランダ', flag: '🇳🇱' },
+        { code: 'CH', name: 'スイス', flag: '🇨🇭' },
+        { code: 'SE', name: 'スウェーデン', flag: '🇸🇪' },
+        { code: 'IE', name: 'アイルランド', flag: '🇮🇪' },
+        { code: 'AT', name: 'オーストリア', flag: '🇦🇹' },
+        { code: 'BE', name: 'ベルギー', flag: '🇧🇪' },
+        { code: 'DK', name: 'デンマーク', flag: '🇩🇰' },
+        { code: 'FI', name: 'フィンランド', flag: '🇫🇮' },
+        { code: 'NO', name: 'ノルウェー', flag: '🇳🇴' },
+        { code: 'PL', name: 'ポーランド', flag: '🇵🇱' },
+        { code: 'PT', name: 'ポルトガル', flag: '🇵🇹' },
+        { code: 'CZ', name: 'チェコ', flag: '🇨🇿' },
+        { code: 'GR', name: 'ギリシャ', flag: '🇬🇷' },
+        { code: 'HU', name: 'ハンガリー', flag: '🇭🇺' },
+        { code: 'IS', name: 'アイスランド', flag: '🇮🇸' },
+        { code: 'RO', name: 'ルーマニア', flag: '🇷🇴' },
+        { code: 'RU', name: 'ロシア', flag: '🇷🇺' },
+        { code: 'TR', name: 'トルコ', flag: '🇹🇷' },
+        { code: 'UA', name: 'ウクライナ', flag: '🇺🇦' }
+      ]
+    },
+    'oceania': {
+      label: 'オセアニア',
+      countries: [
+        { code: 'AU', name: 'オーストラリア', flag: '🇦🇺' },
+        { code: 'NZ', name: 'ニュージーランド', flag: '🇳🇿' }
+      ]
+    },
+    'other': {
+      label: 'その他',
+      countries: [
+        { code: 'BR', name: 'ブラジル', flag: '🇧🇷' },
+        { code: 'AR', name: 'アルゼンチン', flag: '🇦🇷' },
+        { code: 'CL', name: 'チリ', flag: '🇨🇱' },
+        { code: 'CO', name: 'コロンビア', flag: '🇨🇴' },
+        { code: 'EG', name: 'エジプト', flag: '🇪🇬' },
+        { code: 'IL', name: 'イスラエル', flag: '🇮🇱' },
+        { code: 'SA', name: 'サウジアラビア', flag: '🇸🇦' },
+        { code: 'AE', name: 'UAE', flag: '🇦🇪' },
+        { code: 'ZA', name: '南アフリカ', flag: '🇿🇦' },
+        { code: 'OTHER', name: 'その他', flag: '🌍' }
+      ]
+    }
+  }
+  
+  // 人気国（チップで表示）- 地域分類から取得
+  const popularCountries = Object.values(countriesByRegion).flatMap(region => region.countries)
+  
+  // 全ての留学が一般的に可能な国（検索用）
+  const allCountries = [
+    ...popularCountries,
+    { code: 'AT', name: 'オーストリア', flag: '🇦🇹' },
+    { code: 'BE', name: 'ベルギー', flag: '🇧🇪' },
+    { code: 'BR', name: 'ブラジル', flag: '🇧🇷' },
+    { code: 'CL', name: 'チリ', flag: '🇨🇱' },
+    { code: 'CO', name: 'コロンビア', flag: '🇨🇴' },
+    { code: 'CZ', name: 'チェコ', flag: '🇨🇿' },
+    { code: 'DK', name: 'デンマーク', flag: '🇩🇰' },
+    { code: 'EG', name: 'エジプト', flag: '🇪🇬' },
+    { code: 'FI', name: 'フィンランド', flag: '🇫🇮' },
+    { code: 'GR', name: 'ギリシャ', flag: '🇬🇷' },
+    { code: 'HK', name: '香港', flag: '🇭🇰' },
+    { code: 'HU', name: 'ハンガリー', flag: '🇭🇺' },
+    { code: 'ID', name: 'インドネシア', flag: '🇮🇩' },
+    { code: 'IN', name: 'インド', flag: '🇮🇳' },
+    { code: 'IS', name: 'アイスランド', flag: '🇮🇸' },
+    { code: 'IL', name: 'イスラエル', flag: '🇮🇱' },
+    { code: 'MY', name: 'マレーシア', flag: '🇲🇾' },
+    { code: 'MX', name: 'メキシコ', flag: '🇲🇽' },
+    { code: 'NO', name: 'ノルウェー', flag: '🇳🇴' },
+    { code: 'PH', name: 'フィリピン', flag: '🇵🇭' },
+    { code: 'PL', name: 'ポーランド', flag: '🇵🇱' },
+    { code: 'PT', name: 'ポルトガル', flag: '🇵🇹' },
+    { code: 'RO', name: 'ルーマニア', flag: '🇷🇴' },
+    { code: 'RU', name: 'ロシア', flag: '🇷🇺' },
+    { code: 'SA', name: 'サウジアラビア', flag: '🇸🇦' },
+    { code: 'ZA', name: '南アフリカ', flag: '🇿🇦' },
+    { code: 'TH', name: 'タイ', flag: '🇹🇭' },
+    { code: 'TR', name: 'トルコ', flag: '🇹🇷' },
+    { code: 'UA', name: 'ウクライナ', flag: '🇺🇦' },
+    { code: 'AE', name: 'UAE', flag: '🇦🇪' },
+    { code: 'VN', name: 'ベトナム', flag: '🇻🇳' }
+  ]
+  
+  const filteredCountries = allCountries.filter(country =>
+    country.name.toLowerCase().includes(countrySearch.toLowerCase())
+  )
 
   const isVerifiedOrganization = user && 
     user.account_type !== 'individual' && 
@@ -31,13 +181,120 @@ export default function NewPost() {
 
   useEffect(() => {
     const category = searchParams.get('category')
-    if (category && ['question', 'diary', 'information'].includes(category)) {
+    if (category && ['question', 'diary', 'chat', 'information'].includes(category)) {
       setFormData(prev => ({
         ...prev,
-        category: category as 'question' | 'diary' | 'information'
+        category: (category === 'information' ? 'chat' : category) as 'question' | 'diary' | 'chat'
       }))
     }
-  }, [searchParams])
+    if (user) {
+      fetchUserCommunities()
+      fetchUserProfile()
+    }
+  }, [searchParams, user])
+
+  const fetchUserProfile = async () => {
+    if (!user || profileLoaded) return
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('study_abroad_destination, languages')
+        .eq('id', user.id)
+        .single()
+
+      if (error) {
+        console.error('Error fetching user profile:', error)
+        return
+      }
+
+      if (data) {
+        // プロフィール属性を取得
+        const languages = data.languages || []
+        
+        // 留学先を取得（カンマ区切りの文字列または単一の文字列）
+        const destinations = data.study_abroad_destination 
+          ? (data.study_abroad_destination.includes(',') 
+              ? data.study_abroad_destination.split(',').map(d => d.trim()) 
+              : [data.study_abroad_destination])
+          : []
+        
+        // 留学目的を取得（purpose:で始まるもの）
+        const purposeTags = languages
+          .filter((lang: string) => lang.startsWith('purpose:'))
+          .map((lang: string) => lang.replace('purpose:', ''))
+        
+        // 留学詳細種別を取得（detail:で始まるもの）
+        const detailTags = languages
+          .filter((lang: string) => lang.startsWith('detail:'))
+          .map((lang: string) => lang.replace('detail:', ''))
+        
+        // 学生ステータスを取得（status:で始まるもの）
+        const statusTag = languages.find((lang: string) => lang.startsWith('status:'))
+        const studentStatus = statusTag ? statusTag.replace('status:', '') : ''
+
+        // プロフィール属性をチップに反映
+        const autoTags: string[] = []
+        
+        // 留学詳細種別をタグに追加（マッピング）
+        const detailTagMap: Record<string, string> = {
+          'regular-study': '正規留学',
+          'language-study': '語学留学',
+          'exchange': '交換留学',
+          'research': '研究室交流',
+          'working-holiday': 'ワーホリ',
+          'residence': '駐在',
+          'local-hire': '現地採用',
+          'volunteer': 'ボランティア',
+          'internship': 'インターンシップ',
+          'nomad': 'ノマド',
+          'high-school': '中学・高校',
+          'summer-school': 'サマースクール'
+        }
+        
+        detailTags.forEach(detail => {
+          if (detailTagMap[detail] && availableTags.includes(detailTagMap[detail])) {
+            autoTags.push(detailTagMap[detail])
+          }
+        })
+        
+        // 学生ステータスをタグに追加
+        const statusTagMap: Record<string, string> = {
+          'current': '現役留学生',
+          'experienced': '留学経験者',
+          'applicant': '留学志願者'
+        }
+        
+        if (studentStatus && statusTagMap[studentStatus] && availableTags.includes(statusTagMap[studentStatus])) {
+          autoTags.push(statusTagMap[studentStatus])
+        }
+
+        // フォームデータを更新（プロフィール属性を自動選択）
+        setFormData(prev => ({
+          ...prev,
+          tags: autoTags,
+          study_abroad_destinations: destinations
+        }))
+        
+        setProfileLoaded(true)
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error)
+    }
+  }
+
+  const fetchUserCommunities = async () => {
+    if (!user) return
+    try {
+      const communities = await getUserCommunities(user.id)
+      const communityList = communities.map(c => {
+        const community = c.community as any
+        return { id: community.id, name: community.name }
+      }).filter(Boolean)
+      setUserCommunities(communityList)
+    } catch (error) {
+      console.error('Error fetching user communities:', error)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -50,19 +307,25 @@ export default function NewPost() {
     setError('')
 
     try {
-      const tagsArray = formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag)
+      // カテゴリが'information'の場合は'chat'に変換（後方互換性）
+      const category = formData.category === 'information' ? 'chat' : formData.category
       
+      // つぶやきの場合はタイトルを自動生成（内容の最初の50文字）
+      const title = category === 'chat' 
+        ? (formData.content.length > 50 ? formData.content.substring(0, 50) + '...' : formData.content) || 'つぶやき'
+        : formData.title
+      
+      // 複数の国を選択している場合は、最初の1つを保存（将来的には配列フィールドを追加）
       const postData: any = {
-        title: formData.title,
+        title: title,
         content: formData.content,
-        category: formData.category,
-        tags: tagsArray,
-        university: formData.university || null,
-        study_abroad_destination: formData.study_abroad_destination || null,
-        major: formData.major || null,
+        category: category,
+        tags: formData.tags,
+        study_abroad_destination: formData.study_abroad_destinations.length > 0 ? formData.study_abroad_destinations[0] : null,
         author_id: user.id,
         is_official: isVerifiedOrganization && formData.is_official,
-        official_category: isVerifiedOrganization && formData.is_official ? formData.official_category : null
+        official_category: isVerifiedOrganization && formData.is_official ? formData.official_category : null,
+        community_id: formData.community_id || null
       }
 
       const { data, error } = await supabase
@@ -105,7 +368,7 @@ export default function NewPost() {
     const { name, value } = e.target
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: name === 'category' && value === 'information' ? 'chat' : value
     }))
   }
 
@@ -167,14 +430,14 @@ export default function NewPost() {
             <select
               id="category"
               name="category"
-              value={formData.category}
+              value={formData.category === 'information' ? 'chat' : formData.category}
               onChange={handleChange}
               required
               className="input-field"
             >
               <option value="question">質問</option>
               <option value="diary">留学日記</option>
-              <option value="information">情報共有</option>
+              <option value="chat">つぶやき</option>
               {isVerifiedOrganization && (
                 <option value="official">公式投稿</option>
               )}
@@ -225,22 +488,24 @@ export default function NewPost() {
             </>
           )}
 
-          {/* タイトル */}
-          <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
-              タイトル *
-            </label>
-            <input
-              type="text"
-              id="title"
-              name="title"
-              value={formData.title}
-              onChange={handleChange}
-              required
-              placeholder="投稿のタイトルを入力してください"
-              className="input-field"
-            />
-          </div>
+          {/* タイトル（つぶやきの場合は非表示） */}
+          {formData.category !== 'chat' && (
+            <div>
+              <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-2">
+                タイトル *
+              </label>
+              <input
+                type="text"
+                id="title"
+                name="title"
+                value={formData.title}
+                onChange={handleChange}
+                required
+                placeholder="投稿のタイトルを入力してください"
+                className="input-field"
+              />
+            </div>
+          )}
 
           {/* 内容 */}
           <div>
@@ -259,68 +524,236 @@ export default function NewPost() {
             />
           </div>
 
-          {/* タグ */}
+          {/* タグ選択 */}
           <div>
-            <label htmlFor="tags" className="block text-sm font-medium text-gray-700 mb-2">
-              タグ（カンマ区切り）
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              タグ
             </label>
-            <input
-              type="text"
-              id="tags"
-              name="tags"
-              value={formData.tags}
-              onChange={handleChange}
-              placeholder="留学, アメリカ, 大学院"
-              className="input-field"
-            />
-            <p className="text-sm text-gray-500 mt-1">複数のタグはカンマで区切って入力してください</p>
+            <div className="flex flex-wrap gap-2">
+              {availableTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => {
+                    if (formData.tags.includes(tag)) {
+                      setFormData(prev => ({
+                        ...prev,
+                        tags: prev.tags.filter(t => t !== tag)
+                      }))
+                    } else {
+                      setFormData(prev => ({
+                        ...prev,
+                        tags: [...prev.tags, tag]
+                      }))
+                    }
+                  }}
+                  className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                    formData.tags.includes(tag)
+                      ? 'bg-primary-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+            <p className="text-sm text-gray-500 mt-2">
+              選択したタグ: {formData.tags.length > 0 ? formData.tags.join(', ') : 'なし'}
+            </p>
           </div>
 
-          {/* 大学・留学先・専攻 */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label htmlFor="university" className="block text-sm font-medium text-gray-700 mb-2">
-                大学
+          {/* どこに関する質問か */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                どこに関する質問か
               </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const allExpanded = Object.keys(countriesByRegion).every(key => expandedRegions.has(key))
+                  if (allExpanded) {
+                    setExpandedRegions(new Set())
+                  } else {
+                    setExpandedRegions(new Set(Object.keys(countriesByRegion)))
+                  }
+                }}
+                className="text-xs text-primary-600 hover:text-primary-800"
+              >
+                {Object.keys(countriesByRegion).every(key => expandedRegions.has(key)) ? 'すべて折りたたむ' : 'すべて展開'}
+              </button>
+            </div>
+            
+            {/* 地域別の国の国旗チップ（横スクロール・折りたたみ可能） */}
+            {Object.entries(countriesByRegion).map(([regionKey, region]) => {
+              const isExpanded = expandedRegions.has(regionKey)
+              return (
+                <div key={regionKey} className="mb-2 border border-gray-200 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExpandedRegions(prev => {
+                        const newSet = new Set(prev)
+                        if (newSet.has(regionKey)) {
+                          newSet.delete(regionKey)
+                        } else {
+                          newSet.add(regionKey)
+                        }
+                        return newSet
+                      })
+                    }}
+                    className="w-full px-4 py-2 bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
+                  >
+                    <h4 className="text-sm font-medium text-gray-700">{region.label}</h4>
+                    <span className="text-xs text-gray-500">
+                      {isExpanded ? '▼' : '▶'} {formData.study_abroad_destinations.filter(d => region.countries.some(c => c.name === d)).length > 0 && `(${formData.study_abroad_destinations.filter(d => region.countries.some(c => c.name === d)).length}件選択中)`}
+                    </span>
+                  </button>
+                  {isExpanded && (
+                    <div className="relative p-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const ref = countryScrollRefs.current[regionKey]
+                          if (ref) {
+                            ref.scrollBy({ left: -200, behavior: 'smooth' })
+                          }
+                        }}
+                        className="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 shadow-md hover:bg-gray-50 transition-colors"
+                      >
+                        <ChevronLeft className="h-5 w-5 text-gray-600" />
+                      </button>
+                      <div 
+                        ref={(el) => { countryScrollRefs.current[regionKey] = el }}
+                        className="overflow-x-auto pb-2 scrollbar-hide px-8" 
+                        style={{ WebkitOverflowScrolling: 'touch' }}
+                      >
+                        <div className="flex space-x-2 min-w-max">
+                          {region.countries.map((country) => {
+                            const isSelected = formData.study_abroad_destinations.includes(country.name)
+                            return (
+                              <button
+                                key={country.code}
+                                type="button"
+                                onClick={() => {
+                                  if (country.code === 'OTHER') {
+                                    setCountrySearch('')
+                                    setFormData(prev => ({ ...prev, study_abroad_destinations: [] }))
+                                  } else {
+                                    setFormData(prev => {
+                                      if (prev.study_abroad_destinations.includes(country.name)) {
+                                        return { ...prev, study_abroad_destinations: prev.study_abroad_destinations.filter(c => c !== country.name) }
+                                      } else {
+                                        return { ...prev, study_abroad_destinations: [...prev.study_abroad_destinations, country.name] }
+                                      }
+                                    })
+                                    setCountrySearch('')
+                                  }
+                                }}
+                                className={`px-3 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap flex items-center space-x-1 flex-shrink-0 ${
+                                  isSelected
+                                    ? 'bg-primary-600 text-white'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                }`}
+                              >
+                                <span>{country.flag}</span>
+                                <span>{country.name}</span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const ref = countryScrollRefs.current[regionKey]
+                          if (ref) {
+                            ref.scrollBy({ left: 200, behavior: 'smooth' })
+                          }
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 shadow-md hover:bg-gray-50 transition-colors"
+                      >
+                        <ChevronRight className="h-5 w-5 text-gray-600" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+            
+            {/* 検索窓（全ての国を検索可能） */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
+              </div>
               <input
                 type="text"
-                id="university"
-                name="university"
-                value={formData.university}
-                onChange={handleChange}
-                placeholder="東京大学"
-                className="input-field"
+                value={countrySearch}
+                onChange={(e) => setCountrySearch(e.target.value)}
+                placeholder="国を検索..."
+                className="input-field pl-10 w-full"
               />
+              {countrySearch && filteredCountries.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {filteredCountries.map((country) => (
+                    <button
+                      key={country.code}
+                      type="button"
+                      onClick={() => {
+                        setFormData(prev => {
+                          if (prev.study_abroad_destinations.includes(country.name)) {
+                            return { ...prev, study_abroad_destinations: prev.study_abroad_destinations.filter(c => c !== country.name) }
+                          } else {
+                            return { ...prev, study_abroad_destinations: [...prev.study_abroad_destinations, country.name] }
+                          }
+                        })
+                        setCountrySearch('')
+                      }}
+                      className={`w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center space-x-2 ${
+                        formData.study_abroad_destinations.includes(country.name) ? 'bg-primary-50' : ''
+                      }`}
+                    >
+                      <span className="text-xl">{country.flag}</span>
+                      <span className="text-sm">{country.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <div>
-              <label htmlFor="study_abroad_destination" className="block text-sm font-medium text-gray-700 mb-2">
-                留学先
-              </label>
-              <input
-                type="text"
-                id="study_abroad_destination"
-                name="study_abroad_destination"
-                value={formData.study_abroad_destination}
-                onChange={handleChange}
-                placeholder="アメリカ"
-                className="input-field"
-              />
-            </div>
-            <div>
-              <label htmlFor="major" className="block text-sm font-medium text-gray-700 mb-2">
-                専攻
-              </label>
-              <input
-                type="text"
-                id="major"
-                name="major"
-                value={formData.major}
-                onChange={handleChange}
-                placeholder="コンピュータサイエンス"
-                className="input-field"
-              />
-            </div>
+            
+            {formData.study_abroad_destinations.length > 0 && (
+              <p className="text-sm text-gray-500 mt-2">
+                選択中: {formData.study_abroad_destinations.join(', ')}
+              </p>
+            )}
           </div>
+
+          {/* コミュニティ限定投稿 */}
+          {userCommunities.length > 0 && (
+            <div>
+              <label htmlFor="community_id" className="block text-sm font-medium text-gray-700 mb-2">
+                コミュニティ限定投稿（オプション）
+              </label>
+              <select
+                id="community_id"
+                name="community_id"
+                value={formData.community_id || ''}
+                onChange={(e) => setFormData(prev => ({ ...prev, community_id: e.target.value || undefined }))}
+                className="input-field"
+              >
+                <option value="">公開（全員に表示）</option>
+                {userCommunities.map((community) => (
+                  <option key={community.id} value={community.id}>
+                    {community.name}（コミュニティ限定）
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                コミュニティを選択すると、そのコミュニティのメンバーのみに表示されます
+              </p>
+            </div>
+          )}
+
 
           {/* 投稿ボタン */}
           <div className="flex justify-end space-x-4">

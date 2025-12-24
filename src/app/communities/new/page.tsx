@@ -17,7 +17,8 @@ export default function NewCommunity() {
     description: '',
     cover_image_url: '',
     icon_url: '',
-    visibility: 'public' as 'public' | 'private'
+    visibility: 'public' as 'public' | 'private',
+    community_type: (user?.account_type === 'individual' ? 'guild' : 'official') as 'guild' | 'official'
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,7 +37,8 @@ export default function NewCommunity() {
         formData.description || undefined,
         formData.cover_image_url || undefined,
         formData.icon_url || undefined,
-        formData.visibility
+        formData.visibility,
+        formData.community_type
       )
 
       router.push(`/communities/${community.id}`)
@@ -80,17 +82,25 @@ export default function NewCommunity() {
     )
   }
 
-  const isVerifiedOrganization = user && 
+  // 個人アカウントはギルドを作成可能、組織アカウントは公式コミュニティを作成可能
+  const canCreateGuild = user && user.account_type === 'individual'
+  const canCreateOfficialCommunity = user && 
     user.account_type !== 'individual' && 
     user.verification_status === 'verified'
 
-  if (!isVerifiedOrganization) {
+  if (!canCreateGuild && !canCreateOfficialCommunity) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">認証が必要です</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">
+            {user && user.account_type !== 'individual' && user.verification_status !== 'verified'
+              ? '認証が必要です'
+              : 'ログインが必要です'}
+          </h1>
           <p className="text-gray-600 mb-6">
-            コミュニティを作成するには、認証済みの組織アカウントが必要です。
+            {user && user.account_type !== 'individual' && user.verification_status !== 'verified'
+              ? '公式コミュニティを作成するには、認証済みの組織アカウントが必要です。'
+              : 'コミュニティを作成するにはログインしてください。'}
           </p>
           <button
             onClick={() => router.push('/communities')}
@@ -116,7 +126,9 @@ export default function NewCommunity() {
               <ArrowLeft className="h-5 w-5 mr-2" />
               戻る
             </button>
-            <h1 className="text-3xl font-bold text-gray-900">新規コミュニティ</h1>
+            <h1 className="text-3xl font-bold text-gray-900">
+              {formData.community_type === 'guild' ? '新規ギルド' : '新規公式コミュニティ'}
+            </h1>
           </div>
         </div>
 
@@ -192,6 +204,28 @@ export default function NewCommunity() {
               className="input-field"
             />
           </div>
+
+          {/* コミュニティタイプ（個人アカウントのみ表示） */}
+          {user && user.account_type === 'individual' && (
+            <div>
+              <label htmlFor="community_type" className="block text-sm font-medium text-gray-700 mb-2">
+                コミュニティタイプ
+              </label>
+              <select
+                id="community_type"
+                name="community_type"
+                value={formData.community_type}
+                onChange={handleChange}
+                className="input-field"
+                disabled
+              >
+                <option value="guild">ギルド（個人アカウント）</option>
+              </select>
+              <p className="text-sm text-gray-500 mt-1">
+                ギルドでは、メンバーがクエストを投稿し、クリアするとキャンドルを獲得できます。
+              </p>
+            </div>
+          )}
 
           {/* 公開設定 */}
           <div>

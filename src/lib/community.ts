@@ -72,29 +72,38 @@ export async function getCommunityById(communityId: string, userId?: string) {
 }
 
 /**
- * コミュニティを作成（組織アカウントのみ）
+ * コミュニティを作成（個人アカウントはギルド、組織アカウントは公式コミュニティ）
  */
 export async function createCommunity(
   name: string,
   description?: string,
   coverImageUrl?: string,
   iconUrl?: string,
-  visibility: 'public' | 'private' = 'public'
+  visibility: 'public' | 'private' = 'public',
+  communityType: 'guild' | 'official' = 'official'
 ) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     throw new Error('ログインが必要です')
   }
 
-  // 組織アカウントか確認
+  // プロフィールを取得
   const { data: profile } = await supabase
     .from('profiles')
     .select('account_type, verification_status')
     .eq('id', user.id)
     .single()
 
-  if (!profile || profile.account_type === 'individual' || profile.verification_status !== 'verified') {
-    throw new Error('認証済みの組織アカウントのみコミュニティを作成できます')
+  if (!profile) {
+    throw new Error('プロフィールが見つかりません')
+  }
+
+  // 個人アカウントはギルドのみ、組織アカウントは公式コミュニティのみ
+  if (communityType === 'guild' && profile.account_type !== 'individual') {
+    throw new Error('ギルドは個人アカウントのみ作成できます')
+  }
+  if (communityType === 'official' && (profile.account_type === 'individual' || profile.verification_status !== 'verified')) {
+    throw new Error('公式コミュニティは認証済みの組織アカウントのみ作成できます')
   }
 
   const { data, error } = await supabase
@@ -105,7 +114,8 @@ export async function createCommunity(
       cover_image_url: coverImageUrl,
       icon_url: iconUrl,
       owner_id: user.id,
-      visibility
+      visibility,
+      community_type: communityType // ギルド or 公式コミュニティ
     })
     .select(`
       *,
@@ -116,6 +126,24 @@ export async function createCommunity(
   if (error) {
     console.error('Error creating community:', error)
     throw error
+  }
+
+  // 作成者を自動的にメンバーとして追加（承認済み、管理者権限）
+  if (data) {
+    const { error: memberError } = await supabase
+      .from('community_members')
+      .insert({
+        community_id: data.id,
+        user_id: user.id,
+        status: 'approved',
+        role: 'admin',
+        joined_at: new Date().toISOString()
+      })
+
+    if (memberError) {
+      console.error('Error adding creator as member:', memberError)
+      // メンバー追加に失敗してもコミュニティ作成は成功とする
+    }
   }
 
   return data

@@ -5,7 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import type { Post, Comment } from '@/lib/supabase'
-import { Heart, MessageSquare, Share, Flag, Clock, User, MapPin, GraduationCap } from 'lucide-react'
+import { updateUserScore } from '@/lib/quest'
+import { Flame, MessageSquare, Share, Flag, Clock, User, MapPin, GraduationCap } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 
@@ -121,9 +122,48 @@ export default function PostDetail() {
         if (error) throw error
         setLiked(true)
         setPost(prev => prev ? { ...prev, likes_count: prev.likes_count + 1 } : null)
+        
+        // 投稿者に「火」を加算（いいねされた側）
+        if (post?.author_id) {
+          try {
+            await addFlameToUser(post.author_id)
+          } catch (flameError) {
+            console.error('Error adding flame:', flameError)
+          }
+        }
       }
     } catch (error: any) {
       console.error('Error toggling like:', error)
+    }
+  }
+
+  // 「火」をユーザーに加算する関数
+  const addFlameToUser = async (userId: string) => {
+    // スコアレコードを取得または作成
+    const { data: existing } = await supabase
+      .from('user_scores')
+      .select('*')
+      .eq('user_id', userId)
+      .single()
+
+    if (existing) {
+      await supabase
+        .from('user_scores')
+        .update({
+          flame_count: (existing.flame_count || 0) + 1,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+    } else {
+      await supabase
+        .from('user_scores')
+        .insert({
+          user_id: userId,
+          flame_count: 1,
+          candle_count: 0,
+          torch_count: 0,
+          candles_received_count: 0
+        })
     }
   }
 
@@ -166,6 +206,15 @@ export default function PostDetail() {
           .eq('id', user.id)
       }
 
+      // 質問への回答の場合、投稿者に「火」を加算
+      if (post?.category === 'question' && post?.author_id) {
+        try {
+          await addFlameToUser(post.author_id)
+        } catch (flameError) {
+          console.error('Error adding flame for answer:', flameError)
+        }
+      }
+
       setNewComment('')
       fetchComments()
     } catch (error: any) {
@@ -189,8 +238,9 @@ export default function PostDetail() {
   const getCategoryLabel = (category: string) => {
     switch (category) {
       case 'question': return '質問'
-      case 'diary': return '留学日記'
-      case 'information': return '情報共有'
+      case 'diary': return '日記'
+      case 'chat': return 'つぶやき'
+      case 'information': return 'つぶやき' // 後方互換性
       default: return category
     }
   }
@@ -199,7 +249,8 @@ export default function PostDetail() {
     switch (category) {
       case 'question': return 'bg-blue-100 text-blue-800'
       case 'diary': return 'bg-green-100 text-green-800'
-      case 'information': return 'bg-purple-100 text-purple-800'
+      case 'chat': return 'bg-purple-100 text-purple-800'
+      case 'information': return 'bg-purple-100 text-purple-800' // 後方互換性
       default: return 'bg-gray-100 text-gray-800'
     }
   }
@@ -318,11 +369,11 @@ export default function PostDetail() {
                 onClick={handleLike}
                 className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
                   liked 
-                    ? 'bg-red-100 text-red-600' 
+                    ? 'bg-orange-100 text-orange-600' 
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                <Heart className={`h-5 w-5 ${liked ? 'fill-current' : ''}`} />
+                <Flame className={`h-5 w-5 ${liked ? 'text-orange-500 fill-current' : 'text-gray-500'}`} />
                 <span>{post.likes_count}</span>
               </button>
               <div className="flex items-center space-x-2 text-gray-600">
@@ -406,7 +457,7 @@ export default function PostDetail() {
                   </div>
                   <div className="flex items-center space-x-4 mt-4">
                     <button className="flex items-center space-x-1 text-gray-500 hover:text-gray-700">
-                      <Heart className="h-4 w-4" />
+                      <Flame className="h-4 w-4 text-orange-500" />
                       <span>{comment.likes_count}</span>
                     </button>
                     <button className="text-gray-500 hover:text-gray-700">
