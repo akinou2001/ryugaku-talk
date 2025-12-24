@@ -311,16 +311,22 @@ export async function updateVerificationStatus(
   reviewNotes?: string
 ) {
   try {
+<<<<<<< HEAD
     console.log('Updating verification status:', { userId, status, adminId })
     
     // プロフィールの認証ステータスを更新
     const { error: profileError, data: profileData } = await supabase
+=======
+    // プロフィールの認証ステータスを更新
+    const { error: profileError } = await supabase
+>>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
       .from('profiles')
       .update({
         verification_status: status,
         updated_at: new Date().toISOString()
       })
       .eq('id', userId)
+<<<<<<< HEAD
       .select()
 
     if (profileError) {
@@ -345,24 +351,49 @@ export async function updateVerificationStatus(
     }
 
     const requestStatus = status === 'verified' ? 'approved' : status === 'rejected' ? 'rejected' : 'pending'
+=======
+
+    if (profileError) {
+      throw profileError
+    }
+
+    // 認証申請が存在する場合は更新、存在しない場合は作成
+    const { data: existingRequest } = await supabase
+      .from('organization_verification_requests')
+      .select('id')
+      .eq('profile_id', userId)
+      .single()
+>>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
 
     if (existingRequest) {
       // 既存の申請を更新
       const { error: updateError } = await supabase
         .from('organization_verification_requests')
         .update({
+<<<<<<< HEAD
           status: requestStatus,
           reviewed_by: adminId,
           reviewed_at: new Date().toISOString(),
           review_notes: reviewNotes || null
+=======
+          status: status === 'verified' ? 'approved' : status === 'rejected' ? 'rejected' : 'pending',
+          reviewed_by: adminId,
+          reviewed_at: new Date().toISOString(),
+          review_notes: reviewNotes
+>>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
         })
         .eq('id', existingRequest.id)
 
       if (updateError) {
         console.error('Error updating verification request:', updateError)
+<<<<<<< HEAD
         throw new Error(`認証申請の更新に失敗しました: ${updateError.message}`)
       }
       console.log('Verification request updated')
+=======
+        // 申請の更新に失敗しても、プロフィールの更新は成功しているので続行
+      }
+>>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
     } else {
       // 認証申請が存在しない場合は作成（管理者が直接認証した場合）
       const { data: profile } = await supabase
@@ -383,25 +414,38 @@ export async function updateVerificationStatus(
             contact_person_name: profile.contact_person_name || '',
             contact_person_email: profile.contact_person_email || '',
             contact_person_phone: profile.contact_person_phone || null,
+<<<<<<< HEAD
             status: requestStatus,
             reviewed_by: adminId,
             reviewed_at: new Date().toISOString(),
             review_notes: reviewNotes || null
+=======
+            status: status === 'verified' ? 'approved' : status === 'rejected' ? 'rejected' : 'pending',
+            reviewed_by: adminId,
+            reviewed_at: new Date().toISOString(),
+            review_notes: reviewNotes
+>>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
           })
 
         if (createError) {
           console.error('Error creating verification request:', createError)
           // 申請の作成に失敗しても、プロフィールの更新は成功しているので続行
+<<<<<<< HEAD
           // ただし、エラーを記録
         } else {
           console.log('Verification request created')
+=======
+>>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
         }
       }
     }
 
     return { success: true, error: null }
   } catch (error: any) {
+<<<<<<< HEAD
     console.error('Error in updateVerificationStatus:', error)
+=======
+>>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
     return { success: false, error: error.message || '認証状態の更新に失敗しました' }
   }
 }

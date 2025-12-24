@@ -4,8 +4,12 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { createCommunity } from '@/lib/community'
+<<<<<<< HEAD
 import { uploadFile, validateFileType, validateFileSize, FILE_TYPES } from '@/lib/storage'
 import { ArrowLeft, Save, X, Image as ImageIcon } from 'lucide-react'
+=======
+import { ArrowLeft, Save, X } from 'lucide-react'
+>>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
 
 export default function NewCommunity() {
   const { user } = useAuth()
@@ -16,6 +20,7 @@ export default function NewCommunity() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
+<<<<<<< HEAD
     visibility: 'public' as 'public' | 'private',
     community_type: (user?.account_type === 'individual' ? 'guild' : 'official') as 'guild' | 'official'
   })
@@ -51,6 +56,12 @@ export default function NewCommunity() {
     setCoverImage(null)
     setCoverImagePreview(null)
   }
+=======
+    cover_image_url: '',
+    icon_url: '',
+    visibility: 'public' as 'public' | 'private'
+  })
+>>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -63,6 +74,7 @@ export default function NewCommunity() {
     setError('')
 
     try {
+<<<<<<< HEAD
       // カバー画像をアップロード
       let coverImageUrl: string | undefined = undefined
       if (coverImage) {
@@ -86,6 +98,14 @@ export default function NewCommunity() {
         undefined, // icon_urlは不要
         formData.visibility,
         formData.community_type
+=======
+      const community = await createCommunity(
+        formData.name,
+        formData.description || undefined,
+        formData.cover_image_url || undefined,
+        formData.icon_url || undefined,
+        formData.visibility
+>>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
       )
 
       router.push(`/communities/${community.id}`)
@@ -129,6 +149,7 @@ export default function NewCommunity() {
     )
   }
 
+<<<<<<< HEAD
   // 個人アカウントはギルドを作成可能、組織アカウントは公式コミュニティを作成可能
   const canCreateGuild = user && user.account_type === 'individual'
   const canCreateOfficialCommunity = user && 
@@ -148,6 +169,19 @@ export default function NewCommunity() {
             {user && user.account_type !== 'individual' && user.verification_status !== 'verified'
               ? '公式コミュニティを作成するには、認証済みの組織アカウントが必要です。'
               : 'コミュニティを作成するにはログインしてください。'}
+=======
+  const isVerifiedOrganization = user && 
+    user.account_type !== 'individual' && 
+    user.verification_status === 'verified'
+
+  if (!isVerifiedOrganization) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">認証が必要です</h1>
+          <p className="text-gray-600 mb-6">
+            コミュニティを作成するには、認証済みの組織アカウントが必要です。
+>>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
           </p>
           <button
             onClick={() => router.push('/communities')}
@@ -173,9 +207,13 @@ export default function NewCommunity() {
               <ArrowLeft className="h-5 w-5 mr-2" />
               戻る
             </button>
+<<<<<<< HEAD
             <h1 className="text-3xl font-bold text-gray-900">
               {formData.community_type === 'guild' ? '新規ギルド' : '新規公式コミュニティ'}
             </h1>
+=======
+            <h1 className="text-3xl font-bold text-gray-900">新規コミュニティ</h1>
+>>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
           </div>
         </div>
 
@@ -220,6 +258,7 @@ export default function NewCommunity() {
             />
           </div>
 
+<<<<<<< HEAD
           {/* カバー画像 */}
           <div>
             <label htmlFor="cover_image" className="block text-sm font-medium text-gray-700 mb-2">
@@ -277,6 +316,39 @@ export default function NewCommunity() {
               </p>
             </div>
           )}
+=======
+          {/* カバー画像URL */}
+          <div>
+            <label htmlFor="cover_image_url" className="block text-sm font-medium text-gray-700 mb-2">
+              カバー画像URL（任意）
+            </label>
+            <input
+              type="url"
+              id="cover_image_url"
+              name="cover_image_url"
+              value={formData.cover_image_url}
+              onChange={handleChange}
+              placeholder="https://example.com/image.jpg"
+              className="input-field"
+            />
+          </div>
+
+          {/* アイコンURL */}
+          <div>
+            <label htmlFor="icon_url" className="block text-sm font-medium text-gray-700 mb-2">
+              アイコンURL（任意）
+            </label>
+            <input
+              type="url"
+              id="icon_url"
+              name="icon_url"
+              value={formData.icon_url}
+              onChange={handleChange}
+              placeholder="https://example.com/icon.jpg"
+              className="input-field"
+            />
+          </div>
+>>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
 
           {/* 公開設定 */}
           <div>

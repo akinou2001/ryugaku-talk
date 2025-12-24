@@ -1,9 +1,0 @@
-{
-  "/communities/page": "app/communities/page.js",
-  "/profile/[id]/page": "app/profile/[id]/page.js",
-  "/communities/[id]/page": "app/communities/[id]/page.js",
-  "/timeline/page": "app/timeline/page.js",
-  "/profile/[id]/edit/page": "app/profile/[id]/edit/page.js",
-  "/favicon.ico/route": "app/favicon.ico/route.js",
-  "/page": "app/page.js"
-}

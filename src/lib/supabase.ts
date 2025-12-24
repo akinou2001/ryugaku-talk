@@ -149,8 +149,11 @@ export interface Community {
   owner_id: string
   owner?: User
   visibility: CommunityVisibility
+<<<<<<< HEAD
   is_public?: boolean // 誰でも参加可能か、承認制か
   community_type?: 'guild' | 'official' // ギルド or 公式コミュニティ
+=======
+>>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
   created_at: string
   updated_at: string
   // 集計情報（クエリ時に追加）
@@ -238,9 +241,13 @@ export interface Event {
   location?: string
   online_url?: string
   registration_deadline?: string
+<<<<<<< HEAD
   deadline?: string // 締切日時（registration_deadlineの別名）
   capacity?: number
   attachments?: Array<{ url: string; filename: string; type: string }> // ファイル添付（JSONB形式）
+=======
+  capacity?: number
+>>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
   created_by?: string
   creator?: User
   created_at: string
@@ -261,6 +268,7 @@ export interface EventParticipant {
   registered_at: string
 }
 
+<<<<<<< HEAD
 // クエスト機能の型定義
 export type QuestStatus = 'active' | 'completed' | 'cancelled'
 export type QuestRewardType = 'candle' | 'torch'
@@ -328,4 +336,6 @@ export interface CandleSend {
   week_start: string // 週の開始日（月曜日）
 }
 
+=======
+>>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
 
