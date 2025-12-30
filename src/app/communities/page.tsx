@@ -28,7 +28,17 @@ export default function CommunitiesPage() {
         searchTerm || undefined,
         visibilityFilter !== 'all' ? visibilityFilter : undefined
       )
-      setCommunities(data as Community[])
+      
+      // 参加しているコミュニティを上に、参加していないコミュニティを下にソート
+      const sortedData = [...(data as Community[])].sort((a, b) => {
+        // 参加しているコミュニティを優先
+        if (a.is_member && !b.is_member) return -1
+        if (!a.is_member && b.is_member) return 1
+        // どちらも同じ状態の場合は作成日時でソート
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      })
+      
+      setCommunities(sortedData)
     } catch (error) {
       console.error('Error fetching communities:', error)
     } finally {
@@ -156,108 +166,165 @@ export default function CommunitiesPage() {
             <p className="text-sm text-gray-400">検索条件を変更して再度お試しください</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {communities.map((community) => (
-              <div key={community.id} className="card hover:shadow-lg transition-shadow">
-                {/* カバー画像 */}
-                {community.cover_image_url ? (
-                  <img
-                    src={community.cover_image_url}
-                    alt={community.name}
-                    className="w-full h-32 object-cover rounded-t-lg"
-                  />
-                ) : (
-                  <div className="w-full h-32 bg-gradient-to-r from-primary-500 to-primary-600 rounded-t-lg flex items-center justify-center">
-                    <Building2 className="h-12 w-12 text-white opacity-50" />
-                  </div>
-                )}
-
-                <div className="p-4">
-                  {/* コミュニティ名とアイコン */}
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center space-x-2 flex-1 min-w-0">
-                      {community.icon_url ? (
-                        <img
-                          src={community.icon_url}
-                          alt={community.name}
-                          className="w-10 h-10 rounded-full flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
-                          <Building2 className="h-5 w-5 text-primary-600" />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-gray-900 truncate">{community.name}</h3>
-                        {community.owner && (
-                          <div className="flex items-center space-x-1 mt-1">
-                            <span className="text-xs text-gray-500">運営:</span>
-                            <span className="text-xs font-medium text-gray-700">
-                              {community.owner.organization_name || community.owner.name}
-                            </span>
-                            {community.owner.verification_status === 'verified' && (
-                              <CheckCircle className="h-3 w-3 text-blue-500" />
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex-shrink-0">
-                      {community.visibility === 'private' ? (
-                        <Lock className="h-4 w-4 text-gray-400" />
-                      ) : (
-                        <Globe className="h-4 w-4 text-gray-400" />
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 説明 */}
-                  {community.description && (
-                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                      {community.description}
-                    </p>
-                  )}
-
-                  {/* メタ情報 */}
-                  <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
-                    <div className="flex items-center space-x-1">
-                      <Users className="h-3 w-3" />
-                      <span>{community.member_count || 0}名</span>
-                    </div>
-                    <span>{formatDate(community.created_at)}</span>
-                  </div>
-
-                  {/* アクションボタン */}
-                  <div className="flex space-x-2">
-                    <Link
-                      href={`/communities/${community.id}`}
-                      className="btn-secondary flex-1 text-center"
-                    >
-                      詳細を見る
-                    </Link>
-                    {user && !community.is_member && (
-                      <button
-                        onClick={() => handleJoinRequest(community.id)}
-                        className="btn-primary flex-1"
-                        disabled={community.member_status === 'pending'}
-                      >
-                        {community.member_status === 'pending' ? '申請中' : '加入申請'}
-                      </button>
-                    )}
-                    {user && community.is_member && (
-                      <Link
-                        href={`/communities/${community.id}`}
-                        className="btn-primary flex-1 text-center"
-                      >
-                        参加中
-                      </Link>
-                    )}
-                  </div>
+          <>
+            {/* 参加しているコミュニティ */}
+            {communities.filter(c => c.is_member).length > 0 && (
+              <div className="mb-8">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                  <CheckCircle className="h-5 w-5 mr-2 text-green-500" />
+                  参加中のコミュニティ
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {communities.filter(c => c.is_member).map((community) => (
+                    <CommunityCard 
+                      key={community.id} 
+                      community={community} 
+                      user={user}
+                      onJoinRequest={handleJoinRequest}
+                    />
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+
+            {/* 参加していないコミュニティ */}
+            {communities.filter(c => !c.is_member).length > 0 && (
+              <div>
+                {communities.filter(c => c.is_member).length > 0 && (
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                    その他のコミュニティ
+                  </h2>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {communities.filter(c => !c.is_member).map((community) => (
+                    <CommunityCard 
+                      key={community.id} 
+                      community={community} 
+                      user={user}
+                      onJoinRequest={handleJoinRequest}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
+      </div>
+    </div>
+  )
+}
+
+// コミュニティカードコンポーネント
+function CommunityCard({ 
+  community, 
+  user, 
+  onJoinRequest 
+}: { 
+  community: Community
+  user: any
+  onJoinRequest: (communityId: string) => void
+}) {
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('ja-JP')
+  }
+
+  return (
+    <div className="card hover:shadow-lg transition-shadow">
+      {/* カバー画像 */}
+      {community.cover_image_url ? (
+        <img
+          src={community.cover_image_url}
+          alt={community.name}
+          className="w-full h-32 object-cover rounded-t-lg"
+        />
+      ) : (
+        <div className="w-full h-32 bg-gradient-to-r from-primary-500 to-primary-600 rounded-t-lg flex items-center justify-center">
+          <Building2 className="h-12 w-12 text-white opacity-50" />
+        </div>
+      )}
+
+      <div className="p-4">
+        {/* コミュニティ名とアイコン */}
+        <div className="flex items-start justify-between mb-2">
+          <div className="flex items-center space-x-2 flex-1 min-w-0">
+            {community.icon_url ? (
+              <img
+                src={community.icon_url}
+                alt={community.name}
+                className="w-10 h-10 rounded-full flex-shrink-0"
+              />
+            ) : (
+              <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <Building2 className="h-5 w-5 text-primary-600" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-gray-900 truncate">{community.name}</h3>
+              {community.owner && (
+                <div className="flex items-center space-x-1 mt-1">
+                  <span className="text-xs text-gray-500">運営:</span>
+                  <span className="text-xs font-medium text-gray-700">
+                    {community.owner.organization_name || community.owner.name}
+                  </span>
+                  {community.owner.verification_status === 'verified' && (
+                    <CheckCircle className="h-3 w-3 text-blue-500" />
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex-shrink-0">
+            {community.visibility === 'private' ? (
+              <Lock className="h-4 w-4 text-gray-400" />
+            ) : (
+              <Globe className="h-4 w-4 text-gray-400" />
+            )}
+          </div>
+        </div>
+
+        {/* 説明 */}
+        {community.description && (
+          <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+            {community.description}
+          </p>
+        )}
+
+        {/* メタ情報 */}
+        <div className="flex items-center justify-between text-xs text-gray-500 mb-4">
+          <div className="flex items-center space-x-1">
+            <Users className="h-3 w-3" />
+            <span>{community.member_count || 0}名</span>
+          </div>
+          <span>{formatDate(community.created_at)}</span>
+        </div>
+
+        {/* アクションボタン */}
+        <div className="flex space-x-2">
+          <Link
+            href={`/communities/${community.id}`}
+            className="btn-secondary flex-1 text-center"
+          >
+            詳細を見る
+          </Link>
+          {user && !community.is_member && (
+            <button
+              onClick={() => onJoinRequest(community.id)}
+              className="btn-primary flex-1"
+              disabled={community.member_status === 'pending'}
+            >
+              {community.member_status === 'pending' ? '申請中' : '加入申請'}
+            </button>
+          )}
+          {user && community.is_member && (
+            <Link
+              href={`/communities/${community.id}`}
+              className="btn-primary flex-1 text-center"
+            >
+              参加中
+            </Link>
+          )}
+        </div>
       </div>
     </div>
   )

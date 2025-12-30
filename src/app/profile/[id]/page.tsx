@@ -6,7 +6,7 @@ import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import type { User, Post, UserScore } from '@/lib/supabase'
 import { getUserScore } from '@/lib/quest'
-import { User as UserIcon, MapPin, GraduationCap, Calendar, MessageSquare, Flame, Edit, Settings, Send, Building2, Candle, Torch } from 'lucide-react'
+import { User as UserIcon, MapPin, GraduationCap, Calendar, MessageSquare, Flame, Edit, Settings, Send, Building2 } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 
@@ -18,6 +18,7 @@ export default function Profile() {
   const [profile, setProfile] = useState<User | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
   const [userScore, setUserScore] = useState<UserScore | null>(null)
+  const [verificationRequest, setVerificationRequest] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [postsLoading, setPostsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -27,6 +28,7 @@ export default function Profile() {
       fetchProfile()
       fetchUserPosts()
       fetchUserScore()
+      fetchVerificationRequest()
     }
   }, [userId])
 
@@ -80,6 +82,29 @@ export default function Profile() {
       setUserScore(score)
     } catch (error: any) {
       console.error('Error fetching user score:', error)
+    }
+  }
+
+  const fetchVerificationRequest = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('organization_verification_requests')
+        .select('*')
+        .eq('profile_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching verification request:', error)
+        return
+      }
+
+      if (data) {
+        setVerificationRequest(data)
+      }
+    } catch (error: any) {
+      console.error('Error fetching verification request:', error)
     }
   }
 
@@ -144,11 +169,17 @@ export default function Profile() {
 
   const isOwnProfile = currentUser?.id === profile.id
 
+  const isOrganizationAccount = profile.account_type !== 'individual'
+  const pageTitle = isOrganizationAccount ? '組織プロフィール' : 'プロフィール'
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-4xl mx-auto">
+        {/* ページタイトル */}
+        <h1 className="text-2xl font-bold text-gray-900 mb-4">{pageTitle}</h1>
+        
         {/* プロフィールヘッダー */}
-        <div className="card mb-8">
+        <div className={`card mb-8 ${isOrganizationAccount ? 'border-l-4 border-l-blue-500' : ''}`}>
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6">
             <div className="flex items-center space-x-4 mb-4 md:mb-0">
               <div className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center">
@@ -233,13 +264,28 @@ export default function Profile() {
                       </Link>
                     </div>
                   )}
-                  {profile.verification_status === 'pending' && (
+                  {(profile.verification_status === 'pending' || verificationRequest?.status === 'pending') && (
                     <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg text-sm">
-                      <div className="font-semibold mb-1">認証審査中</div>
-                      <div className="text-xs">
+                      <div className="font-semibold mb-1 flex items-center space-x-2">
+                        <span>認証審査中</span>
+                        {verificationRequest && (
+                          <span className="text-xs font-normal opacity-75">
+                            (申請日: {new Date(verificationRequest.created_at).toLocaleDateString('ja-JP')})
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs mb-2">
                         組織アカウントの認証審査中です。通常1-3営業日で完了します。
                         認証が完了すると、コミュニティ作成などの組織用機能がご利用いただけます。
                       </div>
+                      {verificationRequest && (
+                        <div className="text-xs mb-2 space-y-1">
+                          <div>申請組織: {verificationRequest.organization_name}</div>
+                          {verificationRequest.contact_person_name && (
+                            <div>担当者: {verificationRequest.contact_person_name}</div>
+                          )}
+                        </div>
+                      )}
                       {isOwnProfile && (
                         <Link href="/verification/request" className="text-xs text-yellow-700 hover:text-yellow-900 underline mt-2 inline-block">
                           申請内容を確認・更新

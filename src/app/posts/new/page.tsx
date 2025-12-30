@@ -5,7 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import { getUserCommunities } from '@/lib/community'
-import { ArrowLeft, Save, X, Search, ChevronLeft, ChevronRight } from 'lucide-react'
+import { getQuests } from '@/lib/quest'
+import { requestQuestCompletion } from '@/lib/quest'
+import type { Quest } from '@/lib/supabase'
+import { ArrowLeft, Save, X, Search, ChevronLeft, ChevronRight, Flame } from 'lucide-react'
 
 export default function NewPost() {
   const { user } = useAuth()
@@ -25,6 +28,8 @@ export default function NewPost() {
     community_id: '' as string | undefined
   })
   const [userCommunities, setUserCommunities] = useState<Array<{id: string, name: string}>>([])
+  const [availableQuests, setAvailableQuests] = useState<Quest[]>([])
+  const [selectedQuestId, setSelectedQuestId] = useState<string>('')
   const [countrySearch, setCountrySearch] = useState('')
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set())
   const countryScrollRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -296,6 +301,27 @@ export default function NewPost() {
     }
   }
 
+  const fetchQuestsForCommunity = async (communityId: string) => {
+    if (!user) return
+    try {
+      const quests = await getQuests(communityId, user.id)
+      setAvailableQuests(quests)
+    } catch (error) {
+      console.error('Error fetching quests:', error)
+      setAvailableQuests([])
+    }
+  }
+
+  // コミュニティが選択されたら、そのコミュニティのクエストを取得
+  useEffect(() => {
+    if (formData.community_id) {
+      fetchQuestsForCommunity(formData.community_id)
+    } else {
+      setAvailableQuests([])
+      setSelectedQuestId('')
+    }
+  }, [formData.community_id, user])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) {
@@ -315,17 +341,27 @@ export default function NewPost() {
         ? (formData.content.length > 50 ? formData.content.substring(0, 50) + '...' : formData.content) || 'つぶやき'
         : formData.title
       
+      // コミュニティ限定投稿の場合はpost_typeを設定
+      const postType = formData.community_id ? 'normal' : null
+      
+      // クエストタグを追加（選択されている場合）
+      const finalTags = [...formData.tags]
+      if (selectedQuestId) {
+        finalTags.push(`quest:${selectedQuestId}`)
+      }
+      
       // 複数の国を選択している場合は、最初の1つを保存（将来的には配列フィールドを追加）
       const postData: any = {
         title: title,
         content: formData.content,
         category: category,
-        tags: formData.tags,
+        tags: finalTags,
         study_abroad_destination: formData.study_abroad_destinations.length > 0 ? formData.study_abroad_destinations[0] : null,
         author_id: user.id,
         is_official: isVerifiedOrganization && formData.is_official,
         official_category: isVerifiedOrganization && formData.is_official ? formData.official_category : null,
-        community_id: formData.community_id || null
+        community_id: formData.community_id || null,
+        post_type: postType
       }
 
       const { data, error } = await supabase
@@ -336,6 +372,20 @@ export default function NewPost() {
 
       if (error) {
         throw error
+      }
+
+      // クエストタグが含まれている場合、自動的にクエスト完了申請を作成
+      if (selectedQuestId && data) {
+        try {
+          await requestQuestCompletion(
+            selectedQuestId,
+            `投稿: ${data.title}`,
+            `/posts/${data.id}`
+          )
+        } catch (questError: any) {
+          // クエスト完了申請のエラーは投稿作成を妨げない
+          console.error('Error requesting quest completion:', questError)
+        }
       }
 
       // 貢献度を更新（投稿作成で+10ポイント）
@@ -356,7 +406,12 @@ export default function NewPost() {
           .eq('id', user.id)
       }
 
-      router.push(`/posts/${data.id}`)
+      // コミュニティ限定投稿の場合、投稿後にコミュニティページにリダイレクト
+      const redirectPath = formData.community_id 
+        ? `/communities/${formData.community_id}?tab=timeline`
+        : `/posts/${data.id}`
+      
+      router.push(redirectPath)
     } catch (error: any) {
       setError(error.message || '投稿の作成に失敗しました')
     } finally {
@@ -728,30 +783,62 @@ export default function NewPost() {
             )}
           </div>
 
-          {/* コミュニティ限定投稿 */}
-          {userCommunities.length > 0 && (
-            <div>
-              <label htmlFor="community_id" className="block text-sm font-medium text-gray-700 mb-2">
-                コミュニティ限定投稿（オプション）
-              </label>
-              <select
-                id="community_id"
-                name="community_id"
-                value={formData.community_id || ''}
-                onChange={(e) => setFormData(prev => ({ ...prev, community_id: e.target.value || undefined }))}
-                className="input-field"
-              >
-                <option value="">公開（全員に表示）</option>
-                {userCommunities.map((community) => (
-                  <option key={community.id} value={community.id}>
-                    {community.name}（コミュニティ限定）
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-500 mt-1">
-                コミュニティを選択すると、そのコミュニティのメンバーのみに表示されます
-              </p>
-            </div>
+          {/* コミュニティ限定投稿（質問・日記のみ） */}
+          {userCommunities.length > 0 && (formData.category === 'question' || formData.category === 'diary') && (
+            <>
+              <div>
+                <label htmlFor="community_id" className="block text-sm font-medium text-gray-700 mb-2">
+                  コミュニティ限定投稿（オプション）
+                </label>
+                <select
+                  id="community_id"
+                  name="community_id"
+                  value={formData.community_id || ''}
+                  onChange={(e) => {
+                    setFormData(prev => ({ ...prev, community_id: e.target.value || undefined }))
+                    setSelectedQuestId('') // コミュニティが変更されたらクエスト選択をリセット
+                  }}
+                  className="input-field"
+                >
+                  <option value="">公開（全員に表示）</option>
+                  {userCommunities.map((community) => (
+                    <option key={community.id} value={community.id}>
+                      {community.name}（コミュニティ限定）
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  コミュニティを選択すると、そのコミュニティのメンバーのみに表示されます。質問・日記のみコミュニティ限定投稿が可能です。
+                </p>
+              </div>
+
+              {/* クエスト選択（コミュニティ限定投稿の場合のみ） */}
+              {formData.community_id && availableQuests.length > 0 && (
+                <div>
+                  <label htmlFor="quest_id" className="block text-sm font-medium text-gray-700 mb-2">
+                    <Flame className="h-4 w-4 inline mr-1" />
+                    クエストタグ（オプション）
+                  </label>
+                  <select
+                    id="quest_id"
+                    name="quest_id"
+                    value={selectedQuestId}
+                    onChange={(e) => setSelectedQuestId(e.target.value)}
+                    className="input-field"
+                  >
+                    <option value="">クエストを選択しない</option>
+                    {availableQuests.map((quest) => (
+                      <option key={quest.id} value={quest.id}>
+                        {quest.title} ({quest.reward_type === 'candle' ? '🕯️' : '🔥'} {quest.reward_amount}{quest.reward_type === 'candle' ? 'キャンドル' : 'トーチ'})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    クエストを選択すると、投稿にクエストタグが付与され、自動的にクエスト完了申請が送信されます。クエスト作成者の承認後に報酬が付与されます。
+                  </p>
+                </div>
+              )}
+            </>
           )}
 
 

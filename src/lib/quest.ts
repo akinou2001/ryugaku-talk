@@ -50,7 +50,8 @@ export async function createQuest(
   title: string,
   description?: string,
   rewardType: QuestRewardType = 'candle',
-  rewardAmount: number = 1
+  rewardAmount: number = 1,
+  deadline?: string
 ) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
@@ -74,6 +75,7 @@ export async function createQuest(
       creator_profile: profile || null,
       reward_type: rewardType,
       reward_amount: rewardAmount,
+      deadline: deadline || null,
       status: 'active'
     })
     .select(`
@@ -336,5 +338,72 @@ export async function getUserScore(userId: string) {
   }
 
   return data
+}
+
+/**
+ * キャンドルを送信（週1回まで）
+ */
+export async function sendCandle(senderId: string, receiverId: string) {
+  const now = new Date()
+  const dayOfWeek = now.getDay()
+  const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek // 月曜日を0にする
+  const weekStart = new Date(now)
+  weekStart.setDate(now.getDate() + diff)
+  weekStart.setHours(0, 0, 0, 0)
+
+  // 今週に既に送信したか確認
+  const { data: existing } = await supabase
+    .from('candle_sends')
+    .select('*')
+    .eq('sender_id', senderId)
+    .eq('receiver_id', receiverId)
+    .gte('sent_at', weekStart.toISOString())
+    .single()
+
+  if (existing) {
+    throw new Error('今週は既にキャンドルを送信済みです（週1回まで）')
+  }
+
+  // キャンドル送信を記録
+  const { error: sendError } = await supabase
+    .from('candle_sends')
+    .insert({
+      sender_id: senderId,
+      receiver_id: receiverId,
+      sent_at: now.toISOString(),
+      week_start: weekStart.toISOString()
+    })
+
+  if (sendError) {
+    console.error('Error sending candle:', sendError)
+    throw new Error('キャンドルの送信に失敗しました')
+  }
+
+  // 受信者のスコアを更新
+  await updateUserScore(receiverId, 'candle', 1)
+
+  // 送信者のスコアも更新（送信回数の記録）
+  const { data: senderScore } = await supabase
+    .from('user_scores')
+    .select('*')
+    .eq('user_id', senderId)
+    .single()
+
+  if (senderScore) {
+    await supabase
+      .from('user_scores')
+      .update({
+        last_candle_sent_at: now.toISOString(),
+        updated_at: now.toISOString()
+      })
+      .eq('user_id', senderId)
+  } else {
+    await supabase
+      .from('user_scores')
+      .insert({
+        user_id: senderId,
+        last_candle_sent_at: now.toISOString()
+      })
+  }
 }
 

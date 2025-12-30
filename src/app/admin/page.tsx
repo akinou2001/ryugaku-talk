@@ -60,35 +60,60 @@ export default function AdminDashboard() {
   }
 
   const loadData = async () => {
-    if (activeTab === 'stats') {
-      const { data } = await getAdminStats()
-      if (data) {
-        setStats(data)
-      }
+    try {
+      if (activeTab === 'stats') {
+        const { data, error } = await getAdminStats()
+        if (error) {
+          console.error('Error loading stats:', error)
+          alert(`統計情報の取得に失敗しました: ${error.message || error}`)
+        }
+        if (data) {
+          setStats(data)
+        }
     } else if (activeTab === 'verifications') {
-      const { data } = await getVerificationRequests('pending')
+      console.log('Loading verification requests...')
+      const { data, error } = await getVerificationRequests('pending')
+      console.log('Verification requests result:', { data, error, count: data?.length || 0 })
+      if (error) {
+        console.error('Error loading verification requests:', error)
+        alert(`認証申請の取得に失敗しました: ${error.message || error}`)
+      }
       if (data) {
-        setVerificationRequests(data)
+        console.log('Setting verification requests:', data.length)
+        setVerificationRequests(data || [])
+      } else {
+        console.log('No data, setting empty array')
+        setVerificationRequests([])
       }
-    } else if (activeTab === 'users') {
-      const filters: any = {}
-      if (userFilters.accountType !== 'all') {
-        filters.accountType = userFilters.accountType
-      }
-      if (userFilters.verificationStatus !== 'all') {
-        filters.verificationStatus = userFilters.verificationStatus
-      }
-      if (userFilters.isActive !== 'all') {
-        filters.isActive = userFilters.isActive === 'true'
-      }
-      if (userFilters.search) {
-        filters.search = userFilters.search
-      }
+      } else if (activeTab === 'users') {
+        const filters: any = {}
+        if (userFilters.accountType !== 'all') {
+          filters.accountType = userFilters.accountType
+        }
+        if (userFilters.verificationStatus !== 'all') {
+          filters.verificationStatus = userFilters.verificationStatus
+        }
+        if (userFilters.isActive !== 'all') {
+          filters.isActive = userFilters.isActive === 'true'
+        }
+        if (userFilters.search) {
+          filters.search = userFilters.search
+        }
 
-      const { data } = await getUsers(filters)
-      if (data) {
-        setUsers(data)
+        const { data, error } = await getUsers(filters)
+        if (error) {
+          console.error('Error loading users:', error)
+          alert(`ユーザー情報の取得に失敗しました: ${error.message || error}`)
+        }
+        if (data) {
+          setUsers(data || [])
+        } else {
+          setUsers([])
+        }
       }
+    } catch (error: any) {
+      console.error('Error in loadData:', error)
+      alert(`データの取得に失敗しました: ${error.message || error}`)
     }
   }
 
@@ -103,9 +128,10 @@ export default function AdminDashboard() {
       setSelectedRequest(null)
       setReviewNotes('')
       loadData()
-      alert('認証申請を承認しました')
+      alert('認証申請を承認しました。承認されたユーザーは一度ログアウトして再ログインしてください。')
     } else {
       alert(`エラー: ${result.error}`)
+      console.error('Approval error:', result.error)
     }
   }
 
@@ -294,7 +320,7 @@ export default function AdminDashboard() {
                         </span>
                       </div>
                       <div className="space-y-1 text-sm text-gray-600">
-                        <p><strong>申請者:</strong> {request.profile?.name} ({request.profile?.email})</p>
+                        <p><strong>申請者:</strong> {request.profiles?.name} ({request.profiles?.email})</p>
                         <p><strong>担当者:</strong> {request.contact_person_name} ({request.contact_person_email})</p>
                         {request.organization_url && (
                           <p><strong>URL:</strong> <a href={request.organization_url} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline">{request.organization_url}</a></p>
@@ -476,7 +502,7 @@ export default function AdminDashboard() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">申請者</label>
-                    <p className="text-gray-900">{selectedRequest.profile?.name} ({selectedRequest.profile?.email})</p>
+                    <p className="text-gray-900">{selectedRequest.profiles?.name} ({selectedRequest.profiles?.email})</p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">担当者</label>

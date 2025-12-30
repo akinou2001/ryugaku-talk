@@ -73,7 +73,8 @@ export interface OrganizationVerificationRequest {
   review_notes?: string
   created_at: string
   updated_at: string
-  profile?: User
+  profile?: User // 後方互換性のため残す
+  profiles?: User // profile_id外部キーで取得したプロフィール
 }
 
 export interface Post {
@@ -94,6 +95,8 @@ export interface Post {
   is_official: boolean
   official_category?: string
   community_id?: string // コミュニティ限定投稿用
+  post_type?: 'announcement' | 'event' | 'quest' | 'normal' // コミュニティ限定投稿の種別
+  attachments?: Array<{ url: string; filename: string; type: string }> // ファイル添付（JSONB形式）
   created_at: string
   updated_at: string
 }
@@ -143,6 +146,7 @@ export interface Community {
   owner_id: string
   owner?: User
   visibility: CommunityVisibility
+  is_public?: boolean // 誰でも参加可能か、承認制か
   community_type?: 'guild' | 'official' // ギルド or 公式コミュニティ
   created_at: string
   updated_at: string
@@ -231,6 +235,7 @@ export interface Event {
   location?: string
   online_url?: string
   registration_deadline?: string
+  deadline?: string // 締切日時（registration_deadlineの別名）
   capacity?: number
   created_by?: string
   creator?: User
@@ -269,6 +274,7 @@ export interface Quest {
   status: QuestStatus
   reward_type: QuestRewardType
   reward_amount: number
+  deadline?: string // クエストの期限
   created_at: string
   updated_at: string
   // 集計情報

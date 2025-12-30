@@ -280,8 +280,19 @@ export default function Board() {
         </div>
       ) : (
         <div className="space-y-6">
-          {posts.map((post) => (
-            <Link key={post.id} href={`/posts/${post.id}`} className="card hover:shadow-md transition-shadow block">
+          {posts.map((post) => {
+            const isOrganizationPost = post.author && post.author.account_type !== 'individual'
+            const getOrganizationBorderColor = () => {
+              if (!isOrganizationPost) return ''
+              switch (post.author?.account_type) {
+                case 'educational': return 'border-l-4 border-l-blue-500'
+                case 'company': return 'border-l-4 border-l-green-500'
+                case 'government': return 'border-l-4 border-l-purple-500'
+                default: return ''
+              }
+            }
+            return (
+            <Link key={post.id} href={`/posts/${post.id}`} className={`card hover:shadow-md transition-shadow block ${getOrganizationBorderColor()}`}>
               <div className="flex items-center justify-between mb-3">
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(post.category)}`}>
                   {getCategoryLabel(post.category)}
@@ -342,7 +353,8 @@ export default function Board() {
                 </div>
               </div>
             </Link>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

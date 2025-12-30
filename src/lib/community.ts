@@ -5,6 +5,8 @@ import type { Community, CommunityMember, MemberStatus, MemberRole } from './sup
  * コミュニティを検索
  */
 export async function searchCommunities(query?: string, visibility?: 'public' | 'private' | 'all') {
+  const { data: { user } } = await supabase.auth.getUser()
+  
   let supabaseQuery = supabase
     .from('communities')
     .select(`
@@ -28,7 +30,64 @@ export async function searchCommunities(query?: string, visibility?: 'public' | 
     throw error
   }
 
-  return data || []
+  if (!data || data.length === 0) {
+    return []
+  }
+
+  // 各コミュニティのメンバー数を取得
+  const communityIds = data.map(c => c.id)
+  
+  // 承認済みメンバーを取得
+  const { data: approvedMembers } = await supabase
+    .from('community_members')
+    .select('community_id, user_id')
+    .in('community_id', communityIds)
+    .eq('status', 'approved')
+
+  // コミュニティIDごとのメンバー数をカウント
+  const memberCountMap = new Map<string, number>()
+  approvedMembers?.forEach(m => {
+    const currentCount = memberCountMap.get(m.community_id) || 0
+    memberCountMap.set(m.community_id, currentCount + 1)
+  })
+
+  // ユーザーがログインしている場合、メンバーシップ状態を取得
+  let membershipMap = new Map<string, string>()
+  if (user) {
+    const { data: memberships } = await supabase
+      .from('community_members')
+      .select('community_id, status')
+      .eq('user_id', user.id)
+      .in('community_id', communityIds)
+
+    membershipMap = new Map(
+      memberships?.map(m => [m.community_id, m.status]) || []
+    )
+  }
+
+  // 各コミュニティのメンバー数を設定
+  // 所有者がメンバーテーブルに含まれていない場合でも、コミュニティには最低1人（所有者）がいる
+  return data.map(community => {
+    const approvedCount = memberCountMap.get(community.id) || 0
+    // 所有者がメンバーテーブルに含まれているか確認
+    const ownerInMembers = approvedMembers?.some(m => 
+      m.community_id === community.id && m.user_id === community.owner_id
+    )
+    // メンバー数は承認済みメンバー数（所有者が含まれていない場合は+1）
+    const memberCount = ownerInMembers ? approvedCount : Math.max(approvedCount, 1)
+
+    const isMember = user && (
+      community.owner_id === user.id || 
+      membershipMap.get(community.id) === 'approved'
+    )
+
+    return {
+      ...community,
+      member_count: memberCount,
+      is_member: isMember || false,
+      member_status: membershipMap.get(community.id) || undefined
+    }
+  })
 }
 
 /**
@@ -50,7 +109,20 @@ export async function getCommunityById(communityId: string, userId?: string) {
   }
 
   // メンバー情報を取得（ユーザーがログインしている場合）
+  // 所有者の場合は自動的にメンバーとして扱う
   if (userId && data) {
+    const isOwner = data.owner_id === userId
+    
+    if (isOwner) {
+      return {
+        ...data,
+        is_member: true,
+        member_status: 'approved' as MemberStatus,
+        member_role: 'admin' as MemberRole
+      }
+    }
+
+    // 所有者でない場合のみ、メンバーテーブルを確認
     const { data: memberData } = await supabase
       .from('community_members')
       .select('*')
@@ -292,11 +364,46 @@ export async function updateMembershipStatus(
 
 /**
  * コミュニティのメンバー一覧を取得
+ * 注意: この関数はコミュニティメンバーまたは所有者のみが使用可能
  */
 export async function getCommunityMembers(
   communityId: string,
   status?: MemberStatus
 ) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // コミュニティの所有者か、メンバーかを確認
+  const { data: community } = await supabase
+    .from('communities')
+    .select('owner_id')
+    .eq('id', communityId)
+    .single()
+
+  if (!community) {
+    throw new Error('コミュニティが見つかりません')
+  }
+
+  const isOwner = community.owner_id === user.id
+
+  // メンバーシップを確認（所有者の場合はスキップ）
+  if (!isOwner) {
+    const { data: membership } = await supabase
+      .from('community_members')
+      .select('*')
+      .eq('community_id', communityId)
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .single()
+
+    if (!membership) {
+      throw new Error('コミュニティメンバーのみメンバー一覧を閲覧できます')
+    }
+  }
+
+  // メンバー一覧を取得（所有者またはメンバーのみ実行可能）
   let query = supabase
     .from('community_members')
     .select(`
@@ -369,6 +476,282 @@ export async function getCommunityStats(communityId: string) {
     announcement_count: announcementsResult.count || 0,
     event_count: eventsResult.count || 0
   }
+}
+
+/**
+ * コミュニティ限定投稿を取得
+ */
+export async function getCommunityPosts(communityId: string, userId?: string) {
+  const { data, error } = await supabase
+    .from('posts')
+    .select(`
+      *,
+      author:profiles(id, name, account_type, verification_status, organization_name)
+    `)
+    .eq('community_id', communityId)
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  if (error) {
+    console.error('Error fetching community posts:', error)
+    throw error
+  }
+
+  // いいね状態を取得（ユーザーがログインしている場合）
+  if (userId && data) {
+    const postIds = data.map(post => post.id)
+    const { data: likesData } = await supabase
+      .from('likes')
+      .select('post_id')
+      .eq('user_id', userId)
+      .in('post_id', postIds)
+
+    const likedPostIds = new Set(likesData?.map(like => like.post_id) || [])
+    return data.map(post => ({
+      ...post,
+      is_liked: likedPostIds.has(post.id)
+    }))
+  }
+
+  return data || []
+}
+
+/**
+ * コミュニティのイベント一覧を取得
+ */
+export async function getCommunityEvents(communityId: string, userId?: string) {
+  const { data, error } = await supabase
+    .from('events')
+    .select(`
+      *,
+      creator:profiles(id, name, account_type, verification_status, organization_name)
+    `)
+    .eq('community_id', communityId)
+    .order('event_date', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching community events:', error)
+    throw error
+  }
+
+  // 参加状態を取得（ユーザーがログインしている場合）
+  if (userId && data) {
+    const eventIds = data.map(event => event.id)
+    const { data: participantsData } = await supabase
+      .from('event_participants')
+      .select('event_id, status')
+      .eq('user_id', userId)
+      .in('event_id', eventIds)
+
+    const participantMap = new Map(
+      participantsData?.map(p => [p.event_id, p.status]) || []
+    )
+
+    return data.map(event => ({
+      ...event,
+      is_registered: participantMap.has(event.id),
+      registration_status: participantMap.get(event.id) || undefined
+    }))
+  }
+
+  return data || []
+}
+
+/**
+ * イベントを作成
+ */
+export async function createEvent(
+  communityId: string,
+  title: string,
+  description: string,
+  eventDate: string,
+  location?: string,
+  onlineUrl?: string,
+  deadline?: string,
+  capacity?: number
+) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // コミュニティの所有者か確認
+  const { data: community } = await supabase
+    .from('communities')
+    .select('owner_id, community_type')
+    .eq('id', communityId)
+    .single()
+
+  if (!community) {
+    throw new Error('コミュニティが見つかりません')
+  }
+
+  if (community.owner_id !== user.id) {
+    throw new Error('コミュニティの所有者のみイベントを作成できます')
+  }
+
+  if (community.community_type !== 'official') {
+    throw new Error('イベントは公式コミュニティのみ作成できます')
+  }
+
+  const { data, error } = await supabase
+    .from('events')
+    .insert({
+      community_id: communityId,
+      title,
+      description,
+      event_date: eventDate,
+      location: location || null,
+      online_url: onlineUrl || null,
+      registration_deadline: deadline || null,
+      deadline: deadline || null,
+      capacity: capacity || null,
+      created_by: user.id
+    })
+    .select(`
+      *,
+      creator:profiles(id, name, account_type, verification_status, organization_name)
+    `)
+    .single()
+
+  if (error) {
+    console.error('Error creating event:', error)
+    throw error
+  }
+
+  return data
+}
+
+/**
+ * イベントに参加登録
+ */
+export async function registerEvent(eventId: string) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // イベント情報を取得
+  const { data: event } = await supabase
+    .from('events')
+    .select('community_id, capacity, registration_deadline, deadline')
+    .eq('id', eventId)
+    .single()
+
+  if (!event) {
+    throw new Error('イベントが見つかりません')
+  }
+
+  // 締切チェック
+  const deadline = event.deadline || event.registration_deadline
+  if (deadline && new Date(deadline) < new Date()) {
+    throw new Error('参加登録の締切を過ぎています')
+  }
+
+  // メンバーシップを確認
+  const { data: membership } = await supabase
+    .from('community_members')
+    .select('*')
+    .eq('community_id', event.community_id)
+    .eq('user_id', user.id)
+    .eq('status', 'approved')
+    .single()
+
+  if (!membership) {
+    throw new Error('コミュニティメンバーのみ参加登録できます')
+  }
+
+  // 定員チェック
+  if (event.capacity) {
+    const { count } = await supabase
+      .from('event_participants')
+      .select('*', { count: 'exact', head: true })
+      .eq('event_id', eventId)
+      .eq('status', 'registered')
+
+    if (count && count >= event.capacity) {
+      throw new Error('定員に達しています')
+    }
+  }
+
+  // 既に登録済みか確認
+  const { data: existing } = await supabase
+    .from('event_participants')
+    .select('*')
+    .eq('event_id', eventId)
+    .eq('user_id', user.id)
+    .single()
+
+  if (existing) {
+    throw new Error('既に参加登録済みです')
+  }
+
+  const { data, error } = await supabase
+    .from('event_participants')
+    .insert({
+      event_id: eventId,
+      user_id: user.id,
+      status: 'registered'
+    })
+    .select(`
+      *,
+      user:profiles(id, name)
+    `)
+    .single()
+
+  if (error) {
+    console.error('Error registering event:', error)
+    throw error
+  }
+
+  return data
+}
+
+/**
+ * イベントの参加登録をキャンセル
+ */
+export async function cancelEventRegistration(eventId: string) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  const { data, error } = await supabase
+    .from('event_participants')
+    .update({ status: 'cancelled' })
+    .eq('event_id', eventId)
+    .eq('user_id', user.id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error cancelling event registration:', error)
+    throw error
+  }
+
+  return data
+}
+
+/**
+ * イベントの参加者一覧を取得
+ */
+export async function getEventParticipants(eventId: string) {
+  const { data, error } = await supabase
+    .from('event_participants')
+    .select(`
+      *,
+      user:profiles(id, name, account_type, verification_status, organization_name)
+    `)
+    .eq('event_id', eventId)
+    .eq('status', 'registered')
+    .order('registered_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching event participants:', error)
+    throw error
+  }
+
+  return data || []
 }
 
 

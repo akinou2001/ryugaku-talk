@@ -1,12 +1,11 @@
 {
-  "/communities/page": "app/communities/page.js",
   "/ai/page": "app/ai/page.js",
+  "/communities/page": "app/communities/page.js",
   "/timeline/page": "app/timeline/page.js",
-  "/page": "app/page.js",
-  "/settings/page": "app/settings/page.js",
-  "/auth/signin/page": "app/auth/signin/page.js",
-  "/auth/signup/page": "app/auth/signup/page.js",
-  "/posts/new/page": "app/posts/new/page.js",
   "/chat/page": "app/chat/page.js",
-  "/communities/[id]/page": "app/communities/[id]/page.js"
+  "/chat/[userId]/page": "app/chat/[userId]/page.js",
+  "/profile/[id]/page": "app/profile/[id]/page.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/posts/[id]/page": "app/posts/[id]/page.js",
+  "/page": "app/page.js"
 }

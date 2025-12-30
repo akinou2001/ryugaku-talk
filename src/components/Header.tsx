@@ -62,11 +62,6 @@ export function Header() {
                 コミュニティ
               </Link>
             )}
-            {user && user.account_type !== 'individual' && user.verification_status === 'verified' && (
-              <Link href="/communities/new" className="text-gray-700 hover:text-primary-600 transition-colors">
-                コミュニティ作成
-              </Link>
-            )}
           </nav>
 
           {/* ユーザーメニュー */}
@@ -101,16 +96,6 @@ export function Header() {
                           <Users className="h-4 w-4 mr-2" />
                           コミュニティ
                         </Link>
-                        {user.verification_status === 'verified' && (
-                          <Link
-                            href="/communities/new"
-                            className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50"
-                            onClick={() => setIsUserMenuOpen(false)}
-                          >
-                            <Building2 className="h-4 w-4 mr-2" />
-                            コミュニティ作成
-                          </Link>
-                        )}
                         {(user.verification_status === 'unverified' || user.verification_status === 'pending' || user.verification_status === 'rejected') && (
                           <Link
                             href="/verification/request"
@@ -185,11 +170,6 @@ export function Header() {
               {user && (
                 <Link href="/communities" className="text-gray-700 hover:text-primary-600 transition-colors">
                   コミュニティ
-                </Link>
-              )}
-              {user && user.account_type !== 'individual' && user.verification_status === 'verified' && (
-                <Link href="/communities/new" className="text-gray-700 hover:text-primary-600 transition-colors">
-                  コミュニティ作成
                 </Link>
               )}
               {user && user.account_type !== 'individual' && (user.verification_status === 'unverified' || user.verification_status === 'pending' || user.verification_status === 'rejected') && (

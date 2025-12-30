@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
 import { MessageCircle, Flame, MessageSquare, Clock } from 'lucide-react'
+import { AccountBadge } from '@/components/AccountBadge'
 
 export function RecentPosts() {
   const [posts, setPosts] = useState<Post[]>([])
@@ -20,7 +21,7 @@ export function RecentPosts() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name)
+          author:profiles(name, account_type, verification_status, organization_name)
         `)
         .is('community_id', null) // コミュニティ限定投稿は除外
         .order('created_at', { ascending: false })
@@ -103,8 +104,19 @@ export function RecentPosts() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {posts.map((post) => (
-            <Link key={post.id} href={`/posts/${post.id}`} className="card hover:shadow-md transition-shadow">
+          {posts.map((post) => {
+            const isOrganizationPost = post.author && post.author.account_type !== 'individual'
+            const getOrganizationBorderColor = () => {
+              if (!isOrganizationPost) return ''
+              switch (post.author?.account_type) {
+                case 'educational': return 'border-l-4 border-l-blue-500'
+                case 'company': return 'border-l-4 border-l-green-500'
+                case 'government': return 'border-l-4 border-l-purple-500'
+                default: return ''
+              }
+            }
+            return (
+            <Link key={post.id} href={`/posts/${post.id}`} className={`card hover:shadow-md transition-shadow ${getOrganizationBorderColor()}`}>
               <div className="flex items-center justify-between mb-3">
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(post.category)}`}>
                   {getCategoryLabel(post.category)}
@@ -124,7 +136,17 @@ export function RecentPosts() {
               </p>
               
               <div className="flex items-center justify-between text-sm text-gray-500">
-                <span>by {post.author?.name || '匿名'}</span>
+                <div className="flex items-center space-x-2 flex-wrap">
+                  <span>by {post.author?.name || '匿名'}</span>
+                  {post.author && (
+                    <AccountBadge 
+                      accountType={post.author.account_type} 
+                      verificationStatus={post.author.verification_status}
+                      organizationName={post.author.organization_name}
+                      size="sm"
+                    />
+                  )}
+                </div>
                 <div className="flex items-center space-x-4">
                   <span className="flex items-center">
                     <Flame className="h-4 w-4 mr-1 text-orange-500" />
@@ -137,7 +159,8 @@ export function RecentPosts() {
                 </div>
               </div>
             </Link>
-          ))}
+            )
+          })}
         </div>
       )}
     </section>

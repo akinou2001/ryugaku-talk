@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
-import { getCommunityById, getCommunityStats } from '@/lib/community'
+import { getCommunityById, getCommunityStats, getCommunityMembers, getCommunityPosts, getCommunityEvents, requestCommunityMembership, updateMembershipStatus, createEvent, registerEvent, cancelEventRegistration, getEventParticipants } from '@/lib/community'
 import { getQuests, createQuest, requestQuestCompletion, updateQuestCompletionStatus, getQuestCompletions } from '@/lib/quest'
-import type { Community, Quest, QuestCompletion } from '@/lib/supabase'
-import { ArrowLeft, Plus, Users, Building2, CheckCircle, X, Clock, Flame, Search, Filter } from 'lucide-react'
+import type { Community, Quest, QuestCompletion, Post, Event, CommunityMember } from '@/lib/supabase'
+import { ArrowLeft, Plus, Users, Building2, CheckCircle, X, Clock, Flame, MessageSquare, Calendar, UserPlus, Settings, MapPin } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
+
+type TabType = 'timeline' | 'members' | 'events' | 'quests'
 
 export default function CommunityDetail() {
   const { user } = useAuth()
@@ -18,23 +20,54 @@ export default function CommunityDetail() {
   const communityId = params.id as string
 
   const [community, setCommunity] = useState<Community | null>(null)
-  const [quests, setQuests] = useState<Quest[]>([])
+  const [activeTab, setActiveTab] = useState<TabType>('timeline')
   const [loading, setLoading] = useState(true)
-  const [questsLoading, setQuestsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [memberCount, setMemberCount] = useState(0)
+  
+  // メンバーシップ状態
+  const [isMember, setIsMember] = useState(false)
+  const [isOwner, setIsOwner] = useState(false)
+  const [membershipStatus, setMembershipStatus] = useState<'none' | 'pending' | 'approved'>('none')
+
+  // タイムライン
+  const [posts, setPosts] = useState<Post[]>([])
+  const [postsLoading, setPostsLoading] = useState(false)
+
+  // メンバー
+  const [members, setMembers] = useState<CommunityMember[]>([])
+  const [membersLoading, setMembersLoading] = useState(false)
+  const [pendingMembers, setPendingMembers] = useState<CommunityMember[]>([])
+
+  // イベント
+  const [events, setEvents] = useState<Event[]>([])
+  const [eventsLoading, setEventsLoading] = useState(false)
+  const [showCreateEvent, setShowCreateEvent] = useState(false)
+  const [eventParticipants, setEventParticipants] = useState<Record<string, any[]>>({})
+  const [eventForm, setEventForm] = useState({
+    title: '',
+    description: '',
+    event_date: '',
+    location: '',
+    online_url: '',
+    deadline: '',
+    capacity: ''
+  })
+
+  // クエスト
+  const [quests, setQuests] = useState<Quest[]>([])
+  const [questsLoading, setQuestsLoading] = useState(false)
   const [showCreateQuest, setShowCreateQuest] = useState(false)
   const [showCompletionForm, setShowCompletionForm] = useState<string | null>(null)
   const [questCompletions, setQuestCompletions] = useState<Record<string, QuestCompletion[]>>({})
-  const [isMember, setIsMember] = useState(false)
-  const [isOwner, setIsOwner] = useState(false)
-  const [error, setError] = useState('')
-  const [memberCount, setMemberCount] = useState(0)
 
   // クエスト作成フォーム
   const [questForm, setQuestForm] = useState({
     title: '',
     description: '',
     reward_type: 'candle' as 'candle' | 'torch',
-    reward_amount: 1
+    reward_amount: 1,
+    deadline: ''
   })
 
   // クエスト完了申請フォーム
@@ -46,23 +79,58 @@ export default function CommunityDetail() {
   useEffect(() => {
     if (communityId) {
       fetchCommunity()
-      checkMembership()
     }
   }, [communityId, user])
 
+  useEffect(() => {
+    if (community && isMember) {
+      switch (activeTab) {
+        case 'timeline':
+          fetchPosts()
+          break
+        case 'members':
+          fetchMembers()
+          break
+        case 'events':
+          fetchEvents()
+          break
+        case 'quests':
+          fetchQuests()
+          break
+      }
+    }
+  }, [activeTab, community, isMember])
+
   const fetchCommunity = async () => {
     try {
+      setLoading(true)
       const data = await getCommunityById(communityId, user?.id)
       setCommunity(data as Community)
       const owner = user?.id === data?.owner_id
       setIsOwner(owner)
       
-      // コミュニティ情報取得後、クエストと統計情報を取得
+      // メンバーシップ状態を確認
+      if (owner) {
+        setIsMember(true)
+        setMembershipStatus('approved')
+      } else if (data?.is_member) {
+        setIsMember(true)
+        setMembershipStatus('approved')
+      } else if (data?.member_status === 'pending') {
+        setIsMember(false)
+        setMembershipStatus('pending')
+      } else {
+        setIsMember(false)
+        setMembershipStatus('none')
+      }
+      
+      // コミュニティ情報取得後、統計情報を取得
       if (data) {
-        await Promise.all([
-          fetchQuests(owner),
-          fetchCommunityStats()
-        ])
+        await fetchCommunityStats()
+        // メンバーの場合、タイムラインを自動的に読み込む
+        if (owner || data.is_member) {
+          await fetchPosts()
+        }
       }
     } catch (error: any) {
       setError(error.message || 'コミュニティの取得に失敗しました')
@@ -80,15 +148,77 @@ export default function CommunityDetail() {
     }
   }
 
-  const fetchQuests = async (isOwnerFlag?: boolean) => {
+  const fetchPosts = async () => {
+    if (!isMember && !isOwner) return
+    
+    try {
+      setPostsLoading(true)
+      
+      // 投稿、イベント、クエストを取得
+      const [postsData, eventsData, questsData] = await Promise.all([
+        getCommunityPosts(communityId, user?.id),
+        getCommunityEvents(communityId, user?.id),
+        getQuests(communityId, user?.id)
+      ])
+
+      // すべてのアイテムを統合
+      const allItems: any[] = [
+        ...(postsData || []).map((p: any) => ({ ...p, itemType: 'post' })),
+        ...(eventsData || []).map((e: any) => ({ ...e, itemType: 'event' })),
+        ...(questsData || []).map((q: any) => ({ ...q, itemType: 'quest' }))
+      ]
+
+      // 日付順にソート
+      allItems.sort((a, b) => {
+        const dateA = a.event_date || a.created_at
+        const dateB = b.event_date || b.created_at
+        return new Date(dateB).getTime() - new Date(dateA).getTime()
+      })
+
+      setPosts(allItems)
+    } catch (error: any) {
+      console.error('Error fetching posts:', error)
+    } finally {
+      setPostsLoading(false)
+    }
+  }
+
+  const fetchMembers = async () => {
+    try {
+      setMembersLoading(true)
+      const [approvedData, pendingData] = await Promise.all([
+        getCommunityMembers(communityId, 'approved'),
+        isOwner ? getCommunityMembers(communityId, 'pending') : Promise.resolve([])
+      ])
+      setMembers(approvedData || [])
+      setPendingMembers(pendingData || [])
+    } catch (error: any) {
+      console.error('Error fetching members:', error)
+    } finally {
+      setMembersLoading(false)
+    }
+  }
+
+  const fetchEvents = async () => {
+    try {
+      setEventsLoading(true)
+      const data = await getCommunityEvents(communityId, user?.id)
+      setEvents(data || [])
+    } catch (error: any) {
+      console.error('Error fetching events:', error)
+    } finally {
+      setEventsLoading(false)
+    }
+  }
+
+  const fetchQuests = async () => {
     try {
       setQuestsLoading(true)
       const data = await getQuests(communityId, user?.id)
       setQuests(data)
       
       // クエスト作成者の場合、各クエストの完了申請を取得
-      const ownerFlag = isOwnerFlag !== undefined ? isOwnerFlag : isOwner
-      if (ownerFlag && user) {
+      if (isOwner && user) {
         const completionsMap: Record<string, QuestCompletion[]> = {}
         for (const quest of data) {
           if (quest.created_by === user.id) {
@@ -109,27 +239,37 @@ export default function CommunityDetail() {
     }
   }
 
-  const checkMembership = async () => {
-    if (!user) return
+  const handleJoinRequest = async () => {
+    if (!user) {
+      router.push('/auth/signin')
+      return
+    }
 
     try {
-      // 所有者の場合は自動的にメンバーとして扱う
-      if (community && community.owner_id === user.id) {
-        setIsMember(true)
-        return
-      }
+      await requestCommunityMembership(communityId)
+      setMembershipStatus('pending')
+      alert('加入申請を送信しました。承認をお待ちください。')
+    } catch (error: any) {
+      setError(error.message || '加入申請に失敗しました')
+    }
+  }
 
-      const { data } = await supabase
-        .from('community_members')
-        .select('*')
-        .eq('community_id', communityId)
-        .eq('user_id', user.id)
-        .eq('status', 'approved')
-        .single()
+  const handleApproveMember = async (membershipId: string) => {
+    try {
+      await updateMembershipStatus(membershipId, 'approved')
+      await fetchMembers()
+      await fetchCommunityStats()
+    } catch (error: any) {
+      setError(error.message || '承認に失敗しました')
+    }
+  }
 
-      setIsMember(!!data)
-    } catch (error) {
-      setIsMember(false)
+  const handleRejectMember = async (membershipId: string) => {
+    try {
+      await updateMembershipStatus(membershipId, 'rejected')
+      await fetchMembers()
+    } catch (error: any) {
+      setError(error.message || '拒否に失敗しました')
     }
   }
 
@@ -141,14 +281,18 @@ export default function CommunityDetail() {
     }
 
     try {
+      // datetime-localの値をISO形式に変換
+      const deadline = questForm.deadline ? new Date(questForm.deadline).toISOString() : undefined
+      
       await createQuest(
         communityId,
         questForm.title,
         questForm.description,
         questForm.reward_type,
-        questForm.reward_amount
+        questForm.reward_amount,
+        deadline
       )
-      setQuestForm({ title: '', description: '', reward_type: 'candle', reward_amount: 1 })
+      setQuestForm({ title: '', description: '', reward_type: 'candle', reward_amount: 1, deadline: '' })
       setShowCreateQuest(false)
       fetchQuests()
     } catch (error: any) {
@@ -170,7 +314,7 @@ export default function CommunityDetail() {
       )
       setCompletionForm({ proof_text: '', proof_url: '' })
       setShowCompletionForm(null)
-      await fetchQuests(isOwner)
+      await fetchQuests()
     } catch (error: any) {
       setError(error.message || '完了申請に失敗しました')
     }
@@ -184,7 +328,7 @@ export default function CommunityDetail() {
 
     try {
       await updateQuestCompletionStatus(completionId, 'approved')
-      await fetchQuests(isOwner)
+      await fetchQuests()
     } catch (error: any) {
       setError(error.message || '承認に失敗しました')
     }
@@ -198,9 +342,88 @@ export default function CommunityDetail() {
 
     try {
       await updateQuestCompletionStatus(completionId, 'rejected')
-      await fetchQuests(isOwner)
+      await fetchQuests()
     } catch (error: any) {
       setError(error.message || '拒否に失敗しました')
+    }
+  }
+
+  const handleCreateEvent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user || !isOwner) {
+      setError('コミュニティの所有者のみイベントを作成できます')
+      return
+    }
+
+    try {
+      // datetime-localの値をISO形式に変換
+      const eventDate = eventForm.event_date ? new Date(eventForm.event_date).toISOString() : ''
+      const deadline = eventForm.deadline ? new Date(eventForm.deadline).toISOString() : undefined
+      const capacity = eventForm.capacity ? parseInt(eventForm.capacity) : undefined
+
+      await createEvent(
+        communityId,
+        eventForm.title,
+        eventForm.description,
+        eventDate,
+        eventForm.location || undefined,
+        eventForm.online_url || undefined,
+        deadline,
+        capacity
+      )
+      setEventForm({
+        title: '',
+        description: '',
+        event_date: '',
+        location: '',
+        online_url: '',
+        deadline: '',
+        capacity: ''
+      })
+      setShowCreateEvent(false)
+      await fetchEvents()
+    } catch (error: any) {
+      setError(error.message || 'イベントの作成に失敗しました')
+    }
+  }
+
+  const handleRegisterEvent = async (eventId: string) => {
+    if (!user || !isMember) {
+      setError('コミュニティメンバーのみ参加登録できます')
+      return
+    }
+
+    try {
+      await registerEvent(eventId)
+      await fetchEvents()
+    } catch (error: any) {
+      setError(error.message || '参加登録に失敗しました')
+    }
+  }
+
+  const handleCancelEventRegistration = async (eventId: string) => {
+    if (!user) {
+      setError('ログインが必要です')
+      return
+    }
+
+    try {
+      await cancelEventRegistration(eventId)
+      await fetchEvents()
+    } catch (error: any) {
+      setError(error.message || 'キャンセルに失敗しました')
+    }
+  }
+
+  const handleViewEventParticipants = async (eventId: string) => {
+    try {
+      const participants = await getEventParticipants(eventId)
+      setEventParticipants(prev => ({
+        ...prev,
+        [eventId]: participants
+      }))
+    } catch (error: any) {
+      setError(error.message || '参加者一覧の取得に失敗しました')
     }
   }
 
@@ -210,6 +433,17 @@ export default function CommunityDetail() {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
+    })
+  }
+
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleString('ja-JP', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     })
   }
 
@@ -256,6 +490,8 @@ export default function CommunityDetail() {
   const isGuild = community.community_type === 'guild'
   const rewardLabel = isGuild ? 'キャンドル' : 'トーチ'
   const rewardIcon = isGuild ? '🕯️' : '🔥'
+  const canViewContent = isMember || isOwner
+  const isPublicCommunity = community.is_public !== false // デフォルトはtrue
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -332,272 +568,849 @@ export default function CommunityDetail() {
               </div>
             </div>
           </div>
-        </div>
 
-        {/* クエストセクション */}
-        <div className="card mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">クエスト</h2>
-            {isMember && (
-              <button
-                onClick={() => setShowCreateQuest(!showCreateQuest)}
-                className="btn-primary flex items-center"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                クエストを作成
-              </button>
-            )}
-          </div>
-
-          {/* クエスト作成フォーム */}
-          {showCreateQuest && isMember && (
-            <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">新しいクエスト</h3>
-              <form onSubmit={handleCreateQuest} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    タイトル *
-                  </label>
-                  <input
-                    type="text"
-                    value={questForm.title}
-                    onChange={(e) => setQuestForm(prev => ({ ...prev, title: e.target.value }))}
-                    required
-                    className="input-field"
-                    placeholder="クエストのタイトルを入力"
-                  />
+          {/* 参加申請ボタン */}
+          {!canViewContent && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              {membershipStatus === 'pending' ? (
+                <div className="text-center py-4">
+                  <p className="text-gray-600 mb-2">加入申請中です</p>
+                  <p className="text-sm text-gray-500">承認をお待ちください</p>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    説明
-                  </label>
-                  <textarea
-                    value={questForm.description}
-                    onChange={(e) => setQuestForm(prev => ({ ...prev, description: e.target.value }))}
-                    rows={3}
-                    className="input-field"
-                    placeholder="クエストの説明を入力"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      報酬タイプ
-                    </label>
-                    <select
-                      value={questForm.reward_type}
-                      onChange={(e) => setQuestForm(prev => ({ ...prev, reward_type: e.target.value as 'candle' | 'torch' }))}
-                      className="input-field"
+              ) : (
+                <div className="text-center">
+                  <p className="text-gray-600 mb-4">
+                    {isPublicCommunity 
+                      ? 'このコミュニティに参加するには、加入申請が必要です。'
+                      : 'このコミュニティは承認制です。加入申請を送信してください。'}
+                  </p>
+                  {user ? (
+                    <button
+                      onClick={handleJoinRequest}
+                      className="btn-primary flex items-center mx-auto"
                     >
-                      <option value="candle">🕯️ キャンドル（ギルド）</option>
-                      <option value="torch">🔥 トーチ（公式コミュニティ）</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      報酬数
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={questForm.reward_amount}
-                      onChange={(e) => setQuestForm(prev => ({ ...prev, reward_amount: parseInt(e.target.value) || 1 }))}
-                      className="input-field"
-                    />
-                  </div>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      加入申請
+                    </button>
+                  ) : (
+                    <Link href="/auth/signin" className="btn-primary inline-flex items-center">
+                      ログインして加入申請
+                    </Link>
+                  )}
                 </div>
-                <div className="flex space-x-2">
-                  <button type="submit" className="btn-primary">
-                    作成
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCreateQuest(false)
-                      setQuestForm({ title: '', description: '', reward_type: 'candle', reward_amount: 1 })
-                    }}
-                    className="btn-secondary"
-                  >
-                    キャンセル
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          {/* クエスト一覧 */}
-          {questsLoading ? (
-            <div className="animate-pulse space-y-4">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-24 bg-gray-200 rounded"></div>
-              ))}
-            </div>
-          ) : quests.length === 0 ? (
-            <div className="text-center py-12">
-              <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">クエストがありません</p>
-              {isMember && (
-                <p className="text-sm text-gray-400 mt-2">最初のクエストを作成してみましょう</p>
               )}
             </div>
-          ) : (
-            <div className="space-y-4">
-              {quests.map((quest) => (
-                <div key={quest.id} className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-1">{quest.title}</h3>
-                      {quest.description && (
-                        <p className="text-sm text-gray-600 mb-2">{quest.description}</p>
-                      )}
-                      <div className="flex items-center space-x-4 text-xs text-gray-500">
-                        <span>作成者: {quest.creator?.name || '不明'}</span>
-                        <span>{formatDate(quest.created_at)}</span>
-                        <span className="flex items-center space-x-1">
-                          <span>{rewardIcon}</span>
-                          <span>報酬: {quest.reward_amount}{rewardLabel}</span>
-                        </span>
-                      </div>
-                    </div>
-                    <div className="ml-4">
-                      {quest.user_completion_status === 'approved' && (
-                        <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">
-                          完了済み
-                        </span>
-                      )}
-                      {quest.user_completion_status === 'pending' && (
-                        <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs font-medium">
-                          申請中
-                        </span>
-                      )}
-                    </div>
-                  </div>
+          )}
+        </div>
 
-                  {/* クエスト完了申請 */}
-                  {isMember && !quest.user_completion_status && (
-                    <div className="mt-3">
-                      {showCompletionForm === quest.id ? (
-                        <div className="p-3 bg-gray-50 rounded border border-gray-200">
-                          <h4 className="text-sm font-medium text-gray-900 mb-2">完了申請</h4>
-                          <div className="space-y-2 mb-2">
-                            <input
-                              type="text"
-                              value={completionForm.proof_text}
-                              onChange={(e) => setCompletionForm(prev => ({ ...prev, proof_text: e.target.value }))}
-                              placeholder="完了証明（テキスト）"
-                              className="input-field text-sm"
-                            />
-                            <input
-                              type="url"
-                              value={completionForm.proof_url}
-                              onChange={(e) => setCompletionForm(prev => ({ ...prev, proof_url: e.target.value }))}
-                              placeholder="完了証明（URL）"
-                              className="input-field text-sm"
-                            />
+        {/* タブナビゲーション */}
+        {canViewContent && (
+          <div className="card mb-6">
+            <div className="flex space-x-1 border-b border-gray-200">
+              <button
+                onClick={() => setActiveTab('timeline')}
+                className={`px-4 py-2 font-medium text-sm transition-colors ${
+                  activeTab === 'timeline'
+                    ? 'text-primary-600 border-b-2 border-primary-600'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <MessageSquare className="h-4 w-4 inline mr-2" />
+                タイムライン
+              </button>
+              <button
+                onClick={() => setActiveTab('members')}
+                className={`px-4 py-2 font-medium text-sm transition-colors ${
+                  activeTab === 'members'
+                    ? 'text-primary-600 border-b-2 border-primary-600'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Users className="h-4 w-4 inline mr-2" />
+                メンバー
+              </button>
+              {community.community_type === 'official' && (
+                <button
+                  onClick={() => setActiveTab('events')}
+                  className={`px-4 py-2 font-medium text-sm transition-colors ${
+                    activeTab === 'events'
+                      ? 'text-primary-600 border-b-2 border-primary-600'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Calendar className="h-4 w-4 inline mr-2" />
+                  イベント
+                </button>
+              )}
+              <button
+                onClick={() => setActiveTab('quests')}
+                className={`px-4 py-2 font-medium text-sm transition-colors ${
+                  activeTab === 'quests'
+                    ? 'text-primary-600 border-b-2 border-primary-600'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Flame className="h-4 w-4 inline mr-2" />
+                クエスト
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* タブコンテンツ */}
+        {canViewContent && (
+          <>
+            {/* タイムライン */}
+            {activeTab === 'timeline' && (
+              <div className="card">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold text-gray-900">タイムライン</h2>
+                  <Link href={`/posts/new?community_id=${communityId}`} className="btn-primary flex items-center">
+                    <Plus className="h-4 w-4 mr-2" />
+                    投稿する
+                  </Link>
+                </div>
+
+                {postsLoading ? (
+                  <div className="animate-pulse space-y-4">
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="h-24 bg-gray-200 rounded"></div>
+                    ))}
+                  </div>
+                ) : posts.length === 0 ? (
+                  <div className="text-center py-12">
+                    <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500">投稿がありません</p>
+                    <p className="text-sm text-gray-400 mt-2">最初の投稿を作成してみましょう</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {posts.map((item: any) => {
+                      // イベントの場合
+                      if (item.itemType === 'event') {
+                        return (
+                          <div key={item.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow border-l-4 border-l-purple-500">
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2 mb-2">
+                                  <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
+                                    イベント
+                                  </span>
+                                </div>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-1">{item.title}</h3>
+                                <p className="text-sm text-gray-600 line-clamp-2">{item.description}</p>
+                                <div className="flex items-center space-x-4 text-xs text-gray-500 mt-2 flex-wrap gap-2">
+                                  {item.event_date && (
+                                    <span className="flex items-center space-x-1">
+                                      <Calendar className="h-3 w-3" />
+                                      <span>{formatDateTime(item.event_date)}</span>
+                                    </span>
+                                  )}
+                                  {item.location && (
+                                    <span className="flex items-center space-x-1">
+                                      <MapPin className="h-3 w-3" />
+                                      <span>{item.location}</span>
+                                    </span>
+                                  )}
+                                  {item.deadline && (
+                                    <span className="flex items-center space-x-1">
+                                      <Clock className="h-3 w-3" />
+                                      <span>締切: {formatDateTime(item.deadline)}</span>
+                                    </span>
+                                  )}
+                                  {item.creator && (
+                                    <span>by {item.creator.name}</span>
+                                  )}
+                                </div>
+                                {item.is_registered && (
+                                  <span className="inline-block mt-2 px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">
+                                    参加登録済み
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      }
+
+                      // クエストの場合
+                      if (item.itemType === 'quest') {
+                        return (
+                          <div key={item.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow border-l-4 border-l-orange-500">
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-2 mb-2">
+                                  <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-medium">
+                                    クエスト
+                                  </span>
+                                </div>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-1">{item.title}</h3>
+                                {item.description && (
+                                  <p className="text-sm text-gray-600 line-clamp-2 mb-2">{item.description}</p>
+                                )}
+                                <div className="flex items-center space-x-4 text-xs text-gray-500 mt-2 flex-wrap gap-2">
+                                  {item.deadline && (
+                                    <span className="flex items-center space-x-1">
+                                      <Clock className="h-3 w-3" />
+                                      <span>期限: {formatDateTime(item.deadline)}</span>
+                                    </span>
+                                  )}
+                                  {item.reward_type && item.reward_amount && (
+                                    <span className="flex items-center space-x-1">
+                                      <Flame className="h-3 w-3" />
+                                      <span>報酬: {item.reward_amount}{item.reward_type === 'candle' ? 'キャンドル' : 'トーチ'}</span>
+                                    </span>
+                                  )}
+                                  {item.creator && (
+                                    <span>by {item.creator.name}</span>
+                                  )}
+                                </div>
+                                {item.user_completion_status === 'approved' && (
+                                  <span className="inline-block mt-2 px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">
+                                    完了済み
+                                  </span>
+                                )}
+                                {item.user_completion_status === 'pending' && (
+                                  <span className="inline-block mt-2 px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs font-medium">
+                                    申請中
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      }
+
+                      // 通常の投稿の場合
+                      return (
+                        <div key={item.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <Link href={`/posts/${item.id}`} className="hover:underline">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-1">{item.title}</h3>
+                              </Link>
+                              <p className="text-sm text-gray-600 line-clamp-2">{item.content}</p>
+                              <div className="flex items-center space-x-4 text-xs text-gray-500 mt-2">
+                                <span>{item.author?.name || '不明'}</span>
+                                <span>{formatDate(item.created_at)}</span>
+                                <div className="flex items-center space-x-1">
+                                  <Flame className="h-3 w-3" />
+                                  <span>{item.likes_count}</span>
+                                </div>
+                                <div className="flex items-center space-x-1">
+                                  <MessageSquare className="h-3 w-3" />
+                                  <span>{item.comments_count}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* メンバー */}
+            {activeTab === 'members' && (
+              <div className="card">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">メンバー</h2>
+
+                {/* 承認待ちメンバー（所有者のみ） */}
+                {isOwner && pendingMembers.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-medium text-gray-900 mb-3">承認待ち</h3>
+                    <div className="space-y-2">
+                      {pendingMembers.map((member) => (
+                        <div key={member.id} className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                              <Users className="h-5 w-5 text-primary-600" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900">{member.user?.name || '不明'}</p>
+                              <p className="text-xs text-gray-500">申請日: {formatDate(member.created_at)}</p>
+                            </div>
                           </div>
                           <div className="flex space-x-2">
                             <button
-                              onClick={() => handleRequestCompletion(quest.id)}
-                              className="btn-primary text-sm"
+                              onClick={() => handleApproveMember(member.id)}
+                              className="btn-primary text-sm flex items-center"
                             >
-                              申請する
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              承認
                             </button>
                             <button
-                              onClick={() => {
-                                setShowCompletionForm(null)
-                                setCompletionForm({ proof_text: '', proof_url: '' })
-                              }}
-                              className="btn-secondary text-sm"
+                              onClick={() => handleRejectMember(member.id)}
+                              className="btn-secondary text-sm flex items-center"
                             >
-                              キャンセル
+                              <X className="h-3 w-3 mr-1" />
+                              拒否
                             </button>
                           </div>
                         </div>
-                      ) : (
-                        <button
-                          onClick={() => setShowCompletionForm(quest.id)}
-                          className="btn-secondary text-sm"
-                        >
-                          完了を申請
-                        </button>
-                      )}
+                      ))}
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  {/* クエスト作成者向け: 完了申請の承認/拒否 */}
-                  {isOwner && quest.created_by === user?.id && questCompletions[quest.id] && questCompletions[quest.id].length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                      <h4 className="text-sm font-medium text-gray-900 mb-2">完了申請一覧</h4>
-                      <div className="space-y-2">
-                        {questCompletions[quest.id].map((completion) => (
-                          <div key={completion.id} className="p-3 bg-gray-50 rounded border border-gray-200">
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex-1">
-                                <div className="flex items-center space-x-2 mb-1">
-                                  <span className="font-medium text-sm">{completion.user?.name || '不明'}</span>
-                                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                    completion.status === 'approved' ? 'bg-green-100 text-green-800' :
-                                    completion.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                                    'bg-yellow-100 text-yellow-800'
-                                  }`}>
-                                    {completion.status === 'approved' ? '承認済み' :
-                                     completion.status === 'rejected' ? '拒否済み' :
-                                     '申請中'}
-                                  </span>
-                                </div>
-                                {completion.proof_text && (
-                                  <p className="text-xs text-gray-600 mb-1">{completion.proof_text}</p>
-                                )}
-                                {completion.proof_url && (
-                                  <a
-                                    href={completion.proof_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-primary-600 hover:underline"
-                                  >
-                                    {completion.proof_url}
-                                  </a>
-                                )}
-                                <p className="text-xs text-gray-500 mt-1">
-                                  {formatDate(completion.created_at)}
-                                </p>
-                              </div>
-                            </div>
-                            {completion.status === 'pending' && (
-                              <div className="flex space-x-2 mt-2">
-                                <button
-                                  onClick={() => handleApproveCompletion(completion.id)}
-                                  className="btn-primary text-xs flex items-center"
-                                >
-                                  <CheckCircle className="h-3 w-3 mr-1" />
-                                  承認
-                                </button>
-                                <button
-                                  onClick={() => handleRejectCompletion(completion.id)}
-                                  className="btn-secondary text-xs flex items-center"
-                                >
-                                  <X className="h-3 w-3 mr-1" />
-                                  拒否
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        ))}
+                {/* 承認済みメンバー */}
+                {membersLoading ? (
+                  <div className="animate-pulse space-y-4">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="h-16 bg-gray-200 rounded"></div>
+                    ))}
+                  </div>
+                ) : members.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500">メンバーがいません</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {members.map((member) => (
+                      <div key={member.id} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg">
+                        <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                          <Users className="h-5 w-5 text-primary-600" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900">{member.user?.name || '不明'}</p>
+                          <p className="text-xs text-gray-500">
+                            {member.role === 'admin' ? '管理者' : 'メンバー'} • {formatDate(member.joined_at || member.created_at)}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {isOwner && quest.created_by === user?.id && (!questCompletions[quest.id] || questCompletions[quest.id].length === 0) && (
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                      <p className="text-xs text-gray-500">完了申請はまだありません</p>
-                    </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* イベント（公式コミュニティのみ） */}
+            {activeTab === 'events' && community.community_type === 'official' && (
+              <div className="card">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold text-gray-900">イベント</h2>
+                  {isOwner && (
+                    <button
+                      onClick={() => setShowCreateEvent(!showCreateEvent)}
+                      className="btn-primary flex items-center"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      イベントを作成
+                    </button>
                   )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+
+                {/* イベント作成フォーム */}
+                {showCreateEvent && isOwner && (
+                  <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">新しいイベント</h3>
+                    <form onSubmit={handleCreateEvent} className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          タイトル *
+                        </label>
+                        <input
+                          type="text"
+                          value={eventForm.title}
+                          onChange={(e) => setEventForm(prev => ({ ...prev, title: e.target.value }))}
+                          required
+                          className="input-field"
+                          placeholder="イベントのタイトルを入力"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          説明 *
+                        </label>
+                        <textarea
+                          value={eventForm.description}
+                          onChange={(e) => setEventForm(prev => ({ ...prev, description: e.target.value }))}
+                          required
+                          rows={3}
+                          className="input-field"
+                          placeholder="イベントの説明を入力"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            開催日時 *
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={eventForm.event_date}
+                            onChange={(e) => setEventForm(prev => ({ ...prev, event_date: e.target.value }))}
+                            required
+                            className="input-field"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            締切日時
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={eventForm.deadline}
+                            onChange={(e) => setEventForm(prev => ({ ...prev, deadline: e.target.value }))}
+                            className="input-field"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            場所
+                          </label>
+                          <input
+                            type="text"
+                            value={eventForm.location}
+                            onChange={(e) => setEventForm(prev => ({ ...prev, location: e.target.value }))}
+                            className="input-field"
+                            placeholder="会場名や住所"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            オンラインURL
+                          </label>
+                          <input
+                            type="url"
+                            value={eventForm.online_url}
+                            onChange={(e) => setEventForm(prev => ({ ...prev, online_url: e.target.value }))}
+                            className="input-field"
+                            placeholder="https://..."
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          定員
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={eventForm.capacity}
+                          onChange={(e) => setEventForm(prev => ({ ...prev, capacity: e.target.value }))}
+                          className="input-field"
+                          placeholder="定員数（空欄で無制限）"
+                        />
+                      </div>
+                      <div className="flex space-x-2">
+                        <button type="submit" className="btn-primary">
+                          作成
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowCreateEvent(false)
+                            setEventForm({
+                              title: '',
+                              description: '',
+                              event_date: '',
+                              location: '',
+                              online_url: '',
+                              deadline: '',
+                              capacity: ''
+                            })
+                          }}
+                          className="btn-secondary"
+                        >
+                          キャンセル
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {eventsLoading ? (
+                  <div className="animate-pulse space-y-4">
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="h-32 bg-gray-200 rounded"></div>
+                    ))}
+                  </div>
+                ) : events.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500">イベントがありません</p>
+                    {isOwner && (
+                      <p className="text-sm text-gray-400 mt-2">最初のイベントを作成してみましょう</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {events.map((event) => (
+                      <div key={event.id} className="border border-gray-200 rounded-lg p-4">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">{event.title}</h3>
+                        <p className="text-sm text-gray-600 mb-3">{event.description}</p>
+                        <div className="flex items-center space-x-4 text-xs text-gray-500 mb-3">
+                          <div className="flex items-center space-x-1">
+                            <Calendar className="h-3 w-3" />
+                            <span>{formatDateTime(event.event_date)}</span>
+                          </div>
+                          {event.location && (
+                            <div className="flex items-center space-x-1">
+                              <Clock className="h-3 w-3" />
+                              <span>{event.location}</span>
+                            </div>
+                          )}
+                          {event.online_url && (
+                            <a
+                              href={event.online_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary-600 hover:underline"
+                            >
+                              オンライン参加
+                            </a>
+                          )}
+                          {event.deadline && (
+                            <div className="flex items-center space-x-1">
+                              <Clock className="h-3 w-3" />
+                              <span>締切: {formatDateTime(event.deadline)}</span>
+                            </div>
+                          )}
+                          {event.capacity && (
+                            <span>定員: {event.capacity}名</span>
+                          )}
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          {event.is_registered ? (
+                            <>
+                              <span className="px-3 py-1 bg-green-100 text-green-800 rounded text-sm font-medium">
+                                参加登録済み
+                              </span>
+                              <button
+                                onClick={() => handleCancelEventRegistration(event.id)}
+                                className="btn-secondary text-sm"
+                              >
+                                キャンセル
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => handleRegisterEvent(event.id)}
+                              className="btn-primary text-sm"
+                            >
+                              参加する
+                            </button>
+                          )}
+                          {isOwner && (
+                            <button
+                              onClick={() => handleViewEventParticipants(event.id)}
+                              className="btn-secondary text-sm"
+                            >
+                              参加者一覧
+                            </button>
+                          )}
+                        </div>
+                        {isOwner && eventParticipants[event.id] && (
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <h4 className="text-sm font-medium text-gray-900 mb-2">
+                              参加者 ({eventParticipants[event.id].length}名)
+                            </h4>
+                            <div className="space-y-1">
+                              {eventParticipants[event.id].map((participant) => (
+                                <div key={participant.id} className="text-sm text-gray-600">
+                                  {participant.user?.name || '不明'}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* クエスト */}
+            {activeTab === 'quests' && (
+              <div className="card">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold text-gray-900">クエスト</h2>
+                  {isMember && (
+                    <button
+                      onClick={() => setShowCreateQuest(!showCreateQuest)}
+                      className="btn-primary flex items-center"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      クエストを作成
+                    </button>
+                  )}
+                </div>
+
+                {/* クエスト作成フォーム */}
+                {showCreateQuest && isMember && (
+                  <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">新しいクエスト</h3>
+                    <form onSubmit={handleCreateQuest} className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          タイトル *
+                        </label>
+                        <input
+                          type="text"
+                          value={questForm.title}
+                          onChange={(e) => setQuestForm(prev => ({ ...prev, title: e.target.value }))}
+                          required
+                          className="input-field"
+                          placeholder="クエストのタイトルを入力"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          説明
+                        </label>
+                        <textarea
+                          value={questForm.description}
+                          onChange={(e) => setQuestForm(prev => ({ ...prev, description: e.target.value }))}
+                          rows={3}
+                          className="input-field"
+                          placeholder="クエストの説明を入力"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            報酬タイプ
+                          </label>
+                          <select
+                            value={questForm.reward_type}
+                            onChange={(e) => setQuestForm(prev => ({ ...prev, reward_type: e.target.value as 'candle' | 'torch' }))}
+                            className="input-field"
+                          >
+                            <option value="candle">🕯️ キャンドル（ギルド）</option>
+                            <option value="torch">🔥 トーチ（公式コミュニティ）</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            報酬数
+                          </label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={questForm.reward_amount}
+                            onChange={(e) => setQuestForm(prev => ({ ...prev, reward_amount: parseInt(e.target.value) || 1 }))}
+                            className="input-field"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          期限（任意）
+                        </label>
+                        <input
+                          type="datetime-local"
+                          value={questForm.deadline}
+                          onChange={(e) => setQuestForm(prev => ({ ...prev, deadline: e.target.value }))}
+                          className="input-field"
+                        />
+                      </div>
+                      <div className="flex space-x-2">
+                        <button type="submit" className="btn-primary">
+                          作成
+                        </button>
+                          <button
+                          type="button"
+                          onClick={() => {
+                            setShowCreateQuest(false)
+                            setQuestForm({ title: '', description: '', reward_type: 'candle', reward_amount: 1, deadline: '' })
+                          }}
+                          className="btn-secondary"
+                        >
+                          キャンセル
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* クエスト一覧 */}
+                {questsLoading ? (
+                  <div className="animate-pulse space-y-4">
+                    {[...Array(3)].map((_, i) => (
+                      <div key={i} className="h-24 bg-gray-200 rounded"></div>
+                    ))}
+                  </div>
+                ) : quests.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500">クエストがありません</p>
+                    {isMember && (
+                      <p className="text-sm text-gray-400 mt-2">最初のクエストを作成してみましょう</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {quests.map((quest) => (
+                      <div key={quest.id} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-1">{quest.title}</h3>
+                            {quest.description && (
+                              <p className="text-sm text-gray-600 mb-2">{quest.description}</p>
+                            )}
+                            <div className="flex items-center space-x-4 text-xs text-gray-500">
+                              <span>作成者: {quest.creator?.name || '不明'}</span>
+                              <span>{formatDate(quest.created_at)}</span>
+                              {quest.deadline && (
+                                <span className="flex items-center space-x-1">
+                                  <Clock className="h-3 w-3" />
+                                  <span>期限: {formatDateTime(quest.deadline)}</span>
+                                </span>
+                              )}
+                              <span className="flex items-center space-x-1">
+                                <span>{rewardIcon}</span>
+                                <span>報酬: {quest.reward_amount}{rewardLabel}</span>
+                              </span>
+                            </div>
+                          </div>
+                          <div className="ml-4">
+                            {quest.user_completion_status === 'approved' && (
+                              <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">
+                                完了済み
+                              </span>
+                            )}
+                            {quest.user_completion_status === 'pending' && (
+                              <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs font-medium">
+                                申請中
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* クエスト完了申請 */}
+                        {isMember && !quest.user_completion_status && (
+                          <div className="mt-3">
+                            {showCompletionForm === quest.id ? (
+                              <div className="p-3 bg-gray-50 rounded border border-gray-200">
+                                <h4 className="text-sm font-medium text-gray-900 mb-2">完了申請</h4>
+                                <div className="space-y-2 mb-2">
+                                  <input
+                                    type="text"
+                                    value={completionForm.proof_text}
+                                    onChange={(e) => setCompletionForm(prev => ({ ...prev, proof_text: e.target.value }))}
+                                    placeholder="完了証明（テキスト）"
+                                    className="input-field text-sm"
+                                  />
+                                  <input
+                                    type="url"
+                                    value={completionForm.proof_url}
+                                    onChange={(e) => setCompletionForm(prev => ({ ...prev, proof_url: e.target.value }))}
+                                    placeholder="完了証明（URL）"
+                                    className="input-field text-sm"
+                                  />
+                                </div>
+                                <div className="flex space-x-2">
+                                  <button
+                                    onClick={() => handleRequestCompletion(quest.id)}
+                                    className="btn-primary text-sm"
+                                  >
+                                    申請する
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setShowCompletionForm(null)
+                                      setCompletionForm({ proof_text: '', proof_url: '' })
+                                    }}
+                                    className="btn-secondary text-sm"
+                                  >
+                                    キャンセル
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setShowCompletionForm(quest.id)}
+                                className="btn-secondary text-sm"
+                              >
+                                完了を申請
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* クエスト作成者向け: 完了申請の承認/拒否 */}
+                        {isOwner && quest.created_by === user?.id && questCompletions[quest.id] && questCompletions[quest.id].length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <h4 className="text-sm font-medium text-gray-900 mb-2">完了申請一覧</h4>
+                            <div className="space-y-2">
+                              {questCompletions[quest.id].map((completion) => (
+                                <div key={completion.id} className="p-3 bg-gray-50 rounded border border-gray-200">
+                                  <div className="flex items-start justify-between mb-2">
+                                    <div className="flex-1">
+                                      <div className="flex items-center space-x-2 mb-1">
+                                        <span className="font-medium text-sm">{completion.user?.name || '不明'}</span>
+                                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                          completion.status === 'approved' ? 'bg-green-100 text-green-800' :
+                                          completion.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                                          'bg-yellow-100 text-yellow-800'
+                                        }`}>
+                                          {completion.status === 'approved' ? '承認済み' :
+                                           completion.status === 'rejected' ? '拒否済み' :
+                                           '申請中'}
+                                        </span>
+                                      </div>
+                                      {completion.proof_text && (
+                                        <p className="text-xs text-gray-600 mb-1">{completion.proof_text}</p>
+                                      )}
+                                      {completion.proof_url && (
+                                        <a
+                                          href={completion.proof_url}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-xs text-primary-600 hover:underline"
+                                        >
+                                          {completion.proof_url}
+                                        </a>
+                                      )}
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        {formatDate(completion.created_at)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  {completion.status === 'pending' && (
+                                    <div className="flex space-x-2 mt-2">
+                                      <button
+                                        onClick={() => handleApproveCompletion(completion.id)}
+                                        className="btn-primary text-xs flex items-center"
+                                      >
+                                        <CheckCircle className="h-3 w-3 mr-1" />
+                                        承認
+                                      </button>
+                                      <button
+                                        onClick={() => handleRejectCompletion(completion.id)}
+                                        className="btn-secondary text-xs flex items-center"
+                                      >
+                                        <X className="h-3 w-3 mr-1" />
+                                        拒否
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {isOwner && quest.created_by === user?.id && (!questCompletions[quest.id] || questCompletions[quest.id].length === 0) && (
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <p className="text-xs text-gray-500">完了申請はまだありません</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   )
 }
-

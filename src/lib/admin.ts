@@ -28,27 +28,59 @@ export async function isAdmin(userId: string): Promise<boolean> {
  */
 export async function getVerificationRequests(status?: 'pending' | 'approved' | 'rejected') {
   try {
+    console.log('Fetching verification requests with status:', status)
+    
+    // まず、プロフィール情報を含めずにシンプルに取得
     let query = supabase
       .from('organization_verification_requests')
-      .select(`
-        *,
-        profile:profiles(id, name, email, account_type)
-      `)
+      .select('*')
       .order('created_at', { ascending: false })
 
     if (status) {
+      console.log('Filtering by status:', status)
       query = query.eq('status', status)
     }
 
     const { data, error } = await query
 
     if (error) {
+      console.error('Error fetching verification requests:', error)
+      console.error('Error details:', JSON.stringify(error, null, 2))
       throw error
     }
 
-    return { data, error: null }
+    console.log('Verification requests fetched (simple query):', data?.length || 0)
+    if (data && data.length > 0) {
+      console.log('Sample request:', JSON.stringify(data[0], null, 2))
+      
+      // プロフィール情報を個別に取得
+      const profileIds = Array.from(new Set(data.map(r => r.profile_id)))
+      console.log('Fetching profiles for:', profileIds)
+      
+      const { data: profiles, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, name, email, account_type')
+        .in('id', profileIds)
+      
+      if (profileError) {
+        console.error('Error fetching profiles:', profileError)
+      } else {
+        console.log('Profiles fetched:', profiles?.length || 0)
+        
+        // プロフィール情報をマージ
+        const dataWithProfiles = data.map(request => ({
+          ...request,
+          profiles: profiles?.find(p => p.id === request.profile_id)
+        }))
+        
+        return { data: dataWithProfiles, error: null }
+      }
+    }
+    
+    return { data: data || [], error: null }
   } catch (error: any) {
-    return { data: null, error }
+    console.error('Error in getVerificationRequests:', error)
+    return { data: null, error: error.message || error }
   }
 }
 
@@ -88,17 +120,28 @@ export async function approveVerificationRequest(
     }
 
     // プロフィールの認証ステータスを更新
-    const { error: profileError } = await supabase
+    console.log('Updating profile verification_status:', {
+      profile_id: request.profile_id,
+      admin_id: adminId,
+      new_status: 'verified'
+    })
+    
+    const { data: updatedProfile, error: profileError } = await supabase
       .from('profiles')
       .update({
         verification_status: 'verified',
         updated_at: new Date().toISOString()
       })
       .eq('id', request.profile_id)
+      .select()
 
     if (profileError) {
+      console.error('Error updating profile:', profileError)
+      console.error('Profile update error details:', JSON.stringify(profileError, null, 2))
       throw profileError
     }
+
+    console.log('Profile updated successfully:', updatedProfile)
 
     return { success: true, error: null }
   } catch (error: any) {
@@ -268,42 +311,58 @@ export async function updateVerificationStatus(
   reviewNotes?: string
 ) {
   try {
+    console.log('Updating verification status:', { userId, status, adminId })
+    
     // プロフィールの認証ステータスを更新
-    const { error: profileError } = await supabase
+    const { error: profileError, data: profileData } = await supabase
       .from('profiles')
       .update({
         verification_status: status,
         updated_at: new Date().toISOString()
       })
       .eq('id', userId)
+      .select()
 
     if (profileError) {
-      throw profileError
+      console.error('Error updating profile:', profileError)
+      throw new Error(`プロフィールの更新に失敗しました: ${profileError.message}`)
     }
 
+    console.log('Profile updated:', profileData)
+
     // 認証申請が存在する場合は更新、存在しない場合は作成
-    const { data: existingRequest } = await supabase
+    const { data: existingRequest, error: fetchError } = await supabase
       .from('organization_verification_requests')
       .select('id')
       .eq('profile_id', userId)
-      .single()
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      console.error('Error fetching existing request:', fetchError)
+      // エラーを無視して続行（申請が存在しない場合もあるため）
+    }
+
+    const requestStatus = status === 'verified' ? 'approved' : status === 'rejected' ? 'rejected' : 'pending'
 
     if (existingRequest) {
       // 既存の申請を更新
       const { error: updateError } = await supabase
         .from('organization_verification_requests')
         .update({
-          status: status === 'verified' ? 'approved' : status === 'rejected' ? 'rejected' : 'pending',
+          status: requestStatus,
           reviewed_by: adminId,
           reviewed_at: new Date().toISOString(),
-          review_notes: reviewNotes
+          review_notes: reviewNotes || null
         })
         .eq('id', existingRequest.id)
 
       if (updateError) {
         console.error('Error updating verification request:', updateError)
-        // 申請の更新に失敗しても、プロフィールの更新は成功しているので続行
+        throw new Error(`認証申請の更新に失敗しました: ${updateError.message}`)
       }
+      console.log('Verification request updated')
     } else {
       // 認証申請が存在しない場合は作成（管理者が直接認証した場合）
       const { data: profile } = await supabase
@@ -324,21 +383,25 @@ export async function updateVerificationStatus(
             contact_person_name: profile.contact_person_name || '',
             contact_person_email: profile.contact_person_email || '',
             contact_person_phone: profile.contact_person_phone || null,
-            status: status === 'verified' ? 'approved' : status === 'rejected' ? 'rejected' : 'pending',
+            status: requestStatus,
             reviewed_by: adminId,
             reviewed_at: new Date().toISOString(),
-            review_notes: reviewNotes
+            review_notes: reviewNotes || null
           })
 
         if (createError) {
           console.error('Error creating verification request:', createError)
           // 申請の作成に失敗しても、プロフィールの更新は成功しているので続行
+          // ただし、エラーを記録
+        } else {
+          console.log('Verification request created')
         }
       }
     }
 
     return { success: true, error: null }
   } catch (error: any) {
+    console.error('Error in updateVerificationStatus:', error)
     return { success: false, error: error.message || '認証状態の更新に失敗しました' }
   }
 }

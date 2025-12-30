@@ -16,7 +16,7 @@ type DetailCategory = 'all' | 'regular-study' | 'language-study' | 'exchange' | 
 
 type CommunityPost = {
   id: string
-  type: 'announcement' | 'event'
+  type: 'announcement' | 'event' | 'quest'
   title: string
   content: string
   community_id: string
@@ -26,11 +26,31 @@ type CommunityPost = {
   creator?: { name: string }
   event_date?: string
   location?: string
+  deadline?: string
+  reward_type?: 'candle' | 'torch'
+  reward_amount?: number
+}
+
+type TimelineItem = Post | {
+  id: string
+  type: 'event' | 'quest'
+  title: string
+  content: string
+  created_at: string
+  community_id?: string
+  community_name?: string
+  creator?: { name: string }
+  event_date?: string
+  location?: string
+  deadline?: string
+  reward_type?: 'candle' | 'torch'
+  reward_amount?: number
 }
 
 export default function Timeline() {
   const { user } = useAuth()
   const [posts, setPosts] = useState<Post[]>([])
+  const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([])
   const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<TimelineView>('recommended')
@@ -242,7 +262,7 @@ export default function Timeline() {
     try {
       setLoading(true)
       
-      const [announcementsResult, eventsResult] = await Promise.all([
+      const [announcementsResult, eventsResult, questsResult] = await Promise.all([
         supabase
           .from('announcements')
           .select(`
@@ -260,7 +280,17 @@ export default function Timeline() {
             creator:profiles(id, name)
           `)
           .in('community_id', ids)
-          .order('event_date', { ascending: false })
+          .order('event_date', { ascending: false }),
+        supabase
+          .from('quests')
+          .select(`
+            *,
+            community:communities(id, name),
+            creator:profiles(id, name)
+          `)
+          .in('community_id', ids)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
       ])
 
       if (announcementsResult.error) {
@@ -268,6 +298,9 @@ export default function Timeline() {
       }
       if (eventsResult.error) {
         console.error('Error fetching events:', eventsResult.error)
+      }
+      if (questsResult.error) {
+        console.error('Error fetching quests:', questsResult.error)
       }
 
       const announcements: CommunityPost[] = (announcementsResult.data || []).map((a: any) => ({
@@ -296,7 +329,22 @@ export default function Timeline() {
         location: e.location
       }))
 
-      let allPosts = [...announcements, ...events]
+      const quests: CommunityPost[] = (questsResult.data || []).map((q: any) => ({
+        id: q.id,
+        type: 'quest' as const,
+        title: q.title,
+        content: q.description || '',
+        community_id: q.community_id,
+        community_name: q.community?.name,
+        created_at: q.created_at,
+        created_by: q.created_by,
+        creator: q.creator ? { name: q.creator.name } : undefined,
+        deadline: q.deadline,
+        reward_type: q.reward_type,
+        reward_amount: q.reward_amount
+      }))
+
+      let allPosts = [...announcements, ...events, ...quests]
       if (debouncedSearchTerm) {
         allPosts = allPosts.filter(post =>
           post.title.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
@@ -412,14 +460,114 @@ export default function Timeline() {
         query = query.or(`title.ilike.%${debouncedSearchTerm}%,content.ilike.%${debouncedSearchTerm}%`)
       }
 
-      const { data, error } = await query.limit(50)
+      const { data: postsData, error: postsError } = await query.limit(50)
 
-      if (error) {
-        console.error('Error fetching posts:', error)
-        return
+      if (postsError) {
+        console.error('Error fetching posts:', postsError)
       }
 
-      setPosts(data || [])
+      // ユーザーが参加しているコミュニティのイベントとクエストを取得
+      let events: TimelineItem[] = []
+      let quests: TimelineItem[] = []
+      
+      if (user) {
+        try {
+          // ユーザーが参加しているコミュニティを取得
+          const { data: userCommunities } = await supabase
+            .from('community_members')
+            .select('community_id')
+            .eq('user_id', user.id)
+            .eq('status', 'approved')
+
+          const communityIds = userCommunities?.map(c => c.community_id) || []
+
+          if (communityIds.length > 0) {
+            // イベントを取得
+            const { data: eventsData } = await supabase
+              .from('events')
+              .select(`
+                *,
+                community:communities(id, name),
+                creator:profiles(id, name)
+              `)
+              .in('community_id', communityIds)
+              .order('created_at', { ascending: false })
+              .limit(20)
+
+            events = (eventsData || []).map((e: any) => ({
+              id: e.id,
+              type: 'event' as const,
+              title: e.title,
+              content: e.description,
+              created_at: e.created_at,
+              community_id: e.community_id,
+              community_name: e.community?.name,
+              creator: e.creator ? { name: e.creator.name } : undefined,
+              event_date: e.event_date,
+              location: e.location,
+              deadline: e.deadline
+            }))
+
+            // クエストを取得
+            const { data: questsData } = await supabase
+              .from('quests')
+              .select(`
+                *,
+                community:communities(id, name),
+                creator:profiles(id, name)
+              `)
+              .in('community_id', communityIds)
+              .eq('status', 'active')
+              .order('created_at', { ascending: false })
+              .limit(20)
+
+            quests = (questsData || []).map((q: any) => ({
+              id: q.id,
+              type: 'quest' as const,
+              title: q.title,
+              content: q.description || '',
+              created_at: q.created_at,
+              community_id: q.community_id,
+              community_name: q.community?.name,
+              creator: q.creator ? { name: q.creator.name } : undefined,
+              deadline: q.deadline,
+              reward_type: q.reward_type,
+              reward_amount: q.reward_amount
+            }))
+          }
+        } catch (error) {
+          console.error('Error fetching events and quests:', error)
+        }
+      }
+
+      // 投稿、イベント、クエストを統合して日付順にソート
+      const allItems: TimelineItem[] = [
+        ...(postsData || []),
+        ...events,
+        ...quests
+      ]
+
+      // 検索フィルターを適用
+      let filteredItems = allItems
+      if (debouncedSearchTerm) {
+        filteredItems = allItems.filter(item => {
+          const title = 'title' in item ? item.title : ''
+          const content = 'content' in item ? item.content : ''
+          const searchLower = debouncedSearchTerm.toLowerCase()
+          return title.toLowerCase().includes(searchLower) || 
+                 content.toLowerCase().includes(searchLower)
+        })
+      }
+
+      // 日付順にソート
+      filteredItems.sort((a, b) => {
+        const dateA = ('event_date' in a && a.event_date) ? a.event_date : a.created_at
+        const dateB = ('event_date' in b && b.event_date) ? b.event_date : b.created_at
+        return new Date(dateB).getTime() - new Date(dateA).getTime()
+      })
+
+      setPosts(postsData || [])
+      setTimelineItems(filteredItems)
     } catch (error) {
       console.error('Error fetching posts:', error)
     } finally {
@@ -1002,7 +1150,7 @@ export default function Timeline() {
               {communityPosts.map((post) => (
               <Link 
                 key={post.id} 
-                href={post.type === 'announcement' ? `/communities/${post.community_id}/announcements/${post.id}` : `/communities/${post.community_id}/events/${post.id}`}
+                href={post.type === 'quest' ? `/communities/${post.community_id}` : post.type === 'announcement' ? `/communities/${post.community_id}/announcements/${post.id}` : `/communities/${post.community_id}/events/${post.id}`}
                 className="card hover:shadow-md transition-shadow block"
               >
                 <div className="flex items-center justify-between mb-3">
@@ -1010,9 +1158,11 @@ export default function Timeline() {
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                       post.type === 'announcement' 
                         ? 'bg-blue-100 text-blue-800' 
-                        : 'bg-purple-100 text-purple-800'
+                        : post.type === 'event'
+                        ? 'bg-purple-100 text-purple-800'
+                        : 'bg-orange-100 text-orange-800'
                     }`}>
-                      {post.type === 'announcement' ? 'お知らせ' : 'イベント'}
+                      {post.type === 'announcement' ? 'お知らせ' : post.type === 'event' ? 'イベント' : 'クエスト'}
                     </span>
                     {post.community_name && (
                       <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium flex items-center space-x-1">
@@ -1043,6 +1193,23 @@ export default function Timeline() {
                     </span>
                   </div>
                 )}
+
+                {post.type === 'quest' && (
+                  <div className="mb-3 flex items-center space-x-2 flex-wrap gap-2">
+                    {post.deadline && (
+                      <span className="inline-flex items-center space-x-1 px-2 py-1 bg-red-50 text-red-700 rounded-full text-xs font-medium">
+                        <Clock className="h-3 w-3" />
+                        <span>期限: {formatDate(post.deadline)}</span>
+                      </span>
+                    )}
+                    {post.reward_type && post.reward_amount && (
+                      <span className="inline-flex items-center space-x-1 px-2 py-1 bg-yellow-50 text-yellow-700 rounded-full text-xs font-medium">
+                        <Flame className="h-3 w-3" />
+                        <span>報酬: {post.reward_amount}{post.reward_type === 'candle' ? 'キャンドル' : 'トーチ'}</span>
+                      </span>
+                    )}
+                  </div>
+                )}
                 
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-gray-500">
@@ -1068,8 +1235,19 @@ export default function Timeline() {
           </div>
         ) : (
           <div className="space-y-6">
-            {posts.map((post) => (
-            <Link key={post.id} href={`/posts/${post.id}`} className="card hover:shadow-md transition-shadow block">
+            {posts.map((post) => {
+              const isOrganizationPost = post.author && post.author.account_type !== 'individual'
+              const getOrganizationBorderColor = () => {
+                if (!isOrganizationPost) return ''
+                switch (post.author?.account_type) {
+                  case 'educational': return 'border-l-4 border-l-blue-500'
+                  case 'company': return 'border-l-4 border-l-green-500'
+                  case 'government': return 'border-l-4 border-l-purple-500'
+                  default: return ''
+                }
+              }
+              return (
+            <Link key={post.id} href={`/posts/${post.id}`} className={`card hover:shadow-md transition-shadow block ${getOrganizationBorderColor()}`} onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-3">
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(post.category)}`}>
                   {getCategoryLabel(post.category)}
@@ -1156,7 +1334,8 @@ export default function Timeline() {
                 </div>
               </div>
             </Link>
-          ))}
+            )
+            })}
         </div>
           )}
         </>

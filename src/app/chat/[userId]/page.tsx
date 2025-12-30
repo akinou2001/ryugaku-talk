@@ -4,9 +4,11 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
+import { sendCandle } from '@/lib/quest'
 import type { User, Message } from '@/lib/supabase'
-import { ArrowLeft, Send, User as UserIcon, Clock, Flame } from 'lucide-react'
+import { ArrowLeft, Send, User as UserIcon, Clock, Flame, Check, CheckCheck, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
+import { AccountBadge } from '@/components/AccountBadge'
 
 export default function ChatDetail() {
   const { user } = useAuth()
@@ -21,7 +23,10 @@ export default function ChatDetail() {
   const [sending, setSending] = useState(false)
   const [canSendCandle, setCanSendCandle] = useState(false)
   const [candleSent, setCandleSent] = useState(false)
+  const [isTyping, setIsTyping] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (user && userId) {
@@ -38,12 +43,23 @@ export default function ChatDetail() {
             event: '*',
             schema: 'public',
             table: 'messages',
-            filter: `sender_id=eq.${userId},receiver_id=eq.${user.id}`
+            filter: `or(and(sender_id.eq.${user.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${user.id}))`
           },
           (payload) => {
             if (payload.eventType === 'INSERT') {
-              setMessages((prev) => [...prev, payload.new as Message])
-              markAsRead(payload.new.id)
+              const newMsg = payload.new as Message
+              setMessages((prev) => {
+                // 重複チェック
+                if (prev.some(m => m.id === newMsg.id)) return prev
+                return [...prev, newMsg]
+              })
+              if (newMsg.receiver_id === user.id) {
+                markAsRead(newMsg.id)
+              }
+            } else if (payload.eventType === 'UPDATE') {
+              setMessages((prev) => 
+                prev.map(msg => msg.id === payload.new.id ? payload.new as Message : msg)
+              )
             }
           }
         )
@@ -57,8 +73,14 @@ export default function ChatDetail() {
 
   useEffect(() => {
     // メッセージが更新されたらスクロール
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    scrollToBottom()
   }, [messages])
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, 100)
+  }
 
   const fetchUserProfile = async () => {
     try {
@@ -125,6 +147,61 @@ export default function ChatDetail() {
       .eq('receiver_id', user.id)
   }
 
+  const checkCandleSendAvailability = async () => {
+    if (!user) return
+
+    try {
+      // 今週の開始日を計算（月曜日を週の開始とする）
+      const now = new Date()
+      const dayOfWeek = now.getDay()
+      const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek // 月曜日を0にする
+      const weekStart = new Date(now)
+      weekStart.setDate(now.getDate() + diff)
+      weekStart.setHours(0, 0, 0, 0)
+
+      // 今週にこのユーザーにキャンドルを送ったか確認
+      const { data } = await supabase
+        .from('candle_sends')
+        .select('*')
+        .eq('sender_id', user.id)
+        .eq('receiver_id', userId)
+        .gte('sent_at', weekStart.toISOString())
+
+      if (!data || data.length === 0) {
+        setCanSendCandle(true)
+      } else {
+        setCanSendCandle(false)
+        setCandleSent(true)
+      }
+    } catch (error) {
+      console.error('Error checking candle availability:', error)
+    }
+  }
+
+  const handleSendCandle = async () => {
+    if (!user || !canSendCandle) return
+
+    try {
+      await sendCandle(user.id, userId)
+      setCanSendCandle(false)
+      setCandleSent(true)
+      
+      // キャンドル送信をメッセージとして表示
+      const candleMessage: Message = {
+        id: `candle-${Date.now()}`,
+        sender_id: user.id,
+        receiver_id: userId,
+        content: '🕯️ キャンドルを送りました',
+        is_read: false,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+      setMessages((prev) => [...prev, candleMessage])
+    } catch (error: any) {
+      alert(error.message || 'キャンドルの送信に失敗しました')
+    }
+  }
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user || !newMessage.trim() || sending) return
@@ -149,6 +226,7 @@ export default function ChatDetail() {
 
       setMessages((prev) => [...prev, data])
       setNewMessage('')
+      inputRef.current?.focus()
     } catch (error) {
       console.error('Error sending message:', error)
     } finally {
@@ -158,6 +236,12 @@ export default function ChatDetail() {
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString)
+    const now = new Date()
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
+    
+    if (diffInMinutes < 1) return 'たった今'
+    if (diffInMinutes < 60) return `${diffInMinutes}分前`
+    
     return date.toLocaleTimeString('ja-JP', {
       hour: '2-digit',
       minute: '2-digit'
@@ -175,8 +259,16 @@ export default function ChatDetail() {
     } else if (date.toDateString() === yesterday.toDateString()) {
       return '昨日'
     } else {
-      return date.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric' })
+      return date.toLocaleDateString('ja-JP', { 
+        month: 'long', 
+        day: 'numeric',
+        weekday: 'short'
+      })
     }
+  }
+
+  const getInitials = (name: string) => {
+    return name.charAt(0).toUpperCase()
   }
 
   if (!user) {
@@ -194,15 +286,10 @@ export default function ChatDetail() {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="animate-pulse">
-            <div className="h-16 bg-gray-200 rounded mb-4"></div>
-            <div className="space-y-4">
-              <div className="h-20 bg-gray-200 rounded"></div>
-              <div className="h-20 bg-gray-200 rounded"></div>
-            </div>
-          </div>
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">読み込み中...</p>
         </div>
       </div>
     )
@@ -222,115 +309,224 @@ export default function ChatDetail() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto">
-        {/* ヘッダー */}
-        <div className="card mb-4">
+    <div className="h-screen flex flex-col bg-gray-50">
+      {/* ヘッダー */}
+      <div className="bg-white border-b border-gray-200 shadow-sm">
+        <div className="max-w-4xl mx-auto px-4 py-3">
           <div className="flex items-center space-x-4">
             <button
               onClick={() => router.back()}
-              className="flex items-center text-gray-600 hover:text-primary-600 transition-colors"
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
             >
-              <ArrowLeft className="h-5 w-5 mr-2" />
-              戻る
+              <ArrowLeft className="h-5 w-5 text-gray-600" />
             </button>
-            <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-              <UserIcon className="h-5 w-5 text-primary-600" />
-            </div>
-            <div className="flex-1">
-              <h1 className="text-xl font-semibold text-gray-900">{otherUser.name}</h1>
-              <p className="text-sm text-gray-500">{otherUser.email}</p>
-            </div>
-            <Link href={`/profile/${otherUser.id}`} className="btn-secondary text-sm">
-              プロフィールを見る
-            </Link>
-          </div>
-        </div>
-
-        {/* メッセージエリア */}
-        <div className="card mb-4" style={{ height: '500px', overflowY: 'auto' }}>
-          <div className="space-y-4">
-            {messages.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-500">まだメッセージがありません</p>
-                <p className="text-sm text-gray-400 mt-2">メッセージを送って会話を始めましょう</p>
+            
+            <Link href={`/profile/${otherUser.id}`} className="flex items-center space-x-3 flex-1 min-w-0">
+              <div className="relative">
+                <div className="w-12 h-12 bg-gradient-to-br from-primary-400 to-primary-600 rounded-full flex items-center justify-center text-white font-semibold text-lg shadow-md">
+                  {getInitials(otherUser.name)}
+                </div>
+                <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
               </div>
-            ) : (
-              messages.map((message, index) => {
-                const isMyMessage = message.sender_id === user.id
-                const showDate = index === 0 || 
-                  new Date(message.created_at).toDateString() !== 
-                  new Date(messages[index - 1].created_at).toDateString()
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center space-x-2">
+                  <h1 className="text-lg font-semibold text-gray-900 truncate">{otherUser.name}</h1>
+                  {otherUser.account_type && otherUser.account_type !== 'individual' && (
+                    <AccountBadge 
+                      accountType={otherUser.account_type}
+                      verificationStatus={otherUser.verification_status}
+                      organizationName={otherUser.organization_name}
+                      size="sm"
+                    />
+                  )}
+                </div>
+                <p className="text-sm text-gray-500 truncate">{otherUser.email}</p>
+              </div>
+            </Link>
 
-                return (
-                  <div key={message.id}>
-                    {showDate && (
-                      <div className="text-center text-xs text-gray-500 my-4">
-                        {formatDate(message.created_at)}
-                      </div>
-                    )}
-                    <div className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'}`}>
-                      <div
-                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                          isMyMessage
-                            ? 'bg-primary-600 text-white'
-                            : 'bg-gray-100 text-gray-900'
-                        }`}
-                      >
-                        <p className="text-sm">{message.content}</p>
-                        <div className={`flex items-center mt-1 text-xs ${
-                          isMyMessage ? 'text-primary-100' : 'text-gray-500'
-                        }`}>
-                          <Clock className="h-3 w-3 mr-1" />
-                          {formatTime(message.created_at)}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
-
-        {/* メッセージ入力 */}
-        <form onSubmit={handleSend} className="card">
-          <div className="flex space-x-2">
             {canSendCandle && !candleSent && (
               <button
-                type="button"
                 onClick={handleSendCandle}
-                className="btn-secondary flex items-center"
+                className="p-2 hover:bg-yellow-50 rounded-full transition-colors group relative"
                 title="週に1回、キャンドルを送れます"
               >
-                <Flame className="h-4 w-4 mr-1" />
-                <span className="text-sm">🕯️</span>
+                <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
+                  <span className="text-xl">🕯️</span>
+                </div>
               </button>
             )}
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="メッセージを入力..."
-              className="input-field flex-1"
-              disabled={sending}
-            />
+          </div>
+        </div>
+      </div>
+
+      {/* メッセージエリア */}
+      <div 
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto px-4 py-6 bg-gradient-to-b from-gray-50 to-white"
+        style={{ scrollBehavior: 'smooth' }}
+      >
+        <div className="max-w-3xl mx-auto space-y-4">
+          {messages.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="w-20 h-20 bg-gradient-to-br from-primary-100 to-primary-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                <MessageCircle className="h-10 w-10 text-primary-600" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">会話を始めましょう</h3>
+              <p className="text-gray-500 mb-6">メッセージを送って会話を始めましょう</p>
+              {canSendCandle && !candleSent && (
+                <button
+                  onClick={handleSendCandle}
+                  className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-full font-medium shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
+                >
+                  <span className="text-xl">🕯️</span>
+                  <span>キャンドルを送る</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            messages.map((message, index) => {
+              const isMyMessage = message.sender_id === user.id
+              const showDate = index === 0 || 
+                new Date(message.created_at).toDateString() !== 
+                new Date(messages[index - 1].created_at).toDateString()
+              
+              const isCandleMessage = message.content.includes('🕯️')
+              const prevMessage = index > 0 ? messages[index - 1] : null
+              const showAvatar = !prevMessage || 
+                prevMessage.sender_id !== message.sender_id ||
+                new Date(message.created_at).getTime() - new Date(prevMessage.created_at).getTime() > 300000 // 5分以上経過
+
+              return (
+                <div key={message.id}>
+                  {showDate && (
+                    <div className="flex items-center justify-center my-6">
+                      <div className="bg-white px-4 py-1.5 rounded-full shadow-sm border border-gray-200">
+                        <span className="text-xs font-medium text-gray-600">{formatDate(message.created_at)}</span>
+                      </div>
+                    </div>
+                  )}
+                  <div className={`flex items-end space-x-2 ${isMyMessage ? 'flex-row-reverse space-x-reverse' : ''}`}>
+                    {/* アバター */}
+                    {!isMyMessage && (
+                      <div className="flex-shrink-0">
+                        {showAvatar ? (
+                          <div className="w-8 h-8 bg-gradient-to-br from-primary-400 to-primary-600 rounded-full flex items-center justify-center text-white text-xs font-semibold">
+                            {getInitials(otherUser.name)}
+                          </div>
+                        ) : (
+                          <div className="w-8 h-8"></div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* メッセージバブル */}
+                    <div className={`flex flex-col ${isMyMessage ? 'items-end' : 'items-start'} max-w-[70%]`}>
+                      <div
+                        className={`relative px-4 py-2.5 rounded-2xl shadow-sm ${
+                          isCandleMessage
+                            ? 'bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300'
+                            : isMyMessage
+                            ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white'
+                            : 'bg-white text-gray-900 border border-gray-200'
+                        }`}
+                        style={{
+                          borderRadius: isMyMessage 
+                            ? '1rem 1rem 0.25rem 1rem' 
+                            : '1rem 1rem 1rem 0.25rem'
+                        }}
+                      >
+                        {isCandleMessage ? (
+                          <div className="text-center">
+                            <div className="text-3xl mb-1">🕯️</div>
+                            <p className="text-sm font-medium text-gray-700">キャンドルを送りました</p>
+                          </div>
+                        ) : (
+                          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                            {message.content}
+                          </p>
+                        )}
+                      </div>
+                      
+                      {/* タイムスタンプと既読マーク */}
+                      <div className={`flex items-center space-x-1 mt-1 px-1 ${isMyMessage ? 'flex-row-reverse space-x-reverse' : ''}`}>
+                        <span className="text-xs text-gray-500">
+                          {formatTime(message.created_at)}
+                        </span>
+                        {isMyMessage && (
+                          <div className="text-primary-600">
+                            {message.is_read ? (
+                              <CheckCheck className="h-3.5 w-3.5" />
+                            ) : (
+                              <Check className="h-3.5 w-3.5" />
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 自分のアバター（通常は非表示） */}
+                    {isMyMessage && showAvatar && (
+                      <div className="flex-shrink-0">
+                        <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full flex items-center justify-center text-white text-xs font-semibold">
+                          {getInitials(user.name)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+      </div>
+
+      {/* メッセージ入力エリア */}
+      <div className="bg-white border-t border-gray-200 shadow-lg">
+        <div className="max-w-3xl mx-auto px-4 py-4">
+          {candleSent && (
+            <div className="mb-2 px-3 py-1.5 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-xs text-yellow-800 flex items-center space-x-1">
+                <span>🕯️</span>
+                <span>今週は既にキャンドルを送信済みです（週1回まで）</span>
+              </p>
+            </div>
+          )}
+          <form onSubmit={handleSend} className="flex items-end space-x-2">
+            <div className="flex-1 relative">
+              <input
+                ref={inputRef}
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="メッセージを入力..."
+                className="w-full px-4 py-3 pr-12 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all resize-none"
+                disabled={sending}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    handleSend(e)
+                  }
+                }}
+              />
+            </div>
             <button
               type="submit"
               disabled={!newMessage.trim() || sending}
-              className="btn-primary flex items-center"
+              className={`p-3 rounded-full transition-all transform ${
+                newMessage.trim() && !sending
+                  ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-lg hover:shadow-xl hover:scale-105'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
             >
-              <Send className="h-4 w-4 mr-2" />
-              {sending ? '送信中...' : '送信'}
+              {sending ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <Send className="h-5 w-5" />
+              )}
             </button>
-          </div>
-          {!canSendCandle && !candleSent && (
-            <p className="text-xs text-gray-500 mt-2">
-              今週は既にキャンドルを送信済みです（週1回まで）
-            </p>
-          )}
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   )
