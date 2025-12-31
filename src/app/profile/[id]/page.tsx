@@ -267,7 +267,6 @@ export default function Profile() {
                       </Link>
                     </div>
                   )}
-<<<<<<< HEAD
                   {(profile.verification_status === 'pending' || verificationRequest?.status === 'pending') && (
                     <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg text-sm">
                       <div className="font-semibold mb-1 flex items-center space-x-2">
@@ -290,15 +289,6 @@ export default function Profile() {
                           )}
                         </div>
                       )}
-=======
-                  {profile.verification_status === 'pending' && (
-                    <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg text-sm">
-                      <div className="font-semibold mb-1">認証審査中</div>
-                      <div className="text-xs">
-                        組織アカウントの認証審査中です。通常1-3営業日で完了します。
-                        認証が完了すると、コミュニティ作成などの組織用機能がご利用いただけます。
-                      </div>
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
                       {isOwnProfile && (
                         <Link href="/verification/request" className="text-xs text-yellow-700 hover:text-yellow-900 underline mt-2 inline-block">
                           申請内容を確認・更新

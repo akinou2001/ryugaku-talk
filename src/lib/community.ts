@@ -5,11 +5,8 @@ import type { Community, CommunityMember, MemberStatus, MemberRole } from './sup
  * コミュニティを検索
  */
 export async function searchCommunities(query?: string, visibility?: 'public' | 'private' | 'all') {
-<<<<<<< HEAD
   const { data: { user } } = await supabase.auth.getUser()
   
-=======
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
   let supabaseQuery = supabase
     .from('communities')
     .select(`
@@ -33,7 +30,6 @@ export async function searchCommunities(query?: string, visibility?: 'public' | 
     throw error
   }
 
-<<<<<<< HEAD
   if (!data || data.length === 0) {
     return []
   }
@@ -92,9 +88,6 @@ export async function searchCommunities(query?: string, visibility?: 'public' | 
       member_status: membershipMap.get(community.id) || undefined
     }
   })
-=======
-  return data || []
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
 }
 
 /**
@@ -116,7 +109,6 @@ export async function getCommunityById(communityId: string, userId?: string) {
   }
 
   // メンバー情報を取得（ユーザーがログインしている場合）
-<<<<<<< HEAD
   // 所有者の場合は自動的にメンバーとして扱う
   if (userId && data) {
     const isOwner = data.owner_id === userId
@@ -131,9 +123,6 @@ export async function getCommunityById(communityId: string, userId?: string) {
     }
 
     // 所有者でない場合のみ、メンバーテーブルを確認
-=======
-  if (userId && data) {
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
     const { data: memberData } = await supabase
       .from('community_members')
       .select('*')
@@ -155,41 +144,28 @@ export async function getCommunityById(communityId: string, userId?: string) {
 }
 
 /**
-<<<<<<< HEAD
  * コミュニティを作成（個人アカウントはギルド、組織アカウントは公式コミュニティ）
-=======
- * コミュニティを作成（組織アカウントのみ）
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
  */
 export async function createCommunity(
   name: string,
   description?: string,
   coverImageUrl?: string,
   iconUrl?: string,
-<<<<<<< HEAD
   visibility: 'public' | 'private' = 'public',
   communityType: 'guild' | 'official' = 'official'
-=======
-  visibility: 'public' | 'private' = 'public'
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
 ) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     throw new Error('ログインが必要です')
   }
 
-<<<<<<< HEAD
   // プロフィールを取得
-=======
-  // 組織アカウントか確認
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
   const { data: profile } = await supabase
     .from('profiles')
     .select('account_type, verification_status')
     .eq('id', user.id)
     .single()
 
-<<<<<<< HEAD
   if (!profile) {
     throw new Error('プロフィールが見つかりません')
   }
@@ -200,10 +176,6 @@ export async function createCommunity(
   }
   if (communityType === 'official' && (profile.account_type === 'individual' || profile.verification_status !== 'verified')) {
     throw new Error('公式コミュニティは認証済みの組織アカウントのみ作成できます')
-=======
-  if (!profile || profile.account_type === 'individual' || profile.verification_status !== 'verified') {
-    throw new Error('認証済みの組織アカウントのみコミュニティを作成できます')
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
   }
 
   const { data, error } = await supabase
@@ -214,12 +186,8 @@ export async function createCommunity(
       cover_image_url: coverImageUrl,
       icon_url: iconUrl,
       owner_id: user.id,
-<<<<<<< HEAD
       visibility,
       community_type: communityType // ギルド or 公式コミュニティ
-=======
-      visibility
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
     })
     .select(`
       *,
@@ -232,7 +200,6 @@ export async function createCommunity(
     throw error
   }
 
-<<<<<<< HEAD
   // 作成者を自動的にメンバーとして追加（承認済み、管理者権限）
   if (data) {
     const { error: memberError } = await supabase
@@ -251,8 +218,6 @@ export async function createCommunity(
     }
   }
 
-=======
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
   return data
 }
 
@@ -399,16 +364,12 @@ export async function updateMembershipStatus(
 
 /**
  * コミュニティのメンバー一覧を取得
-<<<<<<< HEAD
  * 注意: この関数はコミュニティメンバーまたは所有者のみが使用可能
-=======
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
  */
 export async function getCommunityMembers(
   communityId: string,
   status?: MemberStatus
 ) {
-<<<<<<< HEAD
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     throw new Error('ログインが必要です')
@@ -443,8 +404,6 @@ export async function getCommunityMembers(
   }
 
   // メンバー一覧を取得（所有者またはメンバーのみ実行可能）
-=======
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
   let query = supabase
     .from('community_members')
     .select(`
@@ -519,7 +478,6 @@ export async function getCommunityStats(communityId: string) {
   }
 }
 
-<<<<<<< HEAD
 /**
  * コミュニティ限定投稿を取得
  */
@@ -898,7 +856,3 @@ export async function deleteEvent(eventId: string) {
     throw error
   }
 }
-
-=======
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
-
