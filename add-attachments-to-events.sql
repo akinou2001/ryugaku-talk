@@ -7,3 +7,4 @@ ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE posts
 ADD COLUMN IF NOT EXISTS image_url TEXT;
 
+

@@ -127,3 +127,4 @@ CHECK (account_type IN ('individual', 'educational', 'company', 'government'));
 3. ⚠️ **データベースにaccount_typeカラムが存在する必要がある**（マイグレーションが必要）
 
 
+

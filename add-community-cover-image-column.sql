@@ -15,3 +15,4 @@ COMMENT ON COLUMN communities.cover_image_url IS 'コミュニティのカバー
 COMMENT ON COLUMN communities.icon_url IS 'コミュニティのアイコン画像URL';
 COMMENT ON COLUMN communities.community_type IS 'コミュニティタイプ（guild: ギルド、official: 公式コミュニティ）';
 
+

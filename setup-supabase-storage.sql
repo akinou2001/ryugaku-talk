@@ -40,3 +40,4 @@ USING (bucket_id = 'post-images');
 -- 注意: Supabaseのデフォルト制限は50MBです
 -- アプリケーション層で10MB（イベント添付）と5MB（投稿画像）の制限を実装しています
 
+
