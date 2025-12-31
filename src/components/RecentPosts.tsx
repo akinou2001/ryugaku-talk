@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
 import { MessageCircle, Flame, MessageSquare, Clock } from 'lucide-react'
 import { AccountBadge } from '@/components/AccountBadge'
+import { UserAvatar } from '@/components/UserAvatar'
 
 export function RecentPosts() {
   const [posts, setPosts] = useState<Post[]>([])
@@ -21,7 +22,7 @@ export function RecentPosts() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, account_type, verification_status, organization_name)
+          author:profiles(name, account_type, verification_status, organization_name, icon_url)
         `)
         .is('community_id', null) // コミュニティ限定投稿は除外
         .order('created_at', { ascending: false })
@@ -131,12 +132,17 @@ export function RecentPosts() {
                 {post.title}
               </h3>
               
-              <p className="text-gray-600 mb-4 line-clamp-3">
+              <p className="text-gray-600 mb-4 line-clamp-1">
                 {post.content}
               </p>
               
               <div className="flex items-center justify-between text-sm text-gray-500">
                 <div className="flex items-center space-x-2 flex-wrap">
+                  <UserAvatar 
+                    iconUrl={post.author?.icon_url} 
+                    name={post.author?.name} 
+                    size="sm"
+                  />
                   <span>by {post.author?.name || '匿名'}</span>
                   {post.author && (
                     <AccountBadge 

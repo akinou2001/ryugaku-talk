@@ -486,7 +486,7 @@ export async function getCommunityPosts(communityId: string, userId?: string) {
     .from('posts')
     .select(`
       *,
-      author:profiles(id, name, account_type, verification_status, organization_name)
+      author:profiles(id, name, account_type, verification_status, organization_name, icon_url)
     `)
     .eq('community_id', communityId)
     .order('created_at', { ascending: false })
@@ -568,7 +568,8 @@ export async function createEvent(
   location?: string,
   onlineUrl?: string,
   deadline?: string,
-  capacity?: number
+  capacity?: number,
+  attachments?: Array<{ url: string; filename: string; type: string }>
 ) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
@@ -606,6 +607,7 @@ export async function createEvent(
       registration_deadline: deadline || null,
       deadline: deadline || null,
       capacity: capacity || null,
+      attachments: attachments || [],
       created_by: user.id
     })
     .select(`
@@ -752,6 +754,107 @@ export async function getEventParticipants(eventId: string) {
   }
 
   return data || []
+}
+
+/**
+ * イベントを更新
+ */
+export async function updateEvent(
+  eventId: string,
+  updates: {
+    title?: string
+    description?: string
+    event_date?: string
+    location?: string
+    online_url?: string
+    deadline?: string
+    capacity?: string
+    attachments?: Array<{ url: string; filename: string; type: string }>
+  }
+) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // イベントの作成者またはコミュニティの所有者か確認
+  const { data: event } = await supabase
+    .from('events')
+    .select(`
+      created_by,
+      community:communities(owner_id)
+    `)
+    .eq('id', eventId)
+    .single()
+
+  if (!event) {
+    throw new Error('イベントが見つかりません')
+  }
+
+  const community = event.community as any
+  if (event.created_by !== user.id && community.owner_id !== user.id) {
+    throw new Error('イベントの作成者またはコミュニティの所有者のみ更新できます')
+  }
+
+  const { data, error } = await supabase
+    .from('events')
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', eventId)
+    .select(`
+      *,
+      community:communities(id, name, community_type),
+      creator:profiles(id, name)
+    `)
+    .single()
+
+  if (error) {
+    console.error('Error updating event:', error)
+    throw error
+  }
+
+  return data as Event
+}
+
+/**
+ * イベントを削除
+ */
+export async function deleteEvent(eventId: string) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // イベントの作成者またはコミュニティの所有者か確認
+  const { data: event } = await supabase
+    .from('events')
+    .select(`
+      created_by,
+      community:communities(owner_id)
+    `)
+    .eq('id', eventId)
+    .single()
+
+  if (!event) {
+    throw new Error('イベントが見つかりません')
+  }
+
+  const community = event.community as any
+  if (event.created_by !== user.id && community.owner_id !== user.id) {
+    throw new Error('イベントの作成者またはコミュニティの所有者のみ削除できます')
+  }
+
+  const { error } = await supabase
+    .from('events')
+    .delete()
+    .eq('id', eventId)
+
+  if (error) {
+    console.error('Error deleting event:', error)
+    throw error
+  }
 }
 
 

@@ -9,6 +9,7 @@ import { getUserScore } from '@/lib/quest'
 import { User as UserIcon, MapPin, GraduationCap, Calendar, MessageSquare, Flame, Edit, Settings, Send, Building2 } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
+import { UserAvatar } from '@/components/UserAvatar'
 
 export default function Profile() {
   const { user: currentUser } = useAuth()
@@ -58,7 +59,7 @@ export default function Profile() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name)
+          author:profiles(name, icon_url)
         `)
         .eq('author_id', userId)
         .order('created_at', { ascending: false })
@@ -182,9 +183,11 @@ export default function Profile() {
         <div className={`card mb-8 ${isOrganizationAccount ? 'border-l-4 border-l-blue-500' : ''}`}>
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6">
             <div className="flex items-center space-x-4 mb-4 md:mb-0">
-              <div className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center">
-                <UserIcon className="h-10 w-10 text-primary-600" />
-              </div>
+              <UserAvatar 
+                iconUrl={profile.icon_url} 
+                name={profile.name} 
+                size="xl"
+              />
               <div>
                 <div className="flex items-center space-x-2 mb-1">
                   <h1 className="text-2xl font-bold text-gray-900">{profile.name}</h1>

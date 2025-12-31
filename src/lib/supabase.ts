@@ -51,6 +51,8 @@ export interface User {
   is_active: boolean
   suspended_until?: string
   suspension_reason?: string
+  // アイコン画像
+  icon_url?: string
   created_at: string
   updated_at: string
 }
@@ -97,6 +99,7 @@ export interface Post {
   community_id?: string // コミュニティ限定投稿用
   post_type?: 'announcement' | 'event' | 'quest' | 'normal' // コミュニティ限定投稿の種別
   attachments?: Array<{ url: string; filename: string; type: string }> // ファイル添付（JSONB形式）
+  image_url?: string // 写真1枚用
   created_at: string
   updated_at: string
 }
@@ -237,6 +240,7 @@ export interface Event {
   registration_deadline?: string
   deadline?: string // 締切日時（registration_deadlineの別名）
   capacity?: number
+  attachments?: Array<{ url: string; filename: string; type: string }> // ファイル添付（JSONB形式）
   created_by?: string
   creator?: User
   created_at: string

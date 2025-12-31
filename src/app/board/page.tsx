@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
 import { MessageCircle, Flame, MessageSquare, Clock, Search, Filter, Plus, MapPin, GraduationCap } from 'lucide-react'
 import { AccountBadge } from '@/components/AccountBadge'
+import { UserAvatar } from '@/components/UserAvatar'
 
 export default function Board() {
   const [posts, setPosts] = useState<Post[]>([])
@@ -68,7 +69,7 @@ export default function Board() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, account_type, verification_status, organization_name)
+          author:profiles(name, account_type, verification_status, organization_name, icon_url)
         `)
         .is('community_id', null) // コミュニティ限定投稿は除外
 
@@ -307,24 +308,30 @@ export default function Board() {
                 {post.title}
               </h2>
               
-              <p className="text-gray-600 mb-4 line-clamp-3">
+              <p className="text-gray-600 mb-4 line-clamp-1">
                 {post.content}
               </p>
               
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4 text-sm text-gray-500 flex-wrap">
-                  <span>by </span>
-                  {post.author_id ? (
-                    <Link 
-                      href={`/profile/${post.author_id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-primary-600 hover:text-primary-800 font-medium"
-                    >
-                      {post.author?.name || '匿名'}
-                    </Link>
-                  ) : (
-                    <span>{post.author?.name || '匿名'}</span>
-                  )}
+                  <div className="flex items-center space-x-4 text-sm text-gray-500 flex-wrap">
+                  <div className="flex items-center space-x-2">
+                    <UserAvatar 
+                      iconUrl={post.author?.icon_url} 
+                      name={post.author?.name} 
+                      size="sm"
+                    />
+                    {post.author_id ? (
+                      <Link 
+                        href={`/profile/${post.author_id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-primary-600 hover:text-primary-800 font-medium"
+                      >
+                        {post.author?.name || '匿名'}
+                      </Link>
+                    ) : (
+                      <span>{post.author?.name || '匿名'}</span>
+                    )}
+                  </div>
                   {post.author && (
                     <AccountBadge 
                       accountType={post.author.account_type} 

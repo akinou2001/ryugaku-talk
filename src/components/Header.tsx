@@ -7,12 +7,14 @@ import { useAuth } from './Providers'
 import { Menu, X, User, LogOut, Settings, MessageCircle, Shield, Users, Building2 } from 'lucide-react'
 import { isAdmin } from '@/lib/admin'
 import { TopTabNavigation } from './TopTabNavigation'
+import { UserAvatar } from './UserAvatar'
 
 export function Header() {
   const { user, signOut } = useAuth()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [isAdminUser, setIsAdminUser] = useState(false)
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false)
   const router = useRouter()
 
   useEffect(() => {
@@ -72,7 +74,21 @@ export function Header() {
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                   className="flex items-center space-x-2 text-gray-700 hover:text-primary-600 transition-colors"
                 >
-                  <User className="h-5 w-5" />
+                  <div 
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (user.icon_url) {
+                        setIsAvatarModalOpen(true)
+                      }
+                    }}
+                    className="cursor-pointer"
+                  >
+                    <UserAvatar 
+                      iconUrl={user.icon_url} 
+                      name={user.name} 
+                      size="sm"
+                    />
+                  </div>
                   <span>{user.name}</span>
                 </button>
                 
@@ -221,6 +237,29 @@ export function Header() {
       </div>
     </header>
       <TopTabNavigation />
+      
+      {/* アバター拡大表示モーダル */}
+      {isAvatarModalOpen && user?.icon_url && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
+          onClick={() => setIsAvatarModalOpen(false)}
+        >
+          <div className="relative max-w-2xl max-h-[90vh] p-4">
+            <button
+              onClick={() => setIsAvatarModalOpen(false)}
+              className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors z-10"
+            >
+              <X className="h-6 w-6" />
+            </button>
+            <img
+              src={user.icon_url}
+              alt={`${user.name}のアイコン`}
+              className="max-w-full max-h-[90vh] rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </>
   )
 }

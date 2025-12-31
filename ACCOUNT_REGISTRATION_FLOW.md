@@ -126,3 +126,4 @@ CHECK (account_type IN ('individual', 'educational', 'company', 'government'));
 2. ✅ signUp関数でaccount_typeを保存（実装済み）
 3. ⚠️ **データベースにaccount_typeカラムが存在する必要がある**（マイグレーションが必要）
 
+

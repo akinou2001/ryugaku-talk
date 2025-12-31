@@ -8,6 +8,7 @@ import { MessageCircle, Flame, MessageSquare, Clock, Search, MapPin, GraduationC
 import { AccountBadge } from '@/components/AccountBadge'
 import { useAuth } from '@/components/Providers'
 import { getUserCommunities } from '@/lib/community'
+import { UserAvatar } from '@/components/UserAvatar'
 
 type TimelineView = 'recommended' | 'latest' | 'community'
 type PostCategory = 'all' | 'question' | 'diary' | 'chat'
@@ -374,7 +375,7 @@ export default function Timeline() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, account_type, verification_status, organization_name, study_abroad_destination)
+          author:profiles(name, account_type, verification_status, organization_name, study_abroad_destination, icon_url)
         `)
 
       // コミュニティ限定投稿は除外（通常のタイムラインでは表示しない）
@@ -1214,9 +1215,9 @@ export default function Timeline() {
                 <div className="flex items-center justify-between">
                   <div className="text-sm text-gray-500">
                     {post.creator ? (
-                      <span>by {post.creator.name}</span>
+                      <span>{post.creator.name}</span>
                     ) : (
-                      <span>by コミュニティ</span>
+                      <span>コミュニティ</span>
                     )}
                   </div>
                 </div>
@@ -1262,9 +1263,20 @@ export default function Timeline() {
                 {post.title}
               </h2>
               
-              <p className="text-gray-600 mb-4 line-clamp-3">
+              <p className="text-gray-600 mb-4 line-clamp-1">
                 {post.content}
               </p>
+
+              {/* 写真表示 */}
+              {post.image_url && (
+                <div className="mb-4">
+                  <img
+                    src={post.image_url}
+                    alt="投稿画像"
+                    className="w-full max-w-md rounded-lg border border-gray-200"
+                  />
+                </div>
+              )}
 
               {/* ロケーションタグ */}
               {post.study_abroad_destination && (
@@ -1294,18 +1306,24 @@ export default function Timeline() {
               
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4 text-sm text-gray-500 flex-wrap">
-                  <span>by </span>
-                  {post.author_id ? (
-                    <Link 
-                      href={`/profile/${post.author_id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-primary-600 hover:text-primary-800 font-medium"
-                    >
-                      {post.author?.name || '匿名'}
-                    </Link>
-                  ) : (
-                    <span>{post.author?.name || '匿名'}</span>
-                  )}
+                  <div className="flex items-center space-x-2">
+                    <UserAvatar 
+                      iconUrl={post.author?.icon_url} 
+                      name={post.author?.name} 
+                      size="sm"
+                    />
+                    {post.author_id ? (
+                      <Link 
+                        href={`/profile/${post.author_id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-primary-600 hover:text-primary-800 font-medium"
+                      >
+                        {post.author?.name || '匿名'}
+                      </Link>
+                    ) : (
+                      <span>{post.author?.name || '匿名'}</span>
+                    )}
+                  </div>
                   {post.author && (
                     <AccountBadge 
                       accountType={post.author.account_type} 

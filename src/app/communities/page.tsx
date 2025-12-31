@@ -29,11 +29,19 @@ export default function CommunitiesPage() {
         visibilityFilter !== 'all' ? visibilityFilter : undefined
       )
       
-      // 参加しているコミュニティを上に、参加していないコミュニティを下にソート
+      // 運営中、参加中、その他の順にソート
       const sortedData = [...(data as Community[])].sort((a, b) => {
-        // 参加しているコミュニティを優先
-        if (a.is_member && !b.is_member) return -1
-        if (!a.is_member && b.is_member) return 1
+        const aIsOwner = user && a.owner_id === user.id
+        const bIsOwner = user && b.owner_id === user.id
+        
+        // 運営中のコミュニティを最優先
+        if (aIsOwner && !bIsOwner) return -1
+        if (!aIsOwner && bIsOwner) return 1
+        
+        // 次に参加しているコミュニティ
+        if (a.is_member && !b.is_member && !aIsOwner && !bIsOwner) return -1
+        if (!a.is_member && b.is_member && !aIsOwner && !bIsOwner) return 1
+        
         // どちらも同じ状態の場合は作成日時でソート
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       })
@@ -167,15 +175,35 @@ export default function CommunitiesPage() {
           </div>
         ) : (
           <>
+            {/* 運営中のコミュニティ */}
+            {user && communities.filter(c => c.owner_id === user.id).length > 0 && (
+              <div className="mb-8">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
+                  <Building2 className="h-5 w-5 mr-2 text-primary-600" />
+                  運営中のコミュニティ
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {communities.filter(c => c.owner_id === user.id).map((community) => (
+                    <CommunityCard 
+                      key={community.id} 
+                      community={community} 
+                      user={user}
+                      onJoinRequest={handleJoinRequest}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* 参加しているコミュニティ */}
-            {communities.filter(c => c.is_member).length > 0 && (
+            {communities.filter(c => c.is_member && (!user || c.owner_id !== user.id)).length > 0 && (
               <div className="mb-8">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
                   <CheckCircle className="h-5 w-5 mr-2 text-green-500" />
                   参加中のコミュニティ
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {communities.filter(c => c.is_member).map((community) => (
+                  {communities.filter(c => c.is_member && (!user || c.owner_id !== user.id)).map((community) => (
                     <CommunityCard 
                       key={community.id} 
                       community={community} 
@@ -190,11 +218,12 @@ export default function CommunitiesPage() {
             {/* 参加していないコミュニティ */}
             {communities.filter(c => !c.is_member).length > 0 && (
               <div>
-                {communities.filter(c => c.is_member).length > 0 && (
+                {(user && communities.filter(c => c.owner_id === user.id).length > 0) || 
+                 communities.filter(c => c.is_member && (!user || c.owner_id !== user.id)).length > 0 ? (
                   <h2 className="text-xl font-semibold text-gray-900 mb-4">
                     その他のコミュニティ
                   </h2>
-                )}
+                ) : null}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {communities.filter(c => !c.is_member).map((community) => (
                     <CommunityCard 

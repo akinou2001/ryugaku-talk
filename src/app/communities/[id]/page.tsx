@@ -1,15 +1,17 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
-import { getCommunityById, getCommunityStats, getCommunityMembers, getCommunityPosts, getCommunityEvents, requestCommunityMembership, updateMembershipStatus, createEvent, registerEvent, cancelEventRegistration, getEventParticipants } from '@/lib/community'
-import { getQuests, createQuest, requestQuestCompletion, updateQuestCompletionStatus, getQuestCompletions } from '@/lib/quest'
+import { getCommunityById, getCommunityStats, getCommunityMembers, getCommunityPosts, getCommunityEvents, requestCommunityMembership, updateMembershipStatus, createEvent, registerEvent, cancelEventRegistration, getEventParticipants, updateEvent, deleteEvent, updateCommunity } from '@/lib/community'
+import { uploadFiles, uploadFile, validateFileType, validateFileSize, FILE_TYPES, getFileIcon, isImageFile } from '@/lib/storage'
+import { getQuests, createQuest, requestQuestCompletion, updateQuestCompletionStatus, getQuestCompletions, updateQuest, deleteQuest } from '@/lib/quest'
 import type { Community, Quest, QuestCompletion, Post, Event, CommunityMember } from '@/lib/supabase'
-import { ArrowLeft, Plus, Users, Building2, CheckCircle, X, Clock, Flame, MessageSquare, Calendar, UserPlus, Settings, MapPin } from 'lucide-react'
+import { ArrowLeft, Plus, Users, Building2, CheckCircle, X, Clock, Flame, MessageSquare, Calendar, UserPlus, Settings, MapPin, Upload, File, Image as ImageIcon, Edit, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
+import { UserAvatar } from '@/components/UserAvatar'
 
 type TabType = 'timeline' | 'members' | 'events' | 'quests'
 
@@ -17,6 +19,7 @@ export default function CommunityDetail() {
   const { user } = useAuth()
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const communityId = params.id as string
 
   const [community, setCommunity] = useState<Community | null>(null)
@@ -53,6 +56,8 @@ export default function CommunityDetail() {
     deadline: '',
     capacity: ''
   })
+  const [eventFiles, setEventFiles] = useState<File[]>([])
+  const [eventFilesUploading, setEventFilesUploading] = useState(false)
 
   // クエスト
   const [quests, setQuests] = useState<Quest[]>([])
@@ -76,11 +81,56 @@ export default function CommunityDetail() {
     proof_url: ''
   })
 
+  // コミュニティ編集
+  const [isEditingCommunity, setIsEditingCommunity] = useState(false)
+  const [communityEditForm, setCommunityEditForm] = useState({
+    name: '',
+    description: '',
+    visibility: 'public' as 'public' | 'private'
+  })
+  const [communityCoverImage, setCommunityCoverImage] = useState<File | null>(null)
+  const [communityCoverImagePreview, setCommunityCoverImagePreview] = useState<string | null>(null)
+  const [communityCoverImageUploading, setCommunityCoverImageUploading] = useState(false)
+
   useEffect(() => {
     if (communityId) {
       fetchCommunity()
     }
   }, [communityId, user])
+
+  useEffect(() => {
+    if (community && !isEditingCommunity) {
+      setCommunityEditForm({
+        name: community.name || '',
+        description: community.description || '',
+        visibility: community.visibility || 'public'
+      })
+      setCommunityCoverImagePreview(community.cover_image_url || null)
+    }
+  }, [community, isEditingCommunity])
+
+  // URLパラメータからタブを設定
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    if (tabParam && ['timeline', 'members', 'events', 'quests'].includes(tabParam)) {
+      setActiveTab(tabParam as TabType)
+    }
+  }, [searchParams])
+
+  // ハッシュに基づいてスクロール
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash
+      if (hash) {
+        setTimeout(() => {
+          const element = document.querySelector(hash)
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }
+        }, 300)
+      }
+    }
+  }, [activeTab, events, quests])
 
   useEffect(() => {
     if (community && isMember) {
@@ -356,6 +406,24 @@ export default function CommunityDetail() {
     }
 
     try {
+      setEventFilesUploading(true)
+      
+      // ファイルをアップロード
+      let attachments: Array<{ url: string; filename: string; type: string }> = []
+      if (eventFiles.length > 0) {
+        // ファイルタイプとサイズを検証
+        for (const file of eventFiles) {
+          if (!validateFileType(file, FILE_TYPES.EVENT_ATTACHMENTS)) {
+            throw new Error(`${file.name}はサポートされていないファイル形式です`)
+          }
+          if (!validateFileSize(file, 10)) { // 10MB制限
+            throw new Error(`${file.name}は10MB以下である必要があります`)
+          }
+        }
+        
+        attachments = await uploadFiles(eventFiles, 'event-attachments', communityId)
+      }
+
       // datetime-localの値をISO形式に変換
       const eventDate = eventForm.event_date ? new Date(eventForm.event_date).toISOString() : ''
       const deadline = eventForm.deadline ? new Date(eventForm.deadline).toISOString() : undefined
@@ -369,7 +437,8 @@ export default function CommunityDetail() {
         eventForm.location || undefined,
         eventForm.online_url || undefined,
         deadline,
-        capacity
+        capacity,
+        attachments.length > 0 ? attachments : undefined
       )
       setEventForm({
         title: '',
@@ -380,11 +449,23 @@ export default function CommunityDetail() {
         deadline: '',
         capacity: ''
       })
+      setEventFiles([])
       setShowCreateEvent(false)
       await fetchEvents()
     } catch (error: any) {
       setError(error.message || 'イベントの作成に失敗しました')
+    } finally {
+      setEventFilesUploading(false)
     }
+  }
+
+  const handleEventFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    setEventFiles(prev => [...prev, ...files])
+  }
+
+  const handleRemoveEventFile = (index: number) => {
+    setEventFiles(prev => prev.filter((_, i) => i !== index))
   }
 
   const handleRegisterEvent = async (eventId: string) => {
@@ -424,6 +505,166 @@ export default function CommunityDetail() {
       }))
     } catch (error: any) {
       setError(error.message || '参加者一覧の取得に失敗しました')
+    }
+  }
+
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!confirm('本当にこのイベントを削除しますか？この操作は取り消せません。')) {
+      return
+    }
+
+    try {
+      await deleteEvent(eventId)
+      await fetchEvents()
+      await fetchPosts() // タイムラインも更新
+    } catch (error: any) {
+      setError(error.message || 'イベントの削除に失敗しました')
+    }
+  }
+
+  const handleDeleteQuest = async (questId: string) => {
+    if (!confirm('本当にこのクエストを削除しますか？この操作は取り消せません。')) {
+      return
+    }
+
+    try {
+      await deleteQuest(questId)
+      await fetchQuests()
+      await fetchPosts() // タイムラインも更新
+    } catch (error: any) {
+      setError(error.message || 'クエストの削除に失敗しました')
+    }
+  }
+
+  const [editingEventId, setEditingEventId] = useState<string | null>(null)
+  const [editingQuestId, setEditingQuestId] = useState<string | null>(null)
+  const [editEventForm, setEditEventForm] = useState({
+    title: '',
+    description: '',
+    event_date: '',
+    location: '',
+    online_url: '',
+    deadline: '',
+    capacity: ''
+  })
+  const [editQuestForm, setEditQuestForm] = useState({
+    title: '',
+    description: '',
+    reward_type: 'candle' as 'candle' | 'torch',
+    reward_amount: 1,
+    deadline: ''
+  })
+
+  const handleEditEvent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingEventId) return
+
+    try {
+      const eventDate = editEventForm.event_date ? new Date(editEventForm.event_date).toISOString() : ''
+      const deadline = editEventForm.deadline ? new Date(editEventForm.deadline).toISOString() : undefined
+      const capacity = editEventForm.capacity ? parseInt(editEventForm.capacity) : undefined
+
+      await updateEvent(editingEventId, {
+        title: editEventForm.title,
+        description: editEventForm.description,
+        event_date: eventDate,
+        location: editEventForm.location || undefined,
+        online_url: editEventForm.online_url || undefined,
+        deadline,
+        capacity: capacity?.toString()
+      })
+      setEditingEventId(null)
+      await fetchEvents()
+      await fetchPosts()
+    } catch (error: any) {
+      setError(error.message || 'イベントの編集に失敗しました')
+    }
+  }
+
+  const handleEditQuest = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingQuestId) return
+
+    try {
+      const deadline = editQuestForm.deadline ? new Date(editQuestForm.deadline).toISOString() : undefined
+
+      await updateQuest(editingQuestId, {
+        title: editQuestForm.title,
+        description: editQuestForm.description,
+        reward_type: editQuestForm.reward_type,
+        reward_amount: editQuestForm.reward_amount,
+        deadline
+      })
+      setEditingQuestId(null)
+      await fetchQuests()
+      await fetchPosts()
+    } catch (error: any) {
+      setError(error.message || 'クエストの編集に失敗しました')
+    }
+  }
+
+  const handleCommunityCoverImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!isImageFile(file)) {
+      setError('画像ファイルを選択してください')
+      return
+    }
+
+    if (!validateFileSize(file, 5)) {
+      setError('画像サイズは5MB以下である必要があります')
+      return
+    }
+
+    setCommunityCoverImage(file)
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setCommunityCoverImagePreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+    setError('')
+  }
+
+  const handleRemoveCommunityCoverImage = () => {
+    setCommunityCoverImage(null)
+    setCommunityCoverImagePreview(null)
+  }
+
+  const handleEditCommunity = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!isOwner) return
+
+    try {
+      setError('')
+      
+      // カバー画像をアップロード
+      let coverImageUrl: string | undefined = undefined
+      if (communityCoverImage) {
+        setCommunityCoverImageUploading(true)
+        try {
+          coverImageUrl = await uploadFile(communityCoverImage, 'community-covers', `community-${communityId}`)
+        } catch (error: any) {
+          setError(error.message || 'カバー画像のアップロードに失敗しました')
+          setCommunityCoverImageUploading(false)
+          return
+        } finally {
+          setCommunityCoverImageUploading(false)
+        }
+      }
+
+      await updateCommunity(communityId, {
+        name: communityEditForm.name,
+        description: communityEditForm.description || undefined,
+        visibility: communityEditForm.visibility,
+        cover_image_url: coverImageUrl || (communityCoverImagePreview === null && !communityCoverImage ? null : undefined)
+      })
+      
+      setIsEditingCommunity(false)
+      setCommunityCoverImage(null)
+      await fetchCommunity()
+    } catch (error: any) {
+      setError(error.message || 'コミュニティの編集に失敗しました')
     }
   }
 
@@ -523,51 +764,172 @@ export default function CommunityDetail() {
 
         {/* コミュニティ情報 */}
         <div className="card mb-6">
-          {community.cover_image_url && (
-            <img
-              src={community.cover_image_url}
-              alt={community.name}
-              className="w-full h-48 object-cover rounded-t-lg mb-4"
-            />
-          )}
-          <div className="flex items-start space-x-4">
-            {community.icon_url ? (
-              <img
-                src={community.icon_url}
-                alt={community.name}
-                className="w-16 h-16 rounded-full"
-              />
-            ) : (
-              <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center">
-                <Building2 className="h-8 w-8 text-primary-600" />
+          {isEditingCommunity && isOwner ? (
+            <form onSubmit={handleEditCommunity} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  コミュニティ名 *
+                </label>
+                <input
+                  type="text"
+                  value={communityEditForm.name}
+                  onChange={(e) => setCommunityEditForm(prev => ({ ...prev, name: e.target.value }))}
+                  required
+                  className="input-field"
+                />
               </div>
-            )}
-            <div className="flex-1">
-              <div className="flex items-center space-x-2 mb-2">
-                <h2 className="text-xl font-semibold text-gray-900">{community.name}</h2>
-                {community.owner && (
-                  <AccountBadge
-                    accountType={community.owner.account_type}
-                    verificationStatus={community.owner.verification_status}
-                  />
-                )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  説明
+                </label>
+                <textarea
+                  value={communityEditForm.description}
+                  onChange={(e) => setCommunityEditForm(prev => ({ ...prev, description: e.target.value }))}
+                  rows={4}
+                  className="input-field"
+                />
               </div>
-              {community.description && (
-                <p className="text-gray-600 mb-3">{community.description}</p>
-              )}
-              <div className="flex items-center space-x-4 text-sm text-gray-500">
-                <div className="flex items-center space-x-1">
-                  <Users className="h-4 w-4" />
-                  <span>{memberCount}名</span>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  公開設定
+                </label>
+                <select
+                  value={communityEditForm.visibility}
+                  onChange={(e) => setCommunityEditForm(prev => ({ ...prev, visibility: e.target.value as 'public' | 'private' }))}
+                  className="input-field"
+                >
+                  <option value="public">公開</option>
+                  <option value="private">非公開</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  カバー画像
+                </label>
+                <div className="space-y-2">
+                  {(communityCoverImagePreview || community.cover_image_url) && (
+                    <div className="relative inline-block">
+                      <img
+                        src={communityCoverImagePreview || community.cover_image_url || ''}
+                        alt="カバー画像プレビュー"
+                        className="w-full h-48 object-cover rounded-lg border border-gray-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRemoveCommunityCoverImage}
+                        className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                  {!communityCoverImagePreview && !community.cover_image_url && (
+                    <label className="flex items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-primary-500 transition-colors">
+                      <div className="flex flex-col items-center space-y-2">
+                        <Upload className="h-8 w-8 text-gray-400" />
+                        <span className="text-sm text-gray-600">カバー画像を選択</span>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        onChange={handleCommunityCoverImageChange}
+                        className="hidden"
+                        disabled={communityCoverImageUploading}
+                      />
+                    </label>
+                  )}
+                  {!communityCoverImagePreview && !community.cover_image_url && (
+                    <p className="text-xs text-gray-500">
+                      対応形式: JPEG, PNG, GIF, WebP（5MB以下）
+                    </p>
+                  )}
                 </div>
-                {community.owner && (
-                  <div>
-                    運営: {community.owner.organization_name || community.owner.name}
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  type="submit"
+                  disabled={communityCoverImageUploading}
+                  className="btn-primary"
+                >
+                  {communityCoverImageUploading ? 'アップロード中...' : '保存'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsEditingCommunity(false)
+                    setCommunityCoverImage(null)
+                    setCommunityCoverImagePreview(community.cover_image_url || null)
+                    setCommunityEditForm({
+                      name: community.name || '',
+                      description: community.description || '',
+                      visibility: community.visibility || 'public'
+                    })
+                  }}
+                  className="btn-secondary"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </form>
+          ) : (
+            <>
+              {(communityCoverImagePreview || community.cover_image_url) && (
+                <img
+                  src={communityCoverImagePreview || community.cover_image_url || ''}
+                  alt={community.name}
+                  className="w-full h-48 object-cover rounded-t-lg mb-4"
+                />
+              )}
+              <div className="flex items-start justify-between">
+                <div className="flex items-start space-x-4 flex-1">
+                  {community.icon_url ? (
+                    <img
+                      src={community.icon_url}
+                      alt={community.name}
+                      className="w-16 h-16 rounded-full"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 bg-primary-100 rounded-full flex items-center justify-center">
+                      <Building2 className="h-8 w-8 text-primary-600" />
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <h2 className="text-xl font-semibold text-gray-900">{community.name}</h2>
+                      {community.owner && (
+                        <AccountBadge
+                          accountType={community.owner.account_type}
+                          verificationStatus={community.owner.verification_status}
+                        />
+                      )}
+                    </div>
+                    {community.description && (
+                      <p className="text-gray-600 mb-3">{community.description}</p>
+                    )}
+                    <div className="flex items-center space-x-4 text-sm text-gray-500">
+                      <div className="flex items-center space-x-1">
+                        <Users className="h-4 w-4" />
+                        <span>{memberCount}名</span>
+                      </div>
+                      {community.owner && (
+                        <div>
+                          運営: {community.owner.organization_name || community.owner.name}
+                        </div>
+                      )}
+                    </div>
                   </div>
+                </div>
+                {isOwner && (
+                  <button
+                    onClick={() => setIsEditingCommunity(true)}
+                    className="p-2 text-gray-600 hover:text-primary-600 transition-colors"
+                  >
+                    <Settings className="h-5 w-5" />
+                  </button>
                 )}
               </div>
-            </div>
-          </div>
+            </>
+          )}
 
           {/* 参加申請ボタン */}
           {!canViewContent && (
@@ -689,7 +1051,11 @@ export default function CommunityDetail() {
                       // イベントの場合
                       if (item.itemType === 'event') {
                         return (
-                          <div key={item.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow border-l-4 border-l-purple-500">
+                          <Link
+                            key={item.id}
+                            href={`/communities/${communityId}?tab=events#event-${item.id}`}
+                            className="block border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow border-l-4 border-l-purple-500 cursor-pointer"
+                          >
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex-1">
                                 <div className="flex items-center space-x-2 mb-2">
@@ -719,7 +1085,7 @@ export default function CommunityDetail() {
                                     </span>
                                   )}
                                   {item.creator && (
-                                    <span>by {item.creator.name}</span>
+                                    <span>{item.creator.name}</span>
                                   )}
                                 </div>
                                 {item.is_registered && (
@@ -729,14 +1095,18 @@ export default function CommunityDetail() {
                                 )}
                               </div>
                             </div>
-                          </div>
+                          </Link>
                         )
                       }
 
                       // クエストの場合
                       if (item.itemType === 'quest') {
                         return (
-                          <div key={item.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow border-l-4 border-l-orange-500">
+                          <Link
+                            key={item.id}
+                            href={`/communities/${communityId}?tab=quests#quest-${item.id}`}
+                            className="block border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow border-l-4 border-l-orange-500 cursor-pointer"
+                          >
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex-1">
                                 <div className="flex items-center space-x-2 mb-2">
@@ -762,7 +1132,7 @@ export default function CommunityDetail() {
                                     </span>
                                   )}
                                   {item.creator && (
-                                    <span>by {item.creator.name}</span>
+                                    <span>{item.creator.name}</span>
                                   )}
                                 </div>
                                 {item.user_completion_status === 'approved' && (
@@ -777,7 +1147,7 @@ export default function CommunityDetail() {
                                 )}
                               </div>
                             </div>
-                          </div>
+                          </Link>
                         )
                       }
 
@@ -789,9 +1159,26 @@ export default function CommunityDetail() {
                               <Link href={`/posts/${item.id}`} className="hover:underline">
                                 <h3 className="text-lg font-semibold text-gray-900 mb-1">{item.title}</h3>
                               </Link>
-                              <p className="text-sm text-gray-600 line-clamp-2">{item.content}</p>
+                              <p className="text-sm text-gray-600 line-clamp-1">{item.content}</p>
+                              {/* 写真表示 */}
+                              {item.image_url && (
+                                <div className="mt-2">
+                                  <img
+                                    src={item.image_url}
+                                    alt="投稿画像"
+                                    className="w-full max-w-md rounded-lg border border-gray-200"
+                                  />
+                                </div>
+                              )}
                               <div className="flex items-center space-x-4 text-xs text-gray-500 mt-2">
-                                <span>{item.author?.name || '不明'}</span>
+                                <div className="flex items-center space-x-2">
+                                  <UserAvatar 
+                                    iconUrl={item.author?.icon_url} 
+                                    name={item.author?.name} 
+                                    size="sm"
+                                  />
+                                  <span>{item.author?.name || '不明'}</span>
+                                </div>
                                 <span>{formatDate(item.created_at)}</span>
                                 <div className="flex items-center space-x-1">
                                   <Flame className="h-3 w-3" />
@@ -974,14 +1361,14 @@ export default function CommunityDetail() {
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
-                            オンラインURL
+                            会議室リンク（Zoom等）
                           </label>
                           <input
                             type="url"
                             value={eventForm.online_url}
                             onChange={(e) => setEventForm(prev => ({ ...prev, online_url: e.target.value }))}
                             className="input-field"
-                            placeholder="https://..."
+                            placeholder="https://zoom.us/j/... または https://meet.google.com/..."
                           />
                         </div>
                       </div>
@@ -997,6 +1384,46 @@ export default function CommunityDetail() {
                           className="input-field"
                           placeholder="定員数（空欄で無制限）"
                         />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          添付ファイル（Word、Excel、PowerPoint、PDF、写真など）
+                        </label>
+                        <div className="space-y-2">
+                          <input
+                            type="file"
+                            multiple
+                            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*"
+                            onChange={handleEventFileChange}
+                            className="input-field"
+                            disabled={eventFilesUploading}
+                          />
+                          {eventFiles.length > 0 && (
+                            <div className="space-y-2">
+                              {eventFiles.map((file, index) => (
+                                <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-200">
+                                  <div className="flex items-center space-x-2">
+                                    <span className="text-lg">{getFileIcon(file.type)}</span>
+                                    <span className="text-sm text-gray-700">{file.name}</span>
+                                    <span className="text-xs text-gray-500">
+                                      ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveEventFile(index)}
+                                    className="text-red-600 hover:text-red-800"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <p className="text-xs text-gray-500">
+                            対応形式: PDF, Word, Excel, PowerPoint, 画像（各ファイル10MB以下）
+                          </p>
+                        </div>
                       </div>
                       <div className="flex space-x-2">
                         <button type="submit" className="btn-primary">
@@ -1015,6 +1442,7 @@ export default function CommunityDetail() {
                               deadline: '',
                               capacity: ''
                             })
+                            setEventFiles([])
                           }}
                           className="btn-secondary"
                         >
@@ -1042,9 +1470,151 @@ export default function CommunityDetail() {
                 ) : (
                   <div className="space-y-4">
                     {events.map((event) => (
-                      <div key={event.id} className="border border-gray-200 rounded-lg p-4">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">{event.title}</h3>
-                        <p className="text-sm text-gray-600 mb-3">{event.description}</p>
+                      <div key={event.id} id={`event-${event.id}`} className="border border-gray-200 rounded-lg p-4 scroll-mt-4">
+                        {editingEventId === event.id ? (
+                          <form onSubmit={handleEditEvent} className="space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                タイトル *
+                              </label>
+                              <input
+                                type="text"
+                                value={editEventForm.title}
+                                onChange={(e) => setEditEventForm(prev => ({ ...prev, title: e.target.value }))}
+                                required
+                                className="input-field"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                説明 *
+                              </label>
+                              <textarea
+                                value={editEventForm.description}
+                                onChange={(e) => setEditEventForm(prev => ({ ...prev, description: e.target.value }))}
+                                required
+                                rows={3}
+                                className="input-field"
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  開催日時 *
+                                </label>
+                                <input
+                                  type="datetime-local"
+                                  value={editEventForm.event_date}
+                                  onChange={(e) => setEditEventForm(prev => ({ ...prev, event_date: e.target.value }))}
+                                  required
+                                  className="input-field"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  締切日時
+                                </label>
+                                <input
+                                  type="datetime-local"
+                                  value={editEventForm.deadline}
+                                  onChange={(e) => setEditEventForm(prev => ({ ...prev, deadline: e.target.value }))}
+                                  className="input-field"
+                                />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  場所
+                                </label>
+                                <input
+                                  type="text"
+                                  value={editEventForm.location}
+                                  onChange={(e) => setEditEventForm(prev => ({ ...prev, location: e.target.value }))}
+                                  className="input-field"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  会議室リンク（Zoom等）
+                                </label>
+                                <input
+                                  type="url"
+                                  value={editEventForm.online_url}
+                                  onChange={(e) => setEditEventForm(prev => ({ ...prev, online_url: e.target.value }))}
+                                  className="input-field"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                定員
+                              </label>
+                              <input
+                                type="number"
+                                min="1"
+                                value={editEventForm.capacity}
+                                onChange={(e) => setEditEventForm(prev => ({ ...prev, capacity: e.target.value }))}
+                                className="input-field"
+                              />
+                            </div>
+                            <div className="flex space-x-2">
+                              <button type="submit" className="btn-primary">
+                                保存
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingEventId(null)
+                                  setEditEventForm({
+                                    title: '',
+                                    description: '',
+                                    event_date: '',
+                                    location: '',
+                                    online_url: '',
+                                    deadline: '',
+                                    capacity: ''
+                                  })
+                                }}
+                                className="btn-secondary"
+                              >
+                                キャンセル
+                              </button>
+                            </div>
+                          </form>
+                        ) : (
+                          <>
+                            <div className="flex items-start justify-between mb-2">
+                              <h3 className="text-lg font-semibold text-gray-900">{event.title}</h3>
+                              {isOwner && (
+                                <div className="flex items-center space-x-2">
+                                  <button
+                                    onClick={() => {
+                                      setEditingEventId(event.id)
+                                      setEditEventForm({
+                                        title: event.title,
+                                        description: event.description,
+                                        event_date: event.event_date ? new Date(event.event_date).toISOString().slice(0, 16) : '',
+                                        location: event.location || '',
+                                        online_url: event.online_url || '',
+                                        deadline: event.deadline ? new Date(event.deadline).toISOString().slice(0, 16) : '',
+                                        capacity: event.capacity || ''
+                                      })
+                                    }}
+                                    className="p-1 text-gray-600 hover:text-primary-600"
+                                  >
+                                    <Edit className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteEvent(event.id)}
+                                    className="p-1 text-gray-600 hover:text-red-600"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-600 mb-3">{event.description}</p>
                         <div className="flex items-center space-x-4 text-xs text-gray-500 mb-3">
                           <div className="flex items-center space-x-1">
                             <Calendar className="h-3 w-3" />
@@ -1056,14 +1626,15 @@ export default function CommunityDetail() {
                               <span>{event.location}</span>
                             </div>
                           )}
-                          {event.online_url && (
+                          {event.online_url && event.is_registered && (
                             <a
                               href={event.online_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-primary-600 hover:underline"
+                              className="text-primary-600 hover:underline flex items-center space-x-1"
                             >
-                              オンライン参加
+                              <span>📹</span>
+                              <span>会議室リンク</span>
                             </a>
                           )}
                           {event.deadline && (
@@ -1076,7 +1647,27 @@ export default function CommunityDetail() {
                             <span>定員: {event.capacity}名</span>
                           )}
                         </div>
-                        <div className="flex items-center space-x-2">
+                        {/* 添付ファイル表示 */}
+                        {event.attachments && event.attachments.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <h4 className="text-sm font-medium text-gray-900 mb-2">添付ファイル</h4>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                              {event.attachments.map((attachment, index) => (
+                                <a
+                                  key={index}
+                                  href={attachment.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center space-x-2 p-2 bg-gray-50 rounded border border-gray-200 hover:bg-gray-100 transition-colors"
+                                >
+                                  <span className="text-lg">{getFileIcon(attachment.type)}</span>
+                                  <span className="text-xs text-gray-700 truncate flex-1">{attachment.filename}</span>
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex items-center space-x-2 mt-3">
                           {event.is_registered ? (
                             <>
                               <span className="px-3 py-1 bg-green-100 text-green-800 rounded text-sm font-medium">
@@ -1119,6 +1710,8 @@ export default function CommunityDetail() {
                               ))}
                             </div>
                           </div>
+                        )}
+                          </>
                         )}
                       </div>
                     ))}
@@ -1248,10 +1841,124 @@ export default function CommunityDetail() {
                 ) : (
                   <div className="space-y-4">
                     {quests.map((quest) => (
-                      <div key={quest.id} className="border border-gray-200 rounded-lg p-4">
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-gray-900 mb-1">{quest.title}</h3>
+                      <div key={quest.id} id={`quest-${quest.id}`} className="border border-gray-200 rounded-lg p-4 scroll-mt-4">
+                        {editingQuestId === quest.id ? (
+                          <form onSubmit={handleEditQuest} className="space-y-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                タイトル *
+                              </label>
+                              <input
+                                type="text"
+                                value={editQuestForm.title}
+                                onChange={(e) => setEditQuestForm(prev => ({ ...prev, title: e.target.value }))}
+                                required
+                                className="input-field"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                説明
+                              </label>
+                              <textarea
+                                value={editQuestForm.description}
+                                onChange={(e) => setEditQuestForm(prev => ({ ...prev, description: e.target.value }))}
+                                rows={3}
+                                className="input-field"
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  報酬タイプ
+                                </label>
+                                <select
+                                  value={editQuestForm.reward_type}
+                                  onChange={(e) => setEditQuestForm(prev => ({ ...prev, reward_type: e.target.value as 'candle' | 'torch' }))}
+                                  className="input-field"
+                                >
+                                  <option value="candle">🕯️ キャンドル（ギルド）</option>
+                                  <option value="torch">🔥 トーチ（公式コミュニティ）</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                  報酬数
+                                </label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={editQuestForm.reward_amount}
+                                  onChange={(e) => setEditQuestForm(prev => ({ ...prev, reward_amount: parseInt(e.target.value) || 1 }))}
+                                  className="input-field"
+                                />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                期限（任意）
+                              </label>
+                              <input
+                                type="datetime-local"
+                                value={editQuestForm.deadline}
+                                onChange={(e) => setEditQuestForm(prev => ({ ...prev, deadline: e.target.value }))}
+                                className="input-field"
+                              />
+                            </div>
+                            <div className="flex space-x-2">
+                              <button type="submit" className="btn-primary">
+                                保存
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingQuestId(null)
+                                  setEditQuestForm({
+                                    title: '',
+                                    description: '',
+                                    reward_type: 'candle',
+                                    reward_amount: 1,
+                                    deadline: ''
+                                  })
+                                }}
+                                className="btn-secondary"
+                              >
+                                キャンセル
+                              </button>
+                            </div>
+                          </form>
+                        ) : (
+                          <>
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between mb-1">
+                                  <h3 className="text-lg font-semibold text-gray-900">{quest.title}</h3>
+                                  {quest.created_by === user?.id && (
+                                    <div className="flex items-center space-x-2">
+                                      <button
+                                        onClick={() => {
+                                          setEditingQuestId(quest.id)
+                                          setEditQuestForm({
+                                            title: quest.title,
+                                            description: quest.description || '',
+                                            reward_type: quest.reward_type,
+                                            reward_amount: quest.reward_amount,
+                                            deadline: quest.deadline ? new Date(quest.deadline).toISOString().slice(0, 16) : ''
+                                          })
+                                        }}
+                                        className="p-1 text-gray-600 hover:text-primary-600"
+                                      >
+                                        <Edit className="h-4 w-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteQuest(quest.id)}
+                                        className="p-1 text-gray-600 hover:text-red-600"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
                             {quest.description && (
                               <p className="text-sm text-gray-600 mb-2">{quest.description}</p>
                             )}
@@ -1401,6 +2108,8 @@ export default function CommunityDetail() {
                           <div className="mt-3 pt-3 border-t border-gray-200">
                             <p className="text-xs text-gray-500">完了申請はまだありません</p>
                           </div>
+                        )}
+                          </>
                         )}
                       </div>
                     ))}

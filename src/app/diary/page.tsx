@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
 import { BookOpen, Flame, MessageSquare, Clock, Search, Filter, Plus, Calendar, MapPin, GraduationCap } from 'lucide-react'
+import { UserAvatar } from '@/components/UserAvatar'
 
 export default function Diary() {
   const [posts, setPosts] = useState<Post[]>([])
@@ -68,7 +69,7 @@ export default function Diary() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, university, study_abroad_destination)
+          author:profiles(name, university, study_abroad_destination, icon_url)
         `)
         .is('community_id', null) // コミュニティ限定投稿は除外
         .eq('category', 'diary')
@@ -290,7 +291,12 @@ export default function Diary() {
               
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-4 text-sm text-gray-500">
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center space-x-2">
+                    <UserAvatar 
+                      iconUrl={post.author?.icon_url} 
+                      name={post.author?.name} 
+                      size="sm"
+                    />
                     <span className="font-medium">{post.author?.name || '匿名'}</span>
                     {post.author?.study_abroad_destination && (
                       <span className="text-gray-400">•</span>

@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { createCommunity } from '@/lib/community'
-import { ArrowLeft, Save, X } from 'lucide-react'
+import { uploadFile, validateFileType, validateFileSize, FILE_TYPES } from '@/lib/storage'
+import { ArrowLeft, Save, X, Image as ImageIcon } from 'lucide-react'
 
 export default function NewCommunity() {
   const { user } = useAuth()
@@ -15,11 +16,41 @@ export default function NewCommunity() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    cover_image_url: '',
-    icon_url: '',
     visibility: 'public' as 'public' | 'private',
     community_type: (user?.account_type === 'individual' ? 'guild' : 'official') as 'guild' | 'official'
   })
+  const [coverImage, setCoverImage] = useState<File | null>(null)
+  const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null)
+  const [imageUploading, setImageUploading] = useState(false)
+
+  const handleCoverImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // ファイルタイプとサイズを検証
+      if (!validateFileType(file, FILE_TYPES.POST_IMAGE)) {
+        setError('画像はJPEG、PNG、GIF、WebP形式のみ対応しています')
+        return
+      }
+      if (!validateFileSize(file, 5)) { // 5MB制限
+        setError('画像は5MB以下である必要があります')
+        return
+      }
+      
+      setCoverImage(file)
+      // プレビューを作成
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setCoverImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+      setError('')
+    }
+  }
+
+  const handleRemoveCoverImage = () => {
+    setCoverImage(null)
+    setCoverImagePreview(null)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,11 +63,27 @@ export default function NewCommunity() {
     setError('')
 
     try {
+      // カバー画像をアップロード
+      let coverImageUrl: string | undefined = undefined
+      if (coverImage) {
+        setImageUploading(true)
+        try {
+          coverImageUrl = await uploadFile(coverImage, 'community-covers', `community-cover-${user.id}`)
+        } catch (error: any) {
+          setError(error.message || '画像のアップロードに失敗しました')
+          setLoading(false)
+          setImageUploading(false)
+          return
+        } finally {
+          setImageUploading(false)
+        }
+      }
+
       const community = await createCommunity(
         formData.name,
         formData.description || undefined,
-        formData.cover_image_url || undefined,
-        formData.icon_url || undefined,
+        coverImageUrl,
+        undefined, // icon_urlは不要
         formData.visibility,
         formData.community_type
       )
@@ -173,36 +220,40 @@ export default function NewCommunity() {
             />
           </div>
 
-          {/* カバー画像URL */}
+          {/* カバー画像 */}
           <div>
-            <label htmlFor="cover_image_url" className="block text-sm font-medium text-gray-700 mb-2">
-              カバー画像URL（任意）
+            <label htmlFor="cover_image" className="block text-sm font-medium text-gray-700 mb-2">
+              カバー画像（任意）
             </label>
-            <input
-              type="url"
-              id="cover_image_url"
-              name="cover_image_url"
-              value={formData.cover_image_url}
-              onChange={handleChange}
-              placeholder="https://example.com/image.jpg"
-              className="input-field"
-            />
-          </div>
-
-          {/* アイコンURL */}
-          <div>
-            <label htmlFor="icon_url" className="block text-sm font-medium text-gray-700 mb-2">
-              アイコンURL（任意）
-            </label>
-            <input
-              type="url"
-              id="icon_url"
-              name="icon_url"
-              value={formData.icon_url}
-              onChange={handleChange}
-              placeholder="https://example.com/icon.jpg"
-              className="input-field"
-            />
+            <div className="space-y-2">
+              <input
+                type="file"
+                id="cover_image"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                onChange={handleCoverImageChange}
+                className="input-field"
+                disabled={imageUploading}
+              />
+              {coverImagePreview && (
+                <div className="relative">
+                  <img
+                    src={coverImagePreview}
+                    alt="カバー画像プレビュー"
+                    className="w-full h-48 object-cover rounded-lg border border-gray-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRemoveCoverImage}
+                    className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+              <p className="text-xs text-gray-500">
+                対応形式: JPEG, PNG, GIF, WebP（5MB以下）
+              </p>
+            </div>
           </div>
 
           {/* コミュニティタイプ（個人アカウントのみ表示） */}

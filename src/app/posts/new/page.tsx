@@ -8,7 +8,8 @@ import { getUserCommunities } from '@/lib/community'
 import { getQuests } from '@/lib/quest'
 import { requestQuestCompletion } from '@/lib/quest'
 import type { Quest } from '@/lib/supabase'
-import { ArrowLeft, Save, X, Search, ChevronLeft, ChevronRight, Flame } from 'lucide-react'
+import { uploadFile, validateFileType, validateFileSize, FILE_TYPES, isImageFile } from '@/lib/storage'
+import { ArrowLeft, Save, X, Search, ChevronLeft, ChevronRight, Flame, Image as ImageIcon, Upload } from 'lucide-react'
 
 export default function NewPost() {
   const { user } = useAuth()
@@ -34,6 +35,9 @@ export default function NewPost() {
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set())
   const countryScrollRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const [profileLoaded, setProfileLoaded] = useState(false)
+  const [postImage, setPostImage] = useState<File | null>(null)
+  const [postImagePreview, setPostImagePreview] = useState<string | null>(null)
+  const [imageUploading, setImageUploading] = useState(false)
   
   // タイムラインのチップで使っているタグ
   const availableTags = [
@@ -350,6 +354,30 @@ export default function NewPost() {
         finalTags.push(`quest:${selectedQuestId}`)
       }
       
+      // 写真をアップロード
+      let imageUrl: string | undefined = undefined
+      if (postImage) {
+        setImageUploading(true)
+        try {
+          // ファイルタイプとサイズを検証
+          if (!validateFileType(postImage, FILE_TYPES.POST_IMAGE)) {
+            throw new Error('写真はJPEG、PNG、GIF、WebP形式のみ対応しています')
+          }
+          if (!validateFileSize(postImage, 5)) { // 5MB制限
+            throw new Error('写真は5MB以下である必要があります')
+          }
+          
+          imageUrl = await uploadFile(postImage, 'post-images', user.id)
+        } catch (error: any) {
+          setError(error.message || '写真のアップロードに失敗しました')
+          setLoading(false)
+          setImageUploading(false)
+          return
+        } finally {
+          setImageUploading(false)
+        }
+      }
+
       // 複数の国を選択している場合は、最初の1つを保存（将来的には配列フィールドを追加）
       const postData: any = {
         title: title,
@@ -361,7 +389,8 @@ export default function NewPost() {
         is_official: isVerifiedOrganization && formData.is_official,
         official_category: isVerifiedOrganization && formData.is_official ? formData.official_category : null,
         community_id: formData.community_id || null,
-        post_type: postType
+        post_type: postType,
+        image_url: imageUrl || null
       }
 
       const { data, error } = await supabase
@@ -577,6 +606,72 @@ export default function NewPost() {
               placeholder="投稿の内容を入力してください"
               className="input-field"
             />
+          </div>
+
+          {/* 写真アップロード（1枚のみ） */}
+          <div>
+            <label htmlFor="post_image" className="block text-sm font-medium text-gray-700 mb-2">
+              写真（1枚のみ、オプション）
+            </label>
+            <div className="space-y-2">
+              {!postImage && (
+                <label className="flex items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-primary-500 transition-colors">
+                  <div className="flex flex-col items-center space-y-2">
+                    <ImageIcon className="h-8 w-8 text-gray-400" />
+                    <span className="text-sm text-gray-600">写真を選択</span>
+                    <span className="text-xs text-gray-500">JPEG、PNG、GIF、WebP（5MB以下）</span>
+                  </div>
+                  <input
+                    type="file"
+                    id="post_image"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        if (!validateFileType(file, FILE_TYPES.POST_IMAGE)) {
+                          setError('写真はJPEG、PNG、GIF、WebP形式のみ対応しています')
+                          return
+                        }
+                        if (!validateFileSize(file, 5)) {
+                          setError('写真は5MB以下である必要があります')
+                          return
+                        }
+                        setPostImage(file)
+                        const reader = new FileReader()
+                        reader.onloadend = () => {
+                          setPostImagePreview(reader.result as string)
+                        }
+                        reader.readAsDataURL(file)
+                      }
+                    }}
+                    className="hidden"
+                    disabled={imageUploading}
+                  />
+                </label>
+              )}
+              {postImage && postImagePreview && (
+                <div className="relative">
+                  <img
+                    src={postImagePreview}
+                    alt="プレビュー"
+                    className="w-full h-64 object-cover rounded-lg border border-gray-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPostImage(null)
+                      setPostImagePreview(null)
+                    }}
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                  <div className="mt-2 text-sm text-gray-600">
+                    {postImage.name} ({(postImage.size / 1024 / 1024).toFixed(2)} MB)
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* タグ選択 */}
@@ -854,11 +949,11 @@ export default function NewPost() {
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || imageUploading}
               className="btn-primary flex items-center"
             >
               <Save className="h-4 w-4 mr-2" />
-              {loading ? '投稿中...' : '投稿する'}
+              {loading || imageUploading ? (imageUploading ? '写真をアップロード中...' : '投稿中...') : '投稿する'}
             </button>
           </div>
         </form>

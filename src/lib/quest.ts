@@ -94,6 +94,96 @@ export async function createQuest(
 }
 
 /**
+ * クエストを更新
+ */
+export async function updateQuest(
+  questId: string,
+  updates: {
+    title?: string
+    description?: string
+    reward_type?: QuestRewardType
+    reward_amount?: number
+    deadline?: string
+  }
+) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // クエストの作成者か確認
+  const { data: quest } = await supabase
+    .from('quests')
+    .select('created_by')
+    .eq('id', questId)
+    .single()
+
+  if (!quest) {
+    throw new Error('クエストが見つかりません')
+  }
+
+  if (quest.created_by !== user.id) {
+    throw new Error('クエストの作成者のみ更新できます')
+  }
+
+  const { data, error } = await supabase
+    .from('quests')
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', questId)
+    .select(`
+      *,
+      community:communities(id, name, community_type),
+      creator:profiles(id, name)
+    `)
+    .single()
+
+  if (error) {
+    console.error('Error updating quest:', error)
+    throw error
+  }
+
+  return data as Quest
+}
+
+/**
+ * クエストを削除
+ */
+export async function deleteQuest(questId: string) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // クエストの作成者か確認
+  const { data: quest } = await supabase
+    .from('quests')
+    .select('created_by')
+    .eq('id', questId)
+    .single()
+
+  if (!quest) {
+    throw new Error('クエストが見つかりません')
+  }
+
+  if (quest.created_by !== user.id) {
+    throw new Error('クエストの作成者のみ削除できます')
+  }
+
+  const { error } = await supabase
+    .from('quests')
+    .delete()
+    .eq('id', questId)
+
+  if (error) {
+    console.error('Error deleting quest:', error)
+    throw error
+  }
+}
+
+/**
  * クエスト完了を申請
  */
 export async function requestQuestCompletion(

@@ -5,7 +5,8 @@ import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import type { User } from '@/lib/supabase'
-import { ArrowLeft, Save, X, User as UserIcon, Search, MapPin, Briefcase, Home, GraduationCap as LearnIcon, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ArrowLeft, Save, X, User as UserIcon, Search, MapPin, Briefcase, Home, GraduationCap as LearnIcon, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react'
+import { uploadFile, validateFileType, validateFileSize, FILE_TYPES } from '@/lib/storage'
 
 export default function EditProfile() {
   const { user } = useAuth()
@@ -16,6 +17,10 @@ export default function EditProfile() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [profileIcon, setProfileIcon] = useState<File | null>(null)
+  const [profileIconPreview, setProfileIconPreview] = useState<string | null>(null)
+  const [iconUploading, setIconUploading] = useState(false)
+  const [currentIconUrl, setCurrentIconUrl] = useState<string | null>(null)
   
   const [formData, setFormData] = useState({
     name: '',
@@ -248,11 +253,46 @@ export default function EditProfile() {
         bio: data.bio || '',
         languages: regularLanguages
       })
+      
+      // 現在のアイコンURLを設定
+      if (data.icon_url) {
+        setCurrentIconUrl(data.icon_url)
+      }
     } catch (error: any) {
       setError(error.message || 'プロフィールの取得に失敗しました')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleIconChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // ファイルタイプとサイズを検証
+      if (!validateFileType(file, FILE_TYPES.POST_IMAGE)) {
+        setError('画像はJPEG、PNG、GIF、WebP形式のみ対応しています')
+        return
+      }
+      if (!validateFileSize(file, 5)) { // 5MB制限
+        setError('画像は5MB以下である必要があります')
+        return
+      }
+      
+      setProfileIcon(file)
+      // プレビューを作成
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setProfileIconPreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+      setError('')
+    }
+  }
+
+  const handleRemoveIcon = () => {
+    setProfileIcon(null)
+    setProfileIconPreview(null)
+    setCurrentIconUrl(null)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -263,6 +303,25 @@ export default function EditProfile() {
     setError('')
 
     try {
+      // アイコン画像をアップロード
+      let iconUrl: string | null | undefined = undefined
+      if (profileIcon) {
+        setIconUploading(true)
+        try {
+          iconUrl = await uploadFile(profileIcon, 'post-images', `profile-icon-${user.id}`)
+        } catch (error: any) {
+          setError(error.message || 'アイコン画像のアップロードに失敗しました')
+          setSaving(false)
+          setIconUploading(false)
+          return
+        } finally {
+          setIconUploading(false)
+        }
+      } else if (!currentIconUrl && profileIconPreview === null) {
+        // 既存のアイコンがなく、新しいアイコンも選択されていない場合はnullを設定（削除）
+        iconUrl = null
+      }
+      
       // study_purposeとstudy_detail、student_statusをlanguagesに含める（将来的には専用フィールドを追加）
       // 既存のpurpose:、detail:、status:タグを削除してから追加
       const existingLanguages = formData.languages.filter(lang => !lang.startsWith('purpose:') && !lang.startsWith('detail:') && !lang.startsWith('status:'))
@@ -282,15 +341,22 @@ export default function EditProfile() {
         ? formData.study_abroad_destinations.join(', ')
         : null
       
+      const updateData: any = {
+        name: formData.name,
+        study_abroad_destination: studyAbroadDestination,
+        bio: formData.bio || null,
+        languages: languagesWithAttributes,
+        updated_at: new Date().toISOString()
+      }
+      
+      // アイコンURLを更新（新しいアイコンがアップロードされた場合、または既存のアイコンを削除する場合）
+      if (iconUrl !== undefined) {
+        updateData.icon_url = iconUrl || null
+      }
+      
       const { error } = await supabase
         .from('profiles')
-        .update({
-          name: formData.name,
-          study_abroad_destination: studyAbroadDestination,
-          bio: formData.bio || null,
-          languages: languagesWithAttributes,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', userId)
 
       if (error) {
@@ -395,6 +461,61 @@ export default function EditProfile() {
             <h2 className="text-xl font-semibold text-gray-900 mb-6">基本情報</h2>
             
             <div className="space-y-6">
+              {/* アイコン画像 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  アイコン画像（任意）
+                </label>
+                <div className="space-y-2">
+                  {!profileIcon && !currentIconUrl && (
+                    <label className="flex items-center justify-center w-32 h-32 border-2 border-dashed border-gray-300 rounded-full cursor-pointer hover:border-primary-500 transition-colors">
+                      <div className="flex flex-col items-center space-y-2">
+                        <UserIcon className="h-8 w-8 text-gray-400" />
+                        <span className="text-xs text-gray-600">アイコンを選択</span>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        onChange={handleIconChange}
+                        className="hidden"
+                        disabled={iconUploading}
+                      />
+                    </label>
+                  )}
+                  {(profileIconPreview || currentIconUrl) && (
+                    <div className="relative inline-block">
+                      <img
+                        src={profileIconPreview || currentIconUrl || ''}
+                        alt="アイコンプレビュー"
+                        className="w-32 h-32 rounded-full object-cover border-2 border-gray-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRemoveIcon}
+                        className="absolute top-0 right-0 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                      {!profileIcon && (
+                        <label className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs text-center py-1 cursor-pointer hover:bg-opacity-70 rounded-b-full">
+                          変更
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/gif,image/webp"
+                            onChange={handleIconChange}
+                            className="hidden"
+                            disabled={iconUploading}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500">
+                    対応形式: JPEG, PNG, GIF, WebP（5MB以下）
+                  </p>
+                </div>
+              </div>
+
               {/* 名前 */}
               <div>
                 <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
@@ -795,11 +916,11 @@ export default function EditProfile() {
             </button>
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || iconUploading}
               className="btn-primary flex items-center"
             >
               <Save className="h-4 w-4 mr-2" />
-              {saving ? '保存中...' : '保存'}
+              {saving || iconUploading ? (iconUploading ? 'アイコンをアップロード中...' : '保存中...') : '保存する'}
             </button>
           </div>
         </form>

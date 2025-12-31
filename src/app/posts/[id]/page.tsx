@@ -6,9 +6,10 @@ import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import type { Post, Comment } from '@/lib/supabase'
 import { updateUserScore } from '@/lib/quest'
-import { Flame, MessageSquare, Share, Flag, Clock, User, MapPin, GraduationCap } from 'lucide-react'
+import { Flame, MessageSquare, Share, Flag, Clock, User, MapPin, GraduationCap, Edit, Trash2, MoreVertical } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
+import { UserAvatar } from '@/components/UserAvatar'
 
 export default function PostDetail() {
   const { user } = useAuth()
@@ -23,6 +24,14 @@ export default function PostDetail() {
   const [newComment, setNewComment] = useState('')
   const [liked, setLiked] = useState(false)
   const [error, setError] = useState('')
+  const [showEditForm, setShowEditForm] = useState(false)
+  const [editForm, setEditForm] = useState({
+    title: '',
+    content: '',
+    image_url: ''
+  })
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
 
   useEffect(() => {
     if (postId) {
@@ -37,7 +46,7 @@ export default function PostDetail() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, university, study_abroad_destination, major, account_type, verification_status, organization_name)
+          author:profiles(name, university, study_abroad_destination, major, account_type, verification_status, organization_name, icon_url)
         `)
         .eq('id', postId)
         .single()
@@ -47,6 +56,15 @@ export default function PostDetail() {
       }
 
       setPost(data)
+      
+      // 編集フォームに初期値を設定
+      if (data) {
+        setEditForm({
+          title: data.title || '',
+          content: data.content || '',
+          image_url: data.image_url || ''
+        })
+      }
       
       // いいね状態を確認
       if (user) {
@@ -77,7 +95,7 @@ export default function PostDetail() {
         .from('comments')
         .select(`
           *,
-          author:profiles(name)
+          author:profiles(name, icon_url)
         `)
         .eq('post_id', postId)
         .order('created_at', { ascending: true })
@@ -224,6 +242,70 @@ export default function PostDetail() {
     }
   }
 
+  const handleDelete = async () => {
+    if (!user || !post) return
+    if (post.author_id !== user.id) {
+      setError('投稿の削除は投稿者のみ可能です')
+      return
+    }
+
+    if (!confirm('本当にこの投稿を削除しますか？この操作は取り消せません。')) {
+      return
+    }
+
+    setIsDeleting(true)
+    try {
+      const { error } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', postId)
+
+      if (error) throw error
+
+      // コミュニティ限定投稿の場合はコミュニティページにリダイレクト
+      if (post.community_id) {
+        router.push(`/communities/${post.community_id}?tab=timeline`)
+      } else {
+        router.push('/board')
+      }
+    } catch (error: any) {
+      setError(error.message || '投稿の削除に失敗しました')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user || !post) return
+    if (post.author_id !== user.id) {
+      setError('投稿の編集は投稿者のみ可能です')
+      return
+    }
+
+    setIsEditing(true)
+    try {
+      const { error } = await supabase
+        .from('posts')
+        .update({
+          title: editForm.title,
+          content: editForm.content,
+          image_url: editForm.image_url || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', postId)
+
+      if (error) throw error
+
+      setShowEditForm(false)
+      fetchPost()
+    } catch (error: any) {
+      setError(error.message || '投稿の編集に失敗しました')
+    } finally {
+      setIsEditing(false)
+    }
+  }
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return date.toLocaleDateString('ja-JP', {
@@ -307,7 +389,11 @@ export default function PostDetail() {
           {/* 投稿者情報 */}
           <div className="flex items-center space-x-4 mb-6 flex-wrap">
             <div className="flex items-center space-x-2">
-              <User className="h-5 w-5 text-gray-400" />
+              <UserAvatar 
+                iconUrl={post.author?.icon_url} 
+                name={post.author?.name} 
+                size="md"
+              />
               {post.author_id ? (
                 <Link 
                   href={`/profile/${post.author_id}`}
@@ -356,11 +442,82 @@ export default function PostDetail() {
           )}
 
           {/* 投稿内容 */}
-          <div className="prose max-w-none">
-            <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
-              {post.content}
+          {!showEditForm ? (
+            <>
+              <div className="prose max-w-none">
+                <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
+                  {post.content}
+                </div>
+              </div>
+
+              {/* 写真表示 */}
+              {post.image_url && (
+                <div className="mt-6">
+                  <img
+                    src={post.image_url}
+                    alt="投稿画像"
+                    className="w-full rounded-lg border border-gray-200"
+                  />
+                </div>
+              )}
+            </>
+          ) : null}
+
+          {/* 編集フォーム */}
+          {showEditForm && user && post.author_id === user.id && post.category !== 'chat' && (
+            <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">投稿を編集</h3>
+              <form onSubmit={handleEdit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    タイトル *
+                  </label>
+                  <input
+                    type="text"
+                    value={editForm.title}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, title: e.target.value }))}
+                    required
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    内容 *
+                  </label>
+                  <textarea
+                    value={editForm.content}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, content: e.target.value }))}
+                    required
+                    rows={8}
+                    className="input-field"
+                  />
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    type="submit"
+                    disabled={isEditing}
+                    className="btn-primary"
+                  >
+                    {isEditing ? '保存中...' : '保存'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditForm(false)
+                      setEditForm({
+                        title: post.title || '',
+                        content: post.content || '',
+                        image_url: post.image_url || ''
+                      })
+                    }}
+                    className="btn-secondary"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </form>
             </div>
-          </div>
+          )}
 
           {/* アクションボタン */}
           <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200">
@@ -382,6 +539,28 @@ export default function PostDetail() {
               </div>
             </div>
             <div className="flex items-center space-x-2">
+              {/* 投稿者のみ編集・削除ボタンを表示 */}
+              {user && post.author_id === user.id && (
+                <>
+                  {post.category !== 'chat' && (
+                    <button
+                      onClick={() => setShowEditForm(!showEditForm)}
+                      className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      <Edit className="h-5 w-5" />
+                      <span>編集</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={handleDelete}
+                    disabled={isDeleting}
+                    className="flex items-center space-x-2 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="h-5 w-5" />
+                    <span>{isDeleting ? '削除中...' : '削除'}</span>
+                  </button>
+                </>
+              )}
               <button className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors">
                 <Share className="h-5 w-5" />
                 <span>共有</span>
@@ -447,7 +626,11 @@ export default function PostDetail() {
                 <div key={comment.id} className="border-b border-gray-200 pb-6 last:border-b-0">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center space-x-2">
-                      <User className="h-4 w-4 text-gray-400" />
+                      <UserAvatar 
+                        iconUrl={comment.author?.icon_url} 
+                        name={comment.author?.name} 
+                        size="sm"
+                      />
                       <span className="font-medium text-gray-900">{comment.author?.name || '匿名'}</span>
                     </div>
                     <span className="text-sm text-gray-500">{formatDate(comment.created_at)}</span>
