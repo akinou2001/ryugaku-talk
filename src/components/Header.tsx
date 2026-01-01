@@ -56,27 +56,13 @@ export function Header() {
             <Link href="/timeline" className="text-gray-700 hover:text-primary-600 transition-colors">
               タイムライン
             </Link>
-            <Link href="/ai" className="text-gray-700 hover:text-primary-600 transition-colors">
-              AI検索
+            <Link href="/map" className="text-gray-700 hover:text-primary-600 transition-colors">
+              眺める
             </Link>
-<<<<<<< HEAD
             {user && (
               <Link href="/communities" className="text-gray-700 hover:text-primary-600 transition-colors">
                 コミュニティ
               </Link>
-=======
-            {user && user.account_type !== 'individual' && (
-              <>
-                <Link href="/communities" className="text-gray-700 hover:text-primary-600 transition-colors">
-                  コミュニティ
-                </Link>
-                {user.verification_status === 'verified' && (
-                  <Link href="/communities/new" className="text-gray-700 hover:text-primary-600 transition-colors">
-                    コミュニティ作成
-                  </Link>
-                )}
-              </>
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
             )}
           </nav>
 
@@ -126,19 +112,6 @@ export function Header() {
                           <Users className="h-4 w-4 mr-2" />
                           コミュニティ
                         </Link>
-<<<<<<< HEAD
-=======
-                        {user.verification_status === 'verified' && (
-                          <Link
-                            href="/communities/new"
-                            className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50"
-                            onClick={() => setIsUserMenuOpen(false)}
-                          >
-                            <Building2 className="h-4 w-4 mr-2" />
-                            コミュニティ作成
-                          </Link>
-                        )}
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
                         {(user.verification_status === 'unverified' || user.verification_status === 'pending' || user.verification_status === 'rejected') && (
                           <Link
                             href="/verification/request"
@@ -207,10 +180,9 @@ export function Header() {
               <Link href="/timeline" className="text-gray-700 hover:text-primary-600 transition-colors">
                 タイムライン
               </Link>
-              <Link href="/ai" className="text-gray-700 hover:text-primary-600 transition-colors">
-                AI検索
+              <Link href="/map" className="text-gray-700 hover:text-primary-600 transition-colors">
+                眺める
               </Link>
-<<<<<<< HEAD
               {user && (
                 <Link href="/communities" className="text-gray-700 hover:text-primary-600 transition-colors">
                   コミュニティ
@@ -220,24 +192,6 @@ export function Header() {
                 <Link href="/verification/request" className="text-gray-700 hover:text-primary-600 transition-colors">
                   {user.verification_status === 'pending' ? '認証申請を確認' : '認証申請'}
                 </Link>
-=======
-              {user && user.account_type !== 'individual' && (
-                <>
-                  <Link href="/communities" className="text-gray-700 hover:text-primary-600 transition-colors">
-                    コミュニティ
-                  </Link>
-                  {user.verification_status === 'verified' && (
-                    <Link href="/communities/new" className="text-gray-700 hover:text-primary-600 transition-colors">
-                      コミュニティ作成
-                    </Link>
-                  )}
-                  {(user.verification_status === 'unverified' || user.verification_status === 'pending' || user.verification_status === 'rejected') && (
-                    <Link href="/verification/request" className="text-gray-700 hover:text-primary-600 transition-colors">
-                      {user.verification_status === 'pending' ? '認証申請を確認' : '認証申請'}
-                    </Link>
-                  )}
-                </>
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
               )}
               
               {user ? (

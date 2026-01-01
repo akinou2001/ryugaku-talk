@@ -4,32 +4,37 @@ import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
-import { MessageCircle, Flame, MessageSquare, Clock, Search, MapPin, GraduationCap, Sparkles, Users, BookOpen, HelpCircle, Briefcase, Home, GraduationCap as LearnIcon, ChevronLeft, ChevronRight, Filter, X } from 'lucide-react'
+import { MessageCircle, MessageSquare, Clock, Search, MapPin, GraduationCap, Sparkles, Users, BookOpen, HelpCircle, Briefcase, Home, GraduationCap as LearnIcon, ChevronLeft, ChevronRight, Filter, X, Calendar, Award, TrendingUp, Heart, Eye } from 'lucide-react'
 import { AccountBadge } from '@/components/AccountBadge'
 import { useAuth } from '@/components/Providers'
 import { getUserCommunities } from '@/lib/community'
 import { UserAvatar } from '@/components/UserAvatar'
 
-type TimelineView = 'recommended' | 'latest' | 'community'
+type TimelineView = 'latest' | 'community'
 type PostCategory = 'all' | 'question' | 'diary' | 'chat'
 type MainCategory = 'all' | 'learn' | 'work' | 'live'
 type DetailCategory = 'all' | 'regular-study' | 'language-study' | 'exchange' | 'research' | 'working-holiday' | 'residence' | 'local-hire' | 'volunteer' | 'internship' | 'nomad' | 'high-school' | 'summer-school' | 'current' | 'experienced' | 'applicant'
 
 type CommunityPost = {
   id: string
-  type: 'announcement' | 'event' | 'quest'
+  type: 'post' | 'event' | 'quest'
   title: string
   content: string
   community_id: string
   community_name?: string
   created_at: string
   created_by?: string
-  creator?: { name: string }
+  creator?: { 
+    name: string
+    account_type?: string
+    verification_status?: string
+    organization_name?: string
+  }
   event_date?: string
   location?: string
   deadline?: string
-  reward_type?: 'candle' | 'torch'
   reward_amount?: number
+  category?: string
 }
 
 type TimelineItem = Post | {
@@ -40,11 +45,15 @@ type TimelineItem = Post | {
   created_at: string
   community_id?: string
   community_name?: string
-  creator?: { name: string }
+  creator?: { 
+    name: string
+    account_type?: string
+    verification_status?: string
+    organization_name?: string
+  }
   event_date?: string
   location?: string
   deadline?: string
-  reward_type?: 'candle' | 'torch'
   reward_amount?: number
 }
 
@@ -54,7 +63,7 @@ export default function Timeline() {
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([])
   const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>([])
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<TimelineView>('recommended')
+  const [view, setView] = useState<TimelineView>('latest')
   const [selectedCategory, setSelectedCategory] = useState<PostCategory>('all')
   const [selectedMainCategories, setSelectedMainCategories] = useState<MainCategory[]>([])
   const [selectedDetailCategories, setSelectedDetailCategories] = useState<DetailCategory[]>([])
@@ -66,7 +75,39 @@ export default function Timeline() {
   const [locationSearch, setLocationSearch] = useState('')
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set())
   const [showFilters, setShowFilters] = useState(false) // 絞り込み表示/非表示
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true)
+  const [lastScrollY, setLastScrollY] = useState(0)
+  const headerRef = useRef<HTMLDivElement>(null)
   const locationScrollRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  
+  // スクロール時のヘッダー表示制御
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY
+      const threshold = 100 // スクロールの閾値
+      
+      // ページトップ付近では常に表示
+      if (currentScrollY < threshold) {
+        setIsHeaderVisible(true)
+        setLastScrollY(currentScrollY)
+        return
+      }
+      
+      // 上にスクロールする時はヘッダーを表示
+      if (currentScrollY < lastScrollY) {
+        setIsHeaderVisible(true)
+      } 
+      // 下にスクロールする時はヘッダーを隠す
+      else if (currentScrollY > lastScrollY) {
+        setIsHeaderVisible(false)
+      }
+      
+      setLastScrollY(currentScrollY)
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [lastScrollY])
   
   // デバウンス処理（500ms待機）
   useEffect(() => {
@@ -263,13 +304,13 @@ export default function Timeline() {
     try {
       setLoading(true)
       
-      const [announcementsResult, eventsResult, questsResult] = await Promise.all([
+      const [postsResult, eventsResult, questsResult] = await Promise.all([
         supabase
-          .from('announcements')
+          .from('posts')
           .select(`
             *,
             community:communities(id, name),
-            creator:profiles(id, name)
+            author:profiles(id, name, icon_url, account_type, verification_status, organization_name)
           `)
           .in('community_id', ids)
           .order('created_at', { ascending: false }),
@@ -278,7 +319,7 @@ export default function Timeline() {
           .select(`
             *,
             community:communities(id, name),
-            creator:profiles(id, name)
+            creator:profiles(id, name, account_type, verification_status, organization_name)
           `)
           .in('community_id', ids)
           .order('event_date', { ascending: false }),
@@ -287,15 +328,15 @@ export default function Timeline() {
           .select(`
             *,
             community:communities(id, name),
-            creator:profiles(id, name)
+            creator:profiles(id, name, account_type, verification_status, organization_name)
           `)
           .in('community_id', ids)
           .eq('status', 'active')
           .order('created_at', { ascending: false })
       ])
 
-      if (announcementsResult.error) {
-        console.error('Error fetching announcements:', announcementsResult.error)
+      if (postsResult.error) {
+        console.error('Error fetching posts:', postsResult.error)
       }
       if (eventsResult.error) {
         console.error('Error fetching events:', eventsResult.error)
@@ -304,16 +345,22 @@ export default function Timeline() {
         console.error('Error fetching quests:', questsResult.error)
       }
 
-      const announcements: CommunityPost[] = (announcementsResult.data || []).map((a: any) => ({
-        id: a.id,
-        type: 'announcement' as const,
-        title: a.title,
-        content: a.content,
-        community_id: a.community_id,
-        community_name: a.community?.name,
-        created_at: a.created_at,
-        created_by: a.created_by,
-        creator: a.creator ? { name: a.creator.name } : undefined
+      const posts: CommunityPost[] = (postsResult.data || []).map((p: any) => ({
+        id: p.id,
+        type: 'post' as const,
+        title: p.title,
+        content: p.content,
+        community_id: p.community_id,
+        community_name: p.community?.name,
+        created_at: p.created_at,
+        created_by: p.author_id,
+        creator: p.author ? { 
+          name: p.author.name,
+          account_type: p.author.account_type,
+          verification_status: p.author.verification_status,
+          organization_name: p.author.organization_name
+        } : undefined,
+        category: p.category
       }))
 
       const events: CommunityPost[] = (eventsResult.data || []).map((e: any) => ({
@@ -325,7 +372,12 @@ export default function Timeline() {
         community_name: e.community?.name,
         created_at: e.created_at,
         created_by: e.created_by,
-        creator: e.creator ? { name: e.creator.name } : undefined,
+        creator: e.creator ? { 
+          name: e.creator.name,
+          account_type: e.creator.account_type,
+          verification_status: e.creator.verification_status,
+          organization_name: e.creator.organization_name
+        } : undefined,
         event_date: e.event_date,
         location: e.location
       }))
@@ -339,13 +391,17 @@ export default function Timeline() {
         community_name: q.community?.name,
         created_at: q.created_at,
         created_by: q.created_by,
-        creator: q.creator ? { name: q.creator.name } : undefined,
+        creator: q.creator ? { 
+          name: q.creator.name,
+          account_type: q.creator.account_type,
+          verification_status: q.creator.verification_status,
+          organization_name: q.creator.organization_name
+        } : undefined,
         deadline: q.deadline,
-        reward_type: q.reward_type,
         reward_amount: q.reward_amount
       }))
 
-      let allPosts = [...announcements, ...events, ...quests]
+      let allPosts = [...posts, ...events, ...quests]
       if (debouncedSearchTerm) {
         allPosts = allPosts.filter(post =>
           post.title.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
@@ -382,9 +438,7 @@ export default function Timeline() {
       query = query.is('community_id', null)
 
       // ビューに応じたフィルタリング
-      if (view === 'recommended') {
-        query = query.order('created_at', { ascending: false })
-      } else if (view === 'latest') {
+      if (view === 'latest') {
         query = query.order('created_at', { ascending: false })
       }
 
@@ -600,10 +654,10 @@ export default function Timeline() {
 
   const getCategoryLabel = (category: string) => {
     switch (category) {
-      case 'question': return '質問'
-      case 'diary': return '日記'
-      case 'chat': return 'つぶやき'
-      case 'information': return 'つぶやき' // 後方互換性
+      case 'question': return '❓ 質問'
+      case 'diary': return '📝 日記'
+      case 'chat': return '💬 つぶやき'
+      case 'information': return '💬 つぶやき' // 後方互換性
       case 'official': return '公式'
       default: return category
     }
@@ -611,14 +665,31 @@ export default function Timeline() {
 
   const getCategoryColor = (category: string) => {
     switch (category) {
-      case 'question': return 'bg-blue-100 text-blue-800'
-      case 'diary': return 'bg-green-100 text-green-800'
-      case 'chat': return 'bg-purple-100 text-purple-800'
-      case 'information': return 'bg-purple-100 text-purple-800' // 後方互換性
-      case 'official': return 'bg-orange-100 text-orange-800'
-      default: return 'bg-gray-100 text-gray-800'
+      case 'question': return 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+      case 'diary': return 'bg-gradient-to-r from-green-500 to-green-600 text-white'
+      case 'chat': return 'bg-gradient-to-r from-purple-500 to-purple-600 text-white'
+      case 'information': return 'bg-gradient-to-r from-purple-500 to-purple-600 text-white' // 後方互換性
+      case 'official': return 'bg-gradient-to-r from-orange-500 to-orange-600 text-white'
+      default: return 'bg-gradient-to-r from-gray-500 to-gray-600 text-white'
     }
   }
+  
+  // スケルトンローディング
+  const SkeletonCard = () => (
+    <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 animate-pulse">
+      <div className="flex items-center justify-between mb-4">
+        <div className="h-6 bg-gray-200 rounded-full w-20"></div>
+        <div className="h-4 bg-gray-200 rounded w-16"></div>
+      </div>
+      <div className="h-6 bg-gray-200 rounded w-3/4 mb-3"></div>
+      <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
+      <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+      <div className="flex items-center justify-between mt-6">
+        <div className="h-8 bg-gray-200 rounded-full w-32"></div>
+        <div className="h-6 bg-gray-200 rounded w-24"></div>
+      </div>
+    </div>
+  )
 
   const mainCategories = [
     { id: 'all' as MainCategory, label: 'すべて', icon: null },
@@ -678,16 +749,11 @@ export default function Timeline() {
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-          <div className="space-y-4">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+        <div className="container mx-auto px-4 py-8 max-w-4xl">
+          <div className="space-y-6">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="card">
-                <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                <div className="h-3 bg-gray-200 rounded mb-4"></div>
-                <div className="h-3 bg-gray-200 rounded w-2/3"></div>
-              </div>
+              <SkeletonCard key={i} />
             ))}
           </div>
         </div>
@@ -696,233 +762,246 @@ export default function Timeline() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-4">
-      {/* セグメントコントロール */}
-      <div className="mb-4">
-        <div className="flex space-x-2 bg-gray-100 rounded-lg p-1">
-          <button
-            onClick={() => setView('recommended')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-              view === 'recommended'
-                ? 'bg-white text-primary-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <div className="flex items-center justify-center space-x-1">
-              <Sparkles className="h-4 w-4" />
-              <span>おすすめ</span>
-            </div>
-          </button>
-          <button
-            onClick={() => setView('latest')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-              view === 'latest'
-                ? 'bg-white text-primary-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            最新
-          </button>
-          {user && (
-            <button
-              onClick={() => setView('community')}
-              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                view === 'community'
-                  ? 'bg-white text-primary-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <div className="flex items-center justify-center space-x-1">
-                <Users className="h-4 w-4" />
-                <span>コミュニティ</span>
-              </div>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* 検索バー */}
-      <div className="mb-4">
-        <form onSubmit={handleSearch} className="relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-gray-400" />
-          </div>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="投稿を検索..."
-            className="input-field pl-10 w-full"
-          />
-        </form>
-      </div>
-
-      {/* フィルター表示/非表示ボタン */}
-      {view !== 'community' && (
-        <div className="mb-4">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center space-x-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-          >
-            {showFilters ? (
-              <>
-                <X className="h-4 w-4" />
-                <span>フィルターを隠す</span>
-              </>
-            ) : (
-              <>
-                <Filter className="h-4 w-4" />
-                <span>フィルターを表示</span>
-                {(selectedCategory !== 'all' || selectedMainCategories.length > 0 || selectedDetailCategories.length > 0 || selectedLocations.length > 0) && (
-                  <span className="bg-primary-600 text-white text-xs px-2 py-0.5 rounded-full">
-                    {[
-                      selectedCategory !== 'all' ? 1 : 0,
-                      selectedMainCategories.length,
-                      selectedDetailCategories.length,
-                      selectedLocations.length
-                    ].reduce((a, b) => a + b, 0)}
-                  </span>
-                )}
-              </>
-            )}
-          </button>
-        </div>
-      )}
-
-      {/* 絞り込みオプション（折りたたみ可能） */}
-      {view !== 'community' && showFilters && (
-        <div className="mb-4 space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-              {/* 投稿種別フィルター */}
-          <div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setSelectedCategory('all')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center space-x-1 ${
-                selectedCategory === 'all'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              <span>すべて</span>
-            </button>
-            <button
-              onClick={() => setSelectedCategory('question')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center space-x-1 ${
-                selectedCategory === 'question'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-              }`}
-            >
-              <HelpCircle className="h-4 w-4" />
-              <span>質問</span>
-            </button>
-            <button
-              onClick={() => setSelectedCategory('diary')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center space-x-1 ${
-                selectedCategory === 'diary'
-                  ? 'bg-green-600 text-white'
-                  : 'bg-green-50 text-green-700 hover:bg-green-100'
-              }`}
-            >
-              <BookOpen className="h-4 w-4" />
-              <span>日記</span>
-            </button>
-            <button
-              onClick={() => setSelectedCategory('chat')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center space-x-1 ${
-                selectedCategory === 'chat'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-purple-50 text-purple-700 hover:bg-purple-100'
-              }`}
-            >
-              <MessageSquare className="h-4 w-4" />
-              <span>つぶやき</span>
-            </button>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      {/* ヘッダーセクション（スクロール時に表示/非表示） */}
+      <div 
+        ref={headerRef}
+        className={`sticky top-0 z-50 bg-gradient-to-br from-white via-gray-50 to-white backdrop-blur-md border-b border-gray-200 shadow-sm transition-transform duration-300 ${
+          isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
+        }`}
+      >
+        <div className="container mx-auto px-4 py-6 max-w-4xl">
+          {/* ヘッダー */}
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
+              タイムライン
+            </h1>
+            <p className="text-gray-600">最新の投稿やイベントをチェック</p>
           </div>
 
-          {/* 大カテゴリフィルター */}
-          <div>
-          <div className="flex flex-wrap gap-2">
-            {mainCategories.map((cat) => {
-              const Icon = cat.icon
-              const isSelected = selectedMainCategories.includes(cat.id)
-              return (
+          {/* セグメントコントロール */}
+          <div className="mb-6">
+            <div className="flex space-x-2 bg-white rounded-xl p-1.5 shadow-md border border-gray-200">
+              <button
+                onClick={() => setView('latest')}
+                className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                  view === 'latest'
+                    ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg transform scale-105'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-center space-x-1">
+                  <Clock className="h-4 w-4" />
+                  <span>最新</span>
+                </div>
+              </button>
+              {user && (
                 <button
-                  key={cat.id}
-                  onClick={() => {
-                    if (cat.id === 'all') {
-                      setSelectedMainCategories([])
-                      setSelectedDetailCategories([])
-                    } else {
-                      setSelectedMainCategories(prev => {
-                        if (prev.includes(cat.id)) {
-                          return prev.filter(c => c !== cat.id)
-                        } else {
-                          return [...prev, cat.id]
-                        }
-                      })
-                    }
-                  }}
-                  className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center space-x-1 ${
-                    isSelected
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  onClick={() => setView('community')}
+                  className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                    view === 'community'
+                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg transform scale-105'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
                 >
-                  {Icon && <Icon className="h-4 w-4" />}
-                  <span>{cat.label}</span>
+                  <div className="flex items-center justify-center space-x-2">
+                    <Users className="h-4 w-4" />
+                    <span>コミュニティ</span>
+                  </div>
                 </button>
-              )
-            })}
-          </div>
+              )}
+            </div>
           </div>
 
-          {/* 詳細カテゴリフィルター */}
-          {selectedMainCategories.length > 0 && (
+          {/* 検索バー */}
+          <div className="mb-6">
+            <form onSubmit={handleSearch} className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="投稿を検索..."
+                className="w-full pl-12 pr-4 py-3.5 bg-white border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all shadow-sm hover:shadow-md"
+              />
+            </form>
+          </div>
+        </div>
+      </div>
+      
+      <div className="container mx-auto px-4 py-6 max-w-4xl">
+
+        {/* フィルター表示/非表示ボタン */}
+        {view !== 'community' && (
+          <div className="mb-4">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center space-x-2 px-4 py-2.5 bg-white rounded-xl text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-all shadow-sm border border-gray-200"
+            >
+              {showFilters ? (
+                <>
+                  <X className="h-4 w-4" />
+                  <span>フィルターを隠す</span>
+                </>
+              ) : (
+                <>
+                  <Filter className="h-4 w-4" />
+                  <span>フィルターを表示</span>
+                  {(selectedCategory !== 'all' || selectedMainCategories.length > 0 || selectedDetailCategories.length > 0 || selectedLocations.length > 0) && (
+                    <span className="ml-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white text-xs px-2.5 py-1 rounded-full font-semibold">
+                      {[
+                        selectedCategory !== 'all' ? 1 : 0,
+                        selectedMainCategories.length,
+                        selectedDetailCategories.length,
+                        selectedLocations.length
+                      ].reduce((a, b) => a + b, 0)}
+                    </span>
+                  )}
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* 絞り込みオプション */}
+        {view !== 'community' && showFilters && (
+          <div className="mb-6 p-6 bg-white rounded-2xl shadow-lg border border-gray-200 space-y-6">
+            {/* 投稿種別フィルター */}
             <div>
-          <div className="flex flex-wrap gap-2">
-            {selectedMainCategories.map(mainCat => {
-              if (mainCat === 'all') return null
-              return detailCategories[mainCat].map((detail) => {
-                const isSelected = selectedDetailCategories.includes(detail.id)
-                return (
-                  <button
-                    key={detail.id}
-                    onClick={() => {
-                      if (detail.id === 'all') {
-                        setSelectedDetailCategories([])
-                      } else {
-                        setSelectedDetailCategories(prev => {
-                          if (prev.includes(detail.id)) {
-                            return prev.filter(c => c !== detail.id)
-                          } else {
-                            return [...prev, detail.id]
-                          }
-                        })
-                      }
-                    }}
-                    className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                      isSelected
-                        ? 'bg-primary-100 text-primary-700 border border-primary-300'
-                        : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'
-                    }`}
-                  >
-                    {detail.label}
-                  </button>
-                )
-              })
-            }).flat()}
-          </div>
-          </div>
-          )}
+              <label className="block text-sm font-semibold text-gray-700 mb-3">投稿種別</label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setSelectedCategory('all')}
+                  className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
+                    selectedCategory === 'all'
+                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg transform scale-105'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:scale-105'
+                  }`}
+                >
+                  <span>すべて</span>
+                </button>
+                <button
+                  onClick={() => setSelectedCategory('question')}
+                  className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
+                    selectedCategory === 'question'
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105'
+                      : 'bg-blue-50 text-blue-700 hover:bg-blue-100 hover:scale-105'
+                  }`}
+                >
+                  <HelpCircle className="h-4 w-4" />
+                  <span>質問</span>
+                </button>
+                <button
+                  onClick={() => setSelectedCategory('diary')}
+                  className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
+                    selectedCategory === 'diary'
+                      ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg transform scale-105'
+                      : 'bg-green-50 text-green-700 hover:bg-green-100 hover:scale-105'
+                  }`}
+                >
+                  <BookOpen className="h-4 w-4" />
+                  <span>日記</span>
+                </button>
+                <button
+                  onClick={() => setSelectedCategory('chat')}
+                  className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
+                    selectedCategory === 'chat'
+                      ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg transform scale-105'
+                      : 'bg-purple-50 text-purple-700 hover:bg-purple-100 hover:scale-105'
+                  }`}
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  <span>つぶやき</span>
+                </button>
+              </div>
+            </div>
 
-          {/* ロケーションチップ */}
-          <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="block text-sm font-medium text-gray-700">
-              国で絞り込む
-            </label>
+            {/* 大カテゴリフィルター */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-3">カテゴリ</label>
+              <div className="flex flex-wrap gap-2">
+                {mainCategories.map((cat) => {
+                  const Icon = cat.icon
+                  const isSelected = selectedMainCategories.includes(cat.id)
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => {
+                        if (cat.id === 'all') {
+                          setSelectedMainCategories([])
+                          setSelectedDetailCategories([])
+                        } else {
+                          setSelectedMainCategories(prev => {
+                            if (prev.includes(cat.id)) {
+                              return prev.filter(c => c !== cat.id)
+                            } else {
+                              return [...prev, cat.id]
+                            }
+                          })
+                        }
+                      }}
+                      className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
+                        isSelected
+                          ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg transform scale-105'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:scale-105'
+                      }`}
+                    >
+                      {Icon && <Icon className="h-4 w-4" />}
+                      <span>{cat.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* 詳細カテゴリフィルター */}
+            {selectedMainCategories.length > 0 && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">詳細カテゴリ</label>
+                <div className="flex flex-wrap gap-2">
+                  {selectedMainCategories.map(mainCat => {
+                    if (mainCat === 'all') return null
+                    return detailCategories[mainCat].map((detail) => {
+                      const isSelected = selectedDetailCategories.includes(detail.id)
+                      return (
+                        <button
+                          key={detail.id}
+                          onClick={() => {
+                            if (detail.id === 'all') {
+                              setSelectedDetailCategories([])
+                            } else {
+                              setSelectedDetailCategories(prev => {
+                                if (prev.includes(detail.id)) {
+                                  return prev.filter(c => c !== detail.id)
+                                } else {
+                                  return [...prev, detail.id]
+                                }
+                              })
+                            }
+                          }}
+                          className={`px-4 py-2 rounded-full text-xs font-medium transition-all duration-200 ${
+                            isSelected
+                              ? 'bg-gradient-to-r from-primary-100 to-primary-200 text-primary-800 border-2 border-primary-400 shadow-md transform scale-105'
+                              : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200 hover:scale-105'
+                          }`}
+                        >
+                          {detail.label}
+                        </button>
+                      )
+                    })
+                  }).flat()}
+                </div>
+              </div>
+            )}
+
+            {/* ロケーションチップ */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-semibold text-gray-700">
+                  国で絞り込む
+                </label>
             <button
               onClick={() => {
                 const allKeys = Array.from(Object.keys(countriesByRegion))
@@ -939,425 +1018,466 @@ export default function Timeline() {
             </button>
           </div>
           
-          {/* 地域別の国の国旗チップ（横スクロール・折りたたみ可能） */}
-          {Object.entries(countriesByRegion).map(([regionKey, region]) => {
-            const isExpanded = expandedRegions.has(regionKey)
-            return (
-              <div key={regionKey} className="mb-2 border border-gray-200 rounded-lg overflow-hidden">
-                <button
-                  onClick={() => {
-                    setExpandedRegions(prev => {
-                      const newSet = new Set(prev)
-                      if (newSet.has(regionKey)) {
-                        newSet.delete(regionKey)
-                      } else {
-                        newSet.add(regionKey)
-                      }
-                      return newSet
-                    })
-                  }}
-                  className="w-full px-4 py-2 bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
-                >
-                  <h4 className="text-sm font-medium text-gray-700">{region.label}</h4>
-                  <span className="text-xs text-gray-500">
-                    {isExpanded ? '▼' : '▶'} {selectedLocations.filter(l => region.countries.some(c => c.name === l)).length > 0 && `(${selectedLocations.filter(l => region.countries.some(c => c.name === l)).length}件選択中)`}
-                  </span>
-                </button>
-                {isExpanded && (
-                  <div className="relative p-2">
+              {/* 地域別の国の国旗チップ（横スクロール・折りたたみ可能） */}
+              {Object.entries(countriesByRegion).map(([regionKey, region]) => {
+                const isExpanded = expandedRegions.has(regionKey)
+                return (
+                  <div key={regionKey} className="mb-3 border border-gray-200 rounded-xl overflow-hidden bg-gray-50">
                     <button
                       onClick={() => {
-                        const ref = locationScrollRefs.current[regionKey]
-                        if (ref) {
-                          ref.scrollBy({ left: -200, behavior: 'smooth' })
-                        }
+                        setExpandedRegions(prev => {
+                          const newSet = new Set(prev)
+                          if (newSet.has(regionKey)) {
+                            newSet.delete(regionKey)
+                          } else {
+                            newSet.add(regionKey)
+                          }
+                          return newSet
+                        })
                       }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 shadow-md hover:bg-gray-50 transition-colors"
+                      className="w-full px-4 py-3 bg-white hover:bg-gray-50 transition-colors flex items-center justify-between border-b border-gray-200"
                     >
-                      <ChevronLeft className="h-5 w-5 text-gray-600" />
+                      <h4 className="text-sm font-semibold text-gray-700">{region.label}</h4>
+                      <span className="text-xs text-gray-500">
+                        {isExpanded ? '▼' : '▶'} {selectedLocations.filter(l => region.countries.some(c => c.name === l)).length > 0 && `(${selectedLocations.filter(l => region.countries.some(c => c.name === l)).length}件選択中)`}
+                      </span>
                     </button>
-                    <div 
-                      ref={(el) => { locationScrollRefs.current[regionKey] = el }}
-                      className="overflow-x-auto pb-2 scrollbar-hide px-8" 
-                      style={{ WebkitOverflowScrolling: 'touch' }}
-                    >
-                      <div className="flex space-x-2 min-w-max">
-                        {region.countries.map((country) => {
-                          const isSelected = selectedLocations.includes(country.name)
-                          return (
-                            <button
-                              key={country.code}
-                              onClick={() => {
-                                if (country.code === 'OTHER') {
-                                  setSelectedLocations([])
-                                  setLocationSearch('')
-                                } else {
-                                  setSelectedLocations(prev => {
-                                    if (prev.includes(country.name)) {
-                                      return prev.filter(c => c !== country.name)
+                    {isExpanded && (
+                      <div className="relative p-3">
+                        <button
+                          onClick={() => {
+                            const ref = locationScrollRefs.current[regionKey]
+                            if (ref) {
+                              ref.scrollBy({ left: -200, behavior: 'smooth' })
+                            }
+                          }}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-2 shadow-lg hover:bg-gray-50 transition-colors border border-gray-200"
+                        >
+                          <ChevronLeft className="h-5 w-5 text-gray-600" />
+                        </button>
+                        <div 
+                          ref={(el) => { locationScrollRefs.current[regionKey] = el }}
+                          className="overflow-x-auto pb-2 scrollbar-hide px-10" 
+                          style={{ WebkitOverflowScrolling: 'touch' }}
+                        >
+                          <div className="flex space-x-2 min-w-max">
+                            {region.countries.map((country) => {
+                              const isSelected = selectedLocations.includes(country.name)
+                              return (
+                                <button
+                                  key={country.code}
+                                  onClick={() => {
+                                    if (country.code === 'OTHER') {
+                                      setSelectedLocations([])
+                                      setLocationSearch('')
                                     } else {
-                                      return [...prev, country.name]
+                                      setSelectedLocations(prev => {
+                                        if (prev.includes(country.name)) {
+                                          return prev.filter(c => c !== country.name)
+                                        } else {
+                                          return [...prev, country.name]
+                                        }
+                                      })
+                                      setLocationSearch('')
                                     }
-                                  })
-                                  setLocationSearch('')
-                                }
-                              }}
-                              className={`px-3 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap flex items-center space-x-1 flex-shrink-0 ${
-                                isSelected
-                                  ? 'bg-primary-600 text-white'
-                                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                              }`}
-                            >
-                              <span>{country.flag}</span>
-                              <span>{country.name}</span>
-                            </button>
-                          )
-                        })}
+                                  }}
+                                  className={`px-4 py-2.5 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap flex items-center space-x-2 flex-shrink-0 ${
+                                    isSelected
+                                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg transform scale-105'
+                                      : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 hover:scale-105'
+                                  }`}
+                                >
+                                  <span className="text-lg">{country.flag}</span>
+                                  <span>{country.name}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const ref = locationScrollRefs.current[regionKey]
+                            if (ref) {
+                              ref.scrollBy({ left: 200, behavior: 'smooth' })
+                            }
+                          }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-2 shadow-lg hover:bg-gray-50 transition-colors border border-gray-200"
+                        >
+                          <ChevronRight className="h-5 w-5 text-gray-600" />
+                        </button>
                       </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        const ref = locationScrollRefs.current[regionKey]
-                        if (ref) {
-                          ref.scrollBy({ left: 200, behavior: 'smooth' })
-                        }
-                      }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 shadow-md hover:bg-gray-50 transition-colors"
-                    >
-                      <ChevronRight className="h-5 w-5 text-gray-600" />
-                    </button>
+                    )}
+                  </div>
+                )
+              })}
+              
+              {/* 検索窓 */}
+              <div className="relative mt-4">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  value={locationSearch}
+                  onChange={(e) => setLocationSearch(e.target.value)}
+                  placeholder="国を検索..."
+                  className="w-full pl-10 pr-4 py-2.5 bg-white border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                />
+                {locationSearch && filteredLocations.length > 0 && (
+                  <div className="absolute z-20 w-full mt-2 bg-white border-2 border-gray-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                    {filteredLocations.map((location) => (
+                      <button
+                        key={location}
+                        type="button"
+                        onClick={() => {
+                          setSelectedLocations(prev => {
+                            if (prev.includes(location)) {
+                              return prev.filter(l => l !== location)
+                            } else {
+                              return [...prev, location]
+                            }
+                          })
+                          setLocationSearch('')
+                        }}
+                        className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center space-x-2 border-b border-gray-100 last:border-b-0 ${
+                          selectedLocations.includes(location) ? 'bg-primary-50' : ''
+                        }`}
+                      >
+                        <MapPin className="h-4 w-4 text-gray-400" />
+                        <span className="text-sm font-medium">{location}</span>
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
-            )
-          })}
-          
-          {/* 検索窓（全ての国を検索可能） */}
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-gray-400" />
+              
+              {selectedLocations.length > 0 && (
+                <p className="text-sm text-gray-600 mt-3 px-3 py-2 bg-primary-50 rounded-lg border border-primary-200">
+                  選択中: <span className="font-semibold text-primary-700">{selectedLocations.join(', ')}</span>
+                </p>
+              )}
             </div>
-            <input
-              type="text"
-              value={locationSearch}
-              onChange={(e) => setLocationSearch(e.target.value)}
-              placeholder="国を検索..."
-              className="input-field pl-10 w-full"
-            />
-            {locationSearch && filteredLocations.length > 0 && (
-              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                {filteredLocations.map((location) => (
-                  <button
-                    key={location}
-                    type="button"
-                    onClick={() => {
-                      setSelectedLocations(prev => {
-                        if (prev.includes(location)) {
-                          return prev.filter(l => l !== location)
-                        } else {
-                          return [...prev, location]
-                        }
-                      })
-                      setLocationSearch('')
-                    }}
-                    className={`w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center space-x-2 ${
-                      selectedLocations.includes(location) ? 'bg-primary-50' : ''
-                    }`}
-                  >
-                    <MapPin className="h-4 w-4 text-gray-400" />
-                    <span className="text-sm">{location}</span>
-                  </button>
-                ))}
+
+            {/* フィルターリセット */}
+            {(selectedCategory !== 'all' || selectedMainCategories.length > 0 || selectedDetailCategories.length > 0 || selectedLocations.length > 0) && (
+              <div className="pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => {
+                    setSelectedCategory('all')
+                    setSelectedMainCategories([])
+                    setSelectedDetailCategories([])
+                    setSelectedLocations([])
+                  }}
+                  className="text-sm text-primary-600 hover:text-primary-800 font-semibold transition-colors"
+                >
+                  フィルターをリセット
+                </button>
               </div>
             )}
           </div>
-          
-          {selectedLocations.length > 0 && (
-            <p className="text-sm text-gray-500 mt-2">
-              選択中: {selectedLocations.join(', ')}
-            </p>
-          )}
+        )}
+
+        {/* フィルターが非表示でも、フィルターが適用されている場合は簡易表示 */}
+        {view !== 'community' && !showFilters && (selectedCategory !== 'all' || selectedMainCategories.length > 0 || selectedDetailCategories.length > 0 || selectedLocations.length > 0) && (
+          <div className="mb-6 flex flex-wrap gap-2">
+            {selectedCategory !== 'all' && (
+              <span className="px-4 py-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300">
+                {selectedCategory === 'question' ? '質問' : selectedCategory === 'diary' ? '日記' : 'つぶやき'}
+              </span>
+            )}
+            {selectedMainCategories.length > 0 && (
+              <span className="px-4 py-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300">
+                {selectedMainCategories.map(cat => mainCategories.find(c => c.id === cat)?.label).filter(Boolean).join(', ')}
+              </span>
+            )}
+            {selectedDetailCategories.length > 0 && (
+              <span className="px-4 py-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300">
+                詳細: {selectedDetailCategories.length}件
+              </span>
+            )}
+            {selectedLocations.length > 0 && (
+              <span className="px-4 py-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300">
+                国: {selectedLocations.length}件
+              </span>
+            )}
           </div>
+        )}
 
-          {/* フィルターリセット */}
-          {(selectedCategory !== 'all' || selectedMainCategories.length > 0 || selectedDetailCategories.length > 0 || selectedLocations.length > 0) && (
-            <div className="pt-2 border-t border-gray-200">
-              <button
-                onClick={() => {
-                  setSelectedCategory('all')
-                  setSelectedMainCategories([])
-                  setSelectedDetailCategories([])
-                  setSelectedLocations([])
-                }}
-                className="text-sm text-primary-600 hover:text-primary-800 font-medium"
-              >
-                フィルターをリセット
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+        {/* 投稿一覧 */}
+        {view === 'community' && (
+          <>
+            {!user ? (
+              <div className="text-center py-16 bg-white rounded-2xl shadow-lg border border-gray-200">
+                <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 text-lg font-medium">ログインが必要です</p>
+              </div>
+            ) : communityPosts.length === 0 && !loading ? (
+              <div className="text-center py-16 bg-white rounded-2xl shadow-lg border border-gray-200">
+                <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500 mb-2 text-lg font-medium">
+                  {userCommunityIds.length === 0 
+                    ? '所属しているコミュニティがありません' 
+                    : 'コミュニティの投稿が見つかりません'}
+                </p>
+                {userCommunityIds.length === 0 && (
+                  <Link href="/communities" className="inline-block mt-4 text-primary-600 hover:text-primary-800 text-sm font-semibold transition-colors">
+                    コミュニティを探す →
+                  </Link>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {communityPosts.map((post) => (
+                <Link 
+                  key={post.id} 
+                  href={post.type === 'quest' ? `/communities/${post.community_id}?tab=quests#quest-${post.id}` : post.type === 'post' ? `/posts/${post.id}` : `/communities/${post.community_id}?tab=events#event-${post.id}`}
+                  className="block group"
+                >
+                  <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-2xl hover:border-primary-200 transition-all duration-300 transform hover:-translate-y-1">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center space-x-2 flex-wrap gap-2">
+                        <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${
+                          post.type === 'post' 
+                            ? (post as any).category === 'chat' 
+                              ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white'
+                              : (post as any).category === 'question'
+                              ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+                              : 'bg-gradient-to-r from-green-500 to-green-600 text-white'
+                            : post.type === 'event'
+                            ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white'
+                            : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white'
+                        }`}>
+                          {post.type === 'post' 
+                            ? (post as any).category === 'chat' 
+                              ? '💬 つぶやき'
+                              : (post as any).category === 'question'
+                              ? '❓ 質問'
+                              : '📝 日記'
+                            : post.type === 'event' 
+                            ? '📅 イベント' 
+                            : '🎯 クエスト'}
+                        </span>
+                        {post.community_name && (
+                          <span className="px-3 py-1.5 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-full text-xs font-semibold flex items-center space-x-1 border border-gray-300">
+                            <Users className="h-3 w-3" />
+                            <span>{post.community_name}</span>
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-sm text-gray-500 flex items-center font-medium">
+                        <Clock className="h-4 w-4 mr-1" />
+                        {formatDate(post.event_date || post.created_at)}
+                      </span>
+                    </div>
+                    
+                    {post.type === 'post' && (post as any).category === 'chat' ? (
+                      <h2 className="text-2xl font-bold text-gray-900 mb-4 group-hover:text-primary-600 transition-colors">
+                        {post.content}
+                      </h2>
+                    ) : (
+                      <>
+                        <h2 className="text-2xl font-bold text-gray-900 mb-3 group-hover:text-primary-600 transition-colors">
+                          {post.title}
+                        </h2>
+                        <p className="text-gray-600 mb-4 line-clamp-2 leading-relaxed">
+                          {post.content}
+                        </p>
+                      </>
+                    )}
 
-      {/* フィルターが非表示でも、フィルターが適用されている場合は簡易表示 */}
-      {view !== 'community' && !showFilters && (selectedCategory !== 'all' || selectedMainCategories.length > 0 || selectedDetailCategories.length > 0 || selectedLocations.length > 0) && (
-        <div className="mb-4 flex flex-wrap gap-2">
-          {selectedCategory !== 'all' && (
-            <span className="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-xs font-medium">
-              {selectedCategory === 'question' ? '質問' : selectedCategory === 'diary' ? '日記' : 'つぶやき'}
-            </span>
-          )}
-          {selectedMainCategories.length > 0 && (
-            <span className="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-xs font-medium">
-              {selectedMainCategories.map(cat => mainCategories.find(c => c.id === cat)?.label).filter(Boolean).join(', ')}
-            </span>
-          )}
-          {selectedDetailCategories.length > 0 && (
-            <span className="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-xs font-medium">
-              詳細: {selectedDetailCategories.length}件
-            </span>
-          )}
-          {selectedLocations.length > 0 && (
-            <span className="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-xs font-medium">
-              国: {selectedLocations.length}件
-            </span>
-          )}
-        </div>
-      )}
+                    {post.type === 'event' && post.location && (
+                      <div className="mb-4">
+                        <span className="inline-flex items-center space-x-1 px-3 py-1.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-semibold border border-primary-200">
+                          <MapPin className="h-3 w-3" />
+                          <span>{post.location}</span>
+                        </span>
+                      </div>
+                    )}
 
-      {/* 投稿一覧 */}
-      {view === 'community' && (
-        <>
-          {!user ? (
-            <div className="text-center py-12">
-              <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">ログインが必要です</p>
-            </div>
-          ) : communityPosts.length === 0 && !loading ? (
-            <div className="text-center py-12">
-              <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500 mb-2">
-                {userCommunityIds.length === 0 
-                  ? '所属しているコミュニティがありません' 
-                  : 'コミュニティの投稿が見つかりません'}
-              </p>
-              {userCommunityIds.length === 0 && (
-                <Link href="/communities" className="text-primary-600 hover:text-primary-800 text-sm font-medium">
-                  コミュニティを探す →
+                    {post.type === 'quest' && (
+                      <div className="mb-4 flex items-center space-x-2 flex-wrap gap-2">
+                        {post.deadline && (
+                          <span className="inline-flex items-center space-x-1 px-3 py-1.5 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded-full text-xs font-semibold border border-red-200">
+                            <Clock className="h-3 w-3" />
+                            <span>期限: {formatDate(post.deadline)}</span>
+                          </span>
+                        )}
+                        {post.reward_amount && (
+                          <span className="inline-flex items-center space-x-1 px-3 py-1.5 bg-gradient-to-r from-yellow-50 to-yellow-100 text-yellow-700 rounded-full text-xs font-semibold border border-yellow-200">
+                            <Award className="h-3 w-3" />
+                            <span>報酬: {post.reward_amount}ポイント</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    
+                    <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                      <div className="flex items-center space-x-2 flex-wrap gap-2">
+                        {post.creator ? (
+                          <>
+                            <span className="text-sm text-gray-600 font-medium">{post.creator.name}</span>
+                            {post.creator.account_type && post.creator.account_type !== 'individual' && (
+                              <AccountBadge 
+                                accountType={post.creator.account_type} 
+                                verificationStatus={post.creator.verification_status}
+                                organizationName={post.creator.organization_name}
+                                size="sm"
+                              />
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-sm text-gray-600 font-medium">コミュニティ</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </Link>
-              )}
+                ))}
+              </div>
+            )}
+          </>
+        )}
+        {view !== 'community' && (
+          <>
+            {posts.length === 0 ? (
+            <div className="text-center py-16 bg-white rounded-2xl shadow-lg border border-gray-200">
+              <MessageCircle className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg font-medium">投稿が見つかりません</p>
             </div>
           ) : (
             <div className="space-y-6">
-              {communityPosts.map((post) => (
-              <Link 
-                key={post.id} 
-                href={post.type === 'quest' ? `/communities/${post.community_id}` : post.type === 'announcement' ? `/communities/${post.community_id}/announcements/${post.id}` : `/communities/${post.community_id}/events/${post.id}`}
-                className="card hover:shadow-md transition-shadow block"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center space-x-2">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      post.type === 'announcement' 
-                        ? 'bg-blue-100 text-blue-800' 
-                        : post.type === 'event'
-                        ? 'bg-purple-100 text-purple-800'
-                        : 'bg-orange-100 text-orange-800'
-                    }`}>
-                      {post.type === 'announcement' ? 'お知らせ' : post.type === 'event' ? 'イベント' : 'クエスト'}
+              {posts.map((post) => {
+                const isOrganizationPost = post.author && post.author.account_type !== 'individual'
+                const getOrganizationBorderColor = () => {
+                  if (!isOrganizationPost) return ''
+                  switch (post.author?.account_type) {
+                    case 'educational': return 'border-l-4 border-l-blue-500'
+                    case 'company': return 'border-l-4 border-l-green-500'
+                    case 'government': return 'border-l-4 border-l-purple-500'
+                    default: return ''
+                  }
+                }
+                return (
+              <Link key={post.id} href={`/posts/${post.id}`} className={`block group ${getOrganizationBorderColor()}`} onClick={(e) => e.stopPropagation()}>
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-2xl hover:border-primary-200 transition-all duration-300 transform hover:-translate-y-1">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${getCategoryColor(post.category)}`}>
+                      {getCategoryLabel(post.category)}
                     </span>
-                    {post.community_name && (
-                      <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium flex items-center space-x-1">
-                        <Users className="h-3 w-3" />
-                        <span>{post.community_name}</span>
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-sm text-gray-500 flex items-center">
-                    <Clock className="h-4 w-4 mr-1" />
-                    {formatDate(post.event_date || post.created_at)}
-                  </span>
-                </div>
-                
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                  {post.title}
-                </h2>
-                
-                <p className="text-gray-600 mb-4 line-clamp-3">
-                  {post.content}
-                </p>
-
-                {post.type === 'event' && post.location && (
-                  <div className="mb-3">
-                    <span className="inline-flex items-center space-x-1 px-2 py-1 bg-primary-50 text-primary-700 rounded-full text-xs font-medium">
-                      <MapPin className="h-3 w-3" />
-                      <span>{post.location}</span>
+                    <span className="text-sm text-gray-500 flex items-center font-medium">
+                      <Clock className="h-4 w-4 mr-1" />
+                      {formatDate(post.created_at)}
                     </span>
                   </div>
-                )}
+                  
+                  {post.category === 'chat' ? (
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4 group-hover:text-primary-600 transition-colors">
+                      {post.content}
+                    </h2>
+                  ) : (
+                    <>
+                      <h2 className="text-2xl font-bold text-gray-900 mb-3 group-hover:text-primary-600 transition-colors">
+                        {post.title}
+                      </h2>
+                      <p className="text-gray-600 mb-4 line-clamp-1 leading-relaxed">
+                        {post.content}
+                      </p>
+                    </>
+                  )}
 
-                {post.type === 'quest' && (
-                  <div className="mb-3 flex items-center space-x-2 flex-wrap gap-2">
-                    {post.deadline && (
-                      <span className="inline-flex items-center space-x-1 px-2 py-1 bg-red-50 text-red-700 rounded-full text-xs font-medium">
-                        <Clock className="h-3 w-3" />
-                        <span>期限: {formatDate(post.deadline)}</span>
+                  {/* 写真表示 */}
+                  {post.image_url && (
+                    <div className="mb-4 rounded-xl overflow-hidden border border-gray-200">
+                      <img
+                        src={post.image_url}
+                        alt="投稿画像"
+                        className="w-full max-w-md h-auto object-cover"
+                      />
+                    </div>
+                  )}
+
+                  {/* ロケーションタグ */}
+                  {post.study_abroad_destination && (
+                    <div className="mb-4">
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          const location = post.study_abroad_destination
+                          if (location) {
+                            setSelectedLocations(prev => {
+                              if (prev.includes(location)) {
+                                return prev.filter(l => l !== location)
+                              } else {
+                                return [...prev, location]
+                              }
+                            })
+                          }
+                        }}
+                        className="inline-flex items-center space-x-1 px-3 py-1.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-semibold hover:from-primary-100 hover:to-primary-200 transition-all border border-primary-200"
+                      >
+                        <MapPin className="h-3 w-3" />
+                        <span>{post.study_abroad_destination}</span>
+                      </button>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                    <div className="flex items-center space-x-4 text-sm text-gray-600 flex-wrap gap-3">
+                      <div className="flex items-center space-x-2">
+                        <UserAvatar 
+                          iconUrl={post.author?.icon_url} 
+                          name={post.author?.name} 
+                          size="sm"
+                        />
+                        {post.author_id ? (
+                          <Link 
+                            href={`/profile/${post.author_id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-primary-600 hover:text-primary-800 font-semibold transition-colors"
+                          >
+                            {post.author?.name || '匿名'}
+                          </Link>
+                        ) : (
+                          <span className="font-medium">{post.author?.name || '匿名'}</span>
+                        )}
+                      </div>
+                      {post.author && (
+                        <AccountBadge 
+                          accountType={post.author.account_type} 
+                          verificationStatus={post.author.verification_status}
+                          organizationName={post.author.organization_name}
+                          size="sm"
+                        />
+                      )}
+                      {post.university && (
+                        <span className="flex items-center text-gray-600">
+                          <GraduationCap className="h-4 w-4 mr-1" />
+                          <span className="font-medium">{post.university}</span>
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="flex items-center space-x-5 text-sm text-gray-600">
+                      <span className="flex items-center font-semibold">
+                        <Heart className="h-5 w-5 mr-1.5 text-red-500" />
+                        {post.likes_count}
                       </span>
-                    )}
-                    {post.reward_type && post.reward_amount && (
-                      <span className="inline-flex items-center space-x-1 px-2 py-1 bg-yellow-50 text-yellow-700 rounded-full text-xs font-medium">
-                        <Flame className="h-3 w-3" />
-                        <span>報酬: {post.reward_amount}{post.reward_type === 'candle' ? 'キャンドル' : 'トーチ'}</span>
+                      <span className="flex items-center font-semibold">
+                        <MessageSquare className="h-5 w-5 mr-1.5 text-primary-500" />
+                        {post.comments_count}
                       </span>
-                    )}
-                  </div>
-                )}
-                
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-500">
-                    {post.creator ? (
-                      <span>{post.creator.name}</span>
-                    ) : (
-                      <span>コミュニティ</span>
-                    )}
+                    </div>
                   </div>
                 </div>
               </Link>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-      {view !== 'community' && (
-        <>
-          {posts.length === 0 ? (
-          <div className="text-center py-12">
-            <MessageCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">投稿が見つかりません</p>
+              )
+              })}
           </div>
-        ) : (
-          <div className="space-y-6">
-            {posts.map((post) => {
-              const isOrganizationPost = post.author && post.author.account_type !== 'individual'
-              const getOrganizationBorderColor = () => {
-                if (!isOrganizationPost) return ''
-                switch (post.author?.account_type) {
-                  case 'educational': return 'border-l-4 border-l-blue-500'
-                  case 'company': return 'border-l-4 border-l-green-500'
-                  case 'government': return 'border-l-4 border-l-purple-500'
-                  default: return ''
-                }
-              }
-              return (
-            <Link key={post.id} href={`/posts/${post.id}`} className={`card hover:shadow-md transition-shadow block ${getOrganizationBorderColor()}`} onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-3">
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(post.category)}`}>
-                  {getCategoryLabel(post.category)}
-                </span>
-                <span className="text-sm text-gray-500 flex items-center">
-                  <Clock className="h-4 w-4 mr-1" />
-                  {formatDate(post.created_at)}
-                </span>
-              </div>
-              
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                {post.title}
-              </h2>
-              
-              <p className="text-gray-600 mb-4 line-clamp-1">
-                {post.content}
-              </p>
-
-              {/* 写真表示 */}
-              {post.image_url && (
-                <div className="mb-4">
-                  <img
-                    src={post.image_url}
-                    alt="投稿画像"
-                    className="w-full max-w-md rounded-lg border border-gray-200"
-                  />
-                </div>
-              )}
-
-              {/* ロケーションタグ */}
-              {post.study_abroad_destination && (
-                <div className="mb-3">
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      const location = post.study_abroad_destination
-                      if (location) {
-                        setSelectedLocations(prev => {
-                          if (prev.includes(location)) {
-                            return prev.filter(l => l !== location)
-                          } else {
-                            return [...prev, location]
-                          }
-                        })
-                      }
-                    }}
-                    className="inline-flex items-center space-x-1 px-2 py-1 bg-primary-50 text-primary-700 rounded-full text-xs font-medium hover:bg-primary-100 transition-colors"
-                  >
-                    <MapPin className="h-3 w-3" />
-                    <span>{post.study_abroad_destination}</span>
-                  </button>
-                </div>
-              )}
-              
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4 text-sm text-gray-500 flex-wrap">
-                  <div className="flex items-center space-x-2">
-                    <UserAvatar 
-                      iconUrl={post.author?.icon_url} 
-                      name={post.author?.name} 
-                      size="sm"
-                    />
-                    {post.author_id ? (
-                      <Link 
-                        href={`/profile/${post.author_id}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-primary-600 hover:text-primary-800 font-medium"
-                      >
-                        {post.author?.name || '匿名'}
-                      </Link>
-                    ) : (
-                      <span>{post.author?.name || '匿名'}</span>
-                    )}
-                  </div>
-                  {post.author && (
-                    <AccountBadge 
-                      accountType={post.author.account_type} 
-                      verificationStatus={post.author.verification_status}
-                      organizationName={post.author.organization_name}
-                      size="sm"
-                    />
-                  )}
-                  {post.university && (
-                    <span className="flex items-center">
-                      <GraduationCap className="h-3 w-3 mr-1" />
-                      {post.university}
-                    </span>
-                  )}
-                </div>
-                
-                <div className="flex items-center space-x-4 text-sm text-gray-500">
-                  <span className="flex items-center">
-                    <Flame className="h-4 w-4 mr-1 text-orange-500" />
-                    {post.likes_count}
-                  </span>
-                  <span className="flex items-center">
-                    <MessageSquare className="h-4 w-4 mr-1" />
-                    {post.comments_count}
-                  </span>
-                </div>
-              </div>
-            </Link>
-            )
-            })}
-        </div>
           )}
         </>
       )}
+      </div>
     </div>
   )
 }

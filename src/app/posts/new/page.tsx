@@ -26,7 +26,8 @@ export default function NewPost() {
     study_abroad_destinations: [] as string[],
     is_official: false,
     official_category: '',
-    community_id: '' as string | undefined
+    community_id: '' as string | undefined,
+    urgency_level: 'normal' as 'low' | 'normal' | 'high' | 'urgent'
   })
   const [userCommunities, setUserCommunities] = useState<Array<{id: string, name: string}>>([])
   const [availableQuests, setAvailableQuests] = useState<Quest[]>([])
@@ -390,7 +391,8 @@ export default function NewPost() {
         official_category: isVerifiedOrganization && formData.is_official ? formData.official_category : null,
         community_id: formData.community_id || null,
         post_type: postType,
-        image_url: imageUrl || null
+        image_url: imageUrl || null,
+        urgency_level: category === 'question' ? formData.urgency_level : null
       }
 
       const { data, error } = await supabase
@@ -588,6 +590,30 @@ export default function NewPost() {
                 placeholder="投稿のタイトルを入力してください"
                 className="input-field"
               />
+            </div>
+          )}
+
+          {/* 緊急度設定（質問の場合のみ） */}
+          {formData.category === 'question' && (
+            <div>
+              <label htmlFor="urgency_level" className="block text-sm font-medium text-gray-700 mb-2">
+                緊急度
+              </label>
+              <select
+                id="urgency_level"
+                name="urgency_level"
+                value={formData.urgency_level}
+                onChange={(e) => setFormData(prev => ({ ...prev, urgency_level: e.target.value as 'low' | 'normal' | 'high' | 'urgent' }))}
+                className="input-field"
+              >
+                <option value="low">低</option>
+                <option value="normal">通常</option>
+                <option value="high">高</option>
+                <option value="urgent">緊急</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                質問の緊急度を設定できます。緊急度が高い質問は、平面マップUIで優先的に表示されます。
+              </p>
             </div>
           )}
 
@@ -924,7 +950,7 @@ export default function NewPost() {
                     <option value="">クエストを選択しない</option>
                     {availableQuests.map((quest) => (
                       <option key={quest.id} value={quest.id}>
-                        {quest.title} ({quest.reward_type === 'candle' ? '🕯️' : '🔥'} {quest.reward_amount}{quest.reward_type === 'candle' ? 'キャンドル' : 'トーチ'})
+                        {quest.title} ({quest.reward_amount}ポイント)
                       </option>
                     ))}
                   </select>

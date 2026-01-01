@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
-import { MessageCircle, Flame, MessageSquare, Clock } from 'lucide-react'
+import { MessageCircle, MessageSquare, Clock, Heart } from 'lucide-react'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
 
@@ -54,21 +54,21 @@ export function RecentPosts() {
 
   const getCategoryLabel = (category: string) => {
     switch (category) {
-      case 'question': return '質問'
-      case 'diary': return '日記'
-      case 'chat': return 'つぶやき'
-      case 'information': return 'つぶやき' // 後方互換性
+      case 'question': return '❓ 質問'
+      case 'diary': return '📝 日記'
+      case 'chat': return '💬 つぶやき'
+      case 'information': return '💬 つぶやき' // 後方互換性
       default: return category
     }
   }
 
   const getCategoryColor = (category: string) => {
     switch (category) {
-      case 'question': return 'bg-blue-100 text-blue-800'
-      case 'diary': return 'bg-green-100 text-green-800'
-      case 'chat': return 'bg-purple-100 text-purple-800'
-      case 'information': return 'bg-purple-100 text-purple-800' // 後方互換性
-      default: return 'bg-gray-100 text-gray-800'
+      case 'question': return 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+      case 'diary': return 'bg-gradient-to-r from-green-500 to-green-600 text-white'
+      case 'chat': return 'bg-gradient-to-r from-purple-500 to-purple-600 text-white'
+      case 'information': return 'bg-gradient-to-r from-purple-500 to-purple-600 text-white' // 後方互換性
+      default: return 'bg-gradient-to-r from-gray-500 to-gray-600 text-white'
     }
   }
 
@@ -128,13 +128,20 @@ export function RecentPosts() {
                 </span>
               </div>
               
-              <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
-                {post.title}
-              </h3>
-              
-              <p className="text-gray-600 mb-4 line-clamp-1">
-                {post.content}
-              </p>
+              {post.category === 'chat' ? (
+                <p className="text-gray-900 mb-4 line-clamp-1 text-lg">
+                  {post.content}
+                </p>
+              ) : (
+                <>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
+                    {post.title}
+                  </h3>
+                  <p className="text-gray-600 mb-4 line-clamp-1">
+                    {post.content}
+                  </p>
+                </>
+              )}
               
               <div className="flex items-center justify-between text-sm text-gray-500">
                 <div className="flex items-center space-x-2 flex-wrap">
@@ -155,7 +162,7 @@ export function RecentPosts() {
                 </div>
                 <div className="flex items-center space-x-4">
                   <span className="flex items-center">
-                    <Flame className="h-4 w-4 mr-1 text-orange-500" />
+                    <Heart className="h-4 w-4 mr-1 text-red-500" />
                     {post.likes_count}
                   </span>
                   <span className="flex items-center">

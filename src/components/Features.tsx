@@ -1,4 +1,4 @@
-import { MessageSquare, Users, Building2, Flame, Calendar, BookOpen, MessageCircle, Sparkles, Shield, Star, Heart, Zap } from 'lucide-react'
+import { MessageSquare, Users, Building2, Calendar, BookOpen, MessageCircle, Sparkles, Shield, Star, Heart, Zap, Award } from 'lucide-react'
 import Link from 'next/link'
 
 export function Features() {
@@ -36,9 +36,9 @@ export function Features() {
       link: '/auth/signup'
     },
     {
-      icon: Flame,
+      icon: Award,
       title: 'クエストシステム',
-      description: 'コミュニティ内でクエストを投稿し、達成するとFire・Candle・Torchなどのスコアを獲得できます。',
+      description: 'コミュニティ内でクエストを投稿し、達成するとポイントを獲得できます。',
       color: 'text-orange-600',
       bgColor: 'bg-orange-100',
       link: '/communities'
@@ -54,7 +54,7 @@ export function Features() {
     {
       icon: MessageCircle,
       title: 'チャット機能',
-      description: 'ユーザー同士で直接メッセージを交換。週1回キャンドルを送って感謝を伝えることもできます。',
+      description: 'ユーザー同士で直接メッセージを交換できます。',
       color: 'text-teal-600',
       bgColor: 'bg-teal-100',
       link: '/chat'
@@ -62,7 +62,7 @@ export function Features() {
     {
       icon: Star,
       title: 'スコアシステム',
-      description: 'Fire（いいね・コメント）、Candle（ギルドクエスト）、Torch（公式クエスト）で貢献度を可視化します。',
+      description: '投稿やコメントで貢献度を可視化します。',
       color: 'text-yellow-600',
       bgColor: 'bg-yellow-100',
       link: '/timeline'

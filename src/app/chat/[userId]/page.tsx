@@ -4,9 +4,8 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
-import { sendCandle } from '@/lib/quest'
 import type { User, Message } from '@/lib/supabase'
-import { ArrowLeft, Send, User as UserIcon, Clock, Flame, Check, CheckCheck, MessageCircle } from 'lucide-react'
+import { ArrowLeft, Send, User as UserIcon, Clock, Check, CheckCheck, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 
@@ -21,8 +20,6 @@ export default function ChatDetail() {
   const [newMessage, setNewMessage] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
-  const [canSendCandle, setCanSendCandle] = useState(false)
-  const [candleSent, setCandleSent] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -32,7 +29,6 @@ export default function ChatDetail() {
     if (user && userId) {
       fetchUserProfile()
       fetchMessages()
-      checkCandleSendAvailability()
       
       // リアルタイムでメッセージを監視
       const channel = supabase
@@ -147,60 +143,6 @@ export default function ChatDetail() {
       .eq('receiver_id', user.id)
   }
 
-  const checkCandleSendAvailability = async () => {
-    if (!user) return
-
-    try {
-      // 今週の開始日を計算（月曜日を週の開始とする）
-      const now = new Date()
-      const dayOfWeek = now.getDay()
-      const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek // 月曜日を0にする
-      const weekStart = new Date(now)
-      weekStart.setDate(now.getDate() + diff)
-      weekStart.setHours(0, 0, 0, 0)
-
-      // 今週にこのユーザーにキャンドルを送ったか確認
-      const { data } = await supabase
-        .from('candle_sends')
-        .select('*')
-        .eq('sender_id', user.id)
-        .eq('receiver_id', userId)
-        .gte('sent_at', weekStart.toISOString())
-
-      if (!data || data.length === 0) {
-        setCanSendCandle(true)
-      } else {
-        setCanSendCandle(false)
-        setCandleSent(true)
-      }
-    } catch (error) {
-      console.error('Error checking candle availability:', error)
-    }
-  }
-
-  const handleSendCandle = async () => {
-    if (!user || !canSendCandle) return
-
-    try {
-      await sendCandle(user.id, userId)
-      setCanSendCandle(false)
-      setCandleSent(true)
-      
-      // キャンドル送信をメッセージとして表示
-      const candleMessage: Message = {
-        id: `candle-${Date.now()}`,
-        sender_id: user.id,
-        receiver_id: userId,
-        content: '🕯️ キャンドルを送りました',
-        is_read: false,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }
-      setMessages((prev) => [...prev, candleMessage])
-    } catch (error: any) {
-      alert(error.message || 'キャンドルの送信に失敗しました')
-    }
-  }
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -344,17 +286,6 @@ export default function ChatDetail() {
               </div>
             </Link>
 
-            {canSendCandle && !candleSent && (
-              <button
-                onClick={handleSendCandle}
-                className="p-2 hover:bg-yellow-50 rounded-full transition-colors group relative"
-                title="週に1回、キャンドルを送れます"
-              >
-                <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center shadow-md group-hover:shadow-lg transition-shadow">
-                  <span className="text-xl">🕯️</span>
-                </div>
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -373,15 +304,6 @@ export default function ChatDetail() {
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">会話を始めましょう</h3>
               <p className="text-gray-500 mb-6">メッセージを送って会話を始めましょう</p>
-              {canSendCandle && !candleSent && (
-                <button
-                  onClick={handleSendCandle}
-                  className="inline-flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white rounded-full font-medium shadow-lg hover:shadow-xl transition-all transform hover:scale-105"
-                >
-                  <span className="text-xl">🕯️</span>
-                  <span>キャンドルを送る</span>
-                </button>
-              )}
             </div>
           ) : (
             messages.map((message, index) => {
@@ -390,7 +312,7 @@ export default function ChatDetail() {
                 new Date(message.created_at).toDateString() !== 
                 new Date(messages[index - 1].created_at).toDateString()
               
-              const isCandleMessage = message.content.includes('🕯️')
+              const isCandleMessage = false
               const prevMessage = index > 0 ? messages[index - 1] : null
               const showAvatar = !prevMessage || 
                 prevMessage.sender_id !== message.sender_id ||

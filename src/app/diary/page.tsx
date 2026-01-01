@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
-import { BookOpen, Flame, MessageSquare, Clock, Search, Filter, Plus, Calendar, MapPin, GraduationCap } from 'lucide-react'
+import { BookOpen, MessageSquare, Clock, Search, Filter, Plus, Calendar, MapPin, GraduationCap, Heart } from 'lucide-react'
 import { UserAvatar } from '@/components/UserAvatar'
+import { AccountBadge } from '@/components/AccountBadge'
 
 export default function Diary() {
   const [posts, setPosts] = useState<Post[]>([])
@@ -69,7 +70,7 @@ export default function Diary() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, university, study_abroad_destination, icon_url)
+          author:profiles(name, university, study_abroad_destination, icon_url, account_type, verification_status, organization_name)
         `)
         .is('community_id', null) // コミュニティ限定投稿は除外
         .eq('category', 'diary')
@@ -124,18 +125,30 @@ export default function Diary() {
     return date.toLocaleDateString('ja-JP')
   }
 
+  // スケルトンローディング
+  const SkeletonCard = () => (
+    <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 animate-pulse">
+      <div className="flex items-center justify-between mb-4">
+        <div className="h-6 bg-gray-200 rounded-full w-20"></div>
+        <div className="h-4 bg-gray-200 rounded w-16"></div>
+      </div>
+      <div className="h-6 bg-gray-200 rounded w-3/4 mb-3"></div>
+      <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
+      <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+      <div className="flex items-center justify-between mt-6">
+        <div className="h-8 bg-gray-200 rounded-full w-32"></div>
+        <div className="h-6 bg-gray-200 rounded w-24"></div>
+      </div>
+    </div>
+  )
+
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-1/4 mb-6"></div>
-          <div className="space-y-4">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+        <div className="container mx-auto px-4 py-8 max-w-6xl">
+          <div className="space-y-6">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="card">
-                <div className="h-4 bg-gray-200 rounded mb-2"></div>
-                <div className="h-3 bg-gray-200 rounded mb-4"></div>
-                <div className="h-3 bg-gray-200 rounded w-2/3"></div>
-              </div>
+              <SkeletonCard key={i} />
             ))}
           </div>
         </div>
@@ -144,184 +157,201 @@ export default function Diary() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center space-x-3">
-          <BookOpen className="h-8 w-8 text-primary-600" />
-          <h1 className="text-3xl font-bold text-gray-900">留学日記</h1>
-        </div>
-        <Link href="/posts/new?category=diary" className="btn-primary flex items-center">
-          <Plus className="h-5 w-5 mr-2" />
-          日記を書く
-        </Link>
-      </div>
-
-      {/* 検索・フィルター */}
-      <div className="card mb-8">
-        <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4 mb-6">
-          <div className="flex-1 relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search className="h-5 w-5 text-gray-400" />
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <div className="flex items-center space-x-3 mb-2">
+              <BookOpen className="h-10 w-10 text-primary-600" />
+              <h1 className="text-4xl font-bold text-gray-900 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
+                留学日記
+              </h1>
             </div>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="日記を検索..."
-              className="input-field pl-10"
-            />
+            <p className="text-gray-600">留学の思い出を日記に残しましょう</p>
           </div>
-          <button type="submit" className="btn-primary">
-            検索
-          </button>
-        </form>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="flex items-center space-x-2">
-            <MapPin className="h-5 w-5 text-gray-400" />
-            <select
-              value={selectedCountry}
-              onChange={(e) => setSelectedCountry(e.target.value)}
-              className="input-field flex-1"
-            >
-              <option value="all">すべての国</option>
-              {availableCountries.map((country) => (
-                <option key={country} value={country}>
-                  {country}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <GraduationCap className="h-5 w-5 text-gray-400" />
-            <select
-              value={selectedUniversity}
-              onChange={(e) => setSelectedUniversity(e.target.value)}
-              className="input-field flex-1"
-            >
-              <option value="all">すべての大学</option>
-              {availableUniversities.map((university) => (
-                <option key={university} value={university}>
-                  {university}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Filter className="h-5 w-5 text-gray-400" />
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="input-field flex-1"
-            >
-              <option value="newest">新しい順</option>
-              <option value="oldest">古い順</option>
-              <option value="popular">人気順</option>
-            </select>
-          </div>
+          <Link href="/posts/new?category=diary" className="px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center">
+            <Plus className="h-5 w-5 mr-2" />
+            日記を書く
+          </Link>
         </div>
 
-        {/* フィルターリセット */}
-        {(selectedCountry !== 'all' || selectedUniversity !== 'all') && (
-          <div className="mt-4">
-            <button
-              onClick={() => {
-                setSelectedCountry('all')
-                setSelectedUniversity('all')
-              }}
-              className="text-sm text-primary-600 hover:text-primary-800 font-medium"
-            >
-              フィルターをリセット
+        {/* 検索・フィルター */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-8">
+          <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4 mb-6">
+            <div className="flex-1 relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="日記を検索..."
+                className="w-full pl-12 pr-4 py-3.5 bg-white border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all shadow-sm hover:shadow-md"
+              />
+            </div>
+            <button type="submit" className="px-6 py-3.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200">
+              検索
             </button>
+          </form>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex items-center space-x-2">
+              <MapPin className="h-5 w-5 text-gray-400" />
+              <select
+                value={selectedCountry}
+                onChange={(e) => setSelectedCountry(e.target.value)}
+                className="flex-1 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+              >
+                <option value="all">すべての国</option>
+                {availableCountries.map((country) => (
+                  <option key={country} value={country}>
+                    {country}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <GraduationCap className="h-5 w-5 text-gray-400" />
+              <select
+                value={selectedUniversity}
+                onChange={(e) => setSelectedUniversity(e.target.value)}
+                className="flex-1 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+              >
+                <option value="all">すべての大学</option>
+                {availableUniversities.map((university) => (
+                  <option key={university} value={university}>
+                    {university}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Filter className="h-5 w-5 text-gray-400" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="flex-1 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+              >
+                <option value="newest">新しい順</option>
+                <option value="oldest">古い順</option>
+                <option value="popular">人気順</option>
+              </select>
+            </div>
+          </div>
+
+          {/* フィルターリセット */}
+          {(selectedCountry !== 'all' || selectedUniversity !== 'all') && (
+            <div className="mt-4">
+              <button
+                onClick={() => {
+                  setSelectedCountry('all')
+                  setSelectedUniversity('all')
+                }}
+                className="text-sm text-primary-600 hover:text-primary-800 font-semibold transition-colors"
+              >
+                フィルターをリセット
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 日記一覧 */}
+        {posts.length === 0 ? (
+          <div className="text-center py-16 bg-white rounded-2xl shadow-lg border border-gray-200">
+            <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500 mb-6 text-lg font-medium">まだ留学日記がありません</p>
+            <Link href="/posts/new?category=diary" className="inline-block px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200">
+              最初の日記を書く
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {posts.map((post) => (
+              <Link key={post.id} href={`/posts/${post.id}`} className="block group">
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-2xl hover:border-primary-200 transition-all duration-300 transform hover:-translate-y-1">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-2">
+                      <Calendar className="h-4 w-4 text-gray-400" />
+                      <span className="text-sm text-gray-500 font-medium">{formatDate(post.created_at)}</span>
+                    </div>
+                    <span className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-full text-xs font-bold">
+                      📝 留学日記
+                    </span>
+                  </div>
+                  
+                  <h2 className="text-2xl font-bold text-gray-900 mb-3 group-hover:text-primary-600 transition-colors">
+                    {post.title}
+                  </h2>
+                  
+                  <p className="text-gray-600 mb-4 line-clamp-1 leading-relaxed">
+                    {post.content}
+                  </p>
+                  
+                  {/* タグ */}
+                  {post.tags && post.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {post.tags.slice(0, 3).map((tag, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1.5 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-full text-sm font-medium border border-gray-300"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                      {post.tags.length > 3 && (
+                        <span className="px-3 py-1.5 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-full text-sm font-medium border border-gray-300">
+                          +{post.tags.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                    <div className="flex items-center space-x-4 text-sm text-gray-600">
+                      <div className="flex items-center space-x-2 flex-wrap gap-2">
+                        <UserAvatar 
+                          iconUrl={post.author?.icon_url} 
+                          name={post.author?.name} 
+                          size="sm"
+                        />
+                        <span className="font-semibold">{post.author?.name || '匿名'}</span>
+                        {post.author && (
+                          <AccountBadge 
+                            accountType={post.author.account_type} 
+                            verificationStatus={post.author.verification_status}
+                            organizationName={post.author.organization_name}
+                            size="sm"
+                          />
+                        )}
+                        {post.author?.study_abroad_destination && (
+                          <span className="text-gray-400">•</span>
+                        )}
+                        {post.author?.study_abroad_destination && (
+                          <span className="font-medium">{post.author.study_abroad_destination}</span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-5 text-sm text-gray-600">
+                      <span className="flex items-center font-semibold">
+                        <Heart className="h-5 w-5 mr-1.5 text-red-500" />
+                        {post.likes_count}
+                      </span>
+                      <span className="flex items-center font-semibold">
+                        <MessageSquare className="h-5 w-5 mr-1.5 text-primary-500" />
+                        {post.comments_count}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
           </div>
         )}
       </div>
-
-      {/* 日記一覧 */}
-      {posts.length === 0 ? (
-        <div className="text-center py-12">
-          <BookOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500 mb-6">まだ留学日記がありません</p>
-          <Link href="/posts/new?category=diary" className="btn-primary">
-            最初の日記を書く
-          </Link>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {posts.map((post) => (
-            <Link key={post.id} href={`/posts/${post.id}`} className="card hover:shadow-md transition-shadow block">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-2">
-                  <Calendar className="h-4 w-4 text-gray-400" />
-                  <span className="text-sm text-gray-500">{formatDate(post.created_at)}</span>
-                </div>
-                <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                  留学日記
-                </span>
-              </div>
-              
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                {post.title}
-              </h2>
-              
-              <p className="text-gray-600 mb-4 line-clamp-3">
-                {post.content}
-              </p>
-              
-              {/* タグ */}
-              {post.tags && post.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {post.tags.slice(0, 3).map((tag, index) => (
-                    <span
-                      key={index}
-                      className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm"
-                    >
-                      #{tag}
-                    </span>
-                  ))}
-                  {post.tags.length > 3 && (
-                    <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm">
-                      +{post.tags.length - 3}
-                    </span>
-                  )}
-                </div>
-              )}
-              
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4 text-sm text-gray-500">
-                  <div className="flex items-center space-x-2">
-                    <UserAvatar 
-                      iconUrl={post.author?.icon_url} 
-                      name={post.author?.name} 
-                      size="sm"
-                    />
-                    <span className="font-medium">{post.author?.name || '匿名'}</span>
-                    {post.author?.study_abroad_destination && (
-                      <span className="text-gray-400">•</span>
-                    )}
-                    {post.author?.study_abroad_destination && (
-                      <span>{post.author.study_abroad_destination}</span>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-4 text-sm text-gray-500">
-                  <span className="flex items-center">
-                    <Flame className="h-4 w-4 mr-1 text-orange-500" />
-                    {post.likes_count}
-                  </span>
-                  <span className="flex items-center">
-                    <MessageSquare className="h-4 w-4 mr-1" />
-                    {post.comments_count}
-                  </span>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
