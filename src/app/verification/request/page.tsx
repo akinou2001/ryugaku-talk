@@ -4,11 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
-<<<<<<< HEAD
 import { Building2, Mail, Phone, Globe, FileText, ArrowLeft, CheckCircle, User } from 'lucide-react'
-=======
-import { Building2, Mail, Phone, Globe, FileText, ArrowLeft, CheckCircle } from 'lucide-react'
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
 import Link from 'next/link'
 
 export default function VerificationRequestPage() {
@@ -21,10 +17,7 @@ export default function VerificationRequestPage() {
   
   const [formData, setFormData] = useState({
     organization_name: '',
-<<<<<<< HEAD
     contact_person_name: '',
-=======
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
     official_email: '',
     website_url: '',
     message: ''
@@ -68,15 +61,11 @@ export default function VerificationRequestPage() {
         // 既存の申請がある場合はフォームに値を設定
         setFormData({
           organization_name: data.organization_name || user.organization_name || '',
-<<<<<<< HEAD
           contact_person_name: data.contact_person_name || user.contact_person_name || '',
-=======
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
           official_email: data.contact_person_email || user.contact_person_email || '',
           website_url: data.organization_url || user.organization_url || '',
           message: data.request_reason || ''
         })
-<<<<<<< HEAD
       } else if (user) {
         // 既存の申請がない場合、プロフィール情報をデフォルト値として設定
         setFormData({
@@ -86,8 +75,6 @@ export default function VerificationRequestPage() {
           website_url: user.organization_url || '',
           message: ''
         })
-=======
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
       }
     } catch (error) {
       console.error('Error:', error)
@@ -109,15 +96,12 @@ export default function VerificationRequestPage() {
       return
     }
 
-<<<<<<< HEAD
     if (!formData.contact_person_name.trim()) {
       setError('担当者名を入力してください')
       setLoading(false)
       return
     }
 
-=======
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
     if (!formData.official_email.trim()) {
       setError('公式メールアドレスを入力してください')
       setLoading(false)
@@ -139,10 +123,7 @@ export default function VerificationRequestPage() {
           .from('organization_verification_requests')
           .update({
             organization_name: formData.organization_name,
-<<<<<<< HEAD
             contact_person_name: formData.contact_person_name,
-=======
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
             contact_person_email: formData.official_email,
             organization_url: formData.website_url || null,
             request_reason: formData.message || null,
@@ -151,20 +132,17 @@ export default function VerificationRequestPage() {
           .eq('id', existingRequest.id)
 
         if (updateError) throw updateError
-<<<<<<< HEAD
         
         // profilesテーブルのverification_statusを更新
         const { error: profileUpdateError } = await supabase
           .from('profiles')
           .update({ verification_status: 'pending' })
           .eq('id', user.id)
-        
+
         if (profileUpdateError) {
           console.error('Error updating profile verification status:', profileUpdateError)
           // エラーを無視（申請は成功しているため）
         }
-=======
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
       } else {
         // 新規申請を作成
         const { error: insertError } = await supabase
@@ -173,10 +151,7 @@ export default function VerificationRequestPage() {
             profile_id: user.id,
             account_type: user.account_type,
             organization_name: formData.organization_name,
-<<<<<<< HEAD
             contact_person_name: formData.contact_person_name,
-=======
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
             contact_person_email: formData.official_email,
             organization_url: formData.website_url || null,
             request_reason: formData.message || null,
@@ -184,33 +159,27 @@ export default function VerificationRequestPage() {
           })
 
         if (insertError) throw insertError
-<<<<<<< HEAD
         
         // profilesテーブルのverification_statusを'pending'に更新
         const { error: profileUpdateError } = await supabase
           .from('profiles')
           .update({ verification_status: 'pending' })
           .eq('id', user.id)
-        
+
         if (profileUpdateError) {
           console.error('Error updating profile verification status:', profileUpdateError)
           // エラーを無視（申請は成功しているため）
         }
-=======
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
       }
 
       setSuccess(true)
       // 既存の申請情報を再取得
       await checkExistingRequest()
-<<<<<<< HEAD
       
       // プロフィールページにリダイレクト（申請状態を表示するため）
       setTimeout(() => {
         router.push(`/profile/${user.id}`)
       }, 1500)
-=======
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
     } catch (error: any) {
       setError(error.message || '認証申請の送信に失敗しました')
     } finally {
@@ -325,7 +294,6 @@ export default function VerificationRequestPage() {
                 </div>
               </div>
 
-<<<<<<< HEAD
               {/* 担当者名 */}
               <div>
                 <label htmlFor="contact_person_name" className="block text-sm font-medium text-gray-700 mb-2">
@@ -351,8 +319,6 @@ export default function VerificationRequestPage() {
                 </p>
               </div>
 
-=======
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
               {/* 公式メールアドレス */}
               <div>
                 <label htmlFor="official_email" className="block text-sm font-medium text-gray-700 mb-2">

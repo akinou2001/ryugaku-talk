@@ -8,7 +8,7 @@ import { getCommunityById, getCommunityStats, getCommunityMembers, getCommunityP
 import { uploadFiles, uploadFile, validateFileType, validateFileSize, FILE_TYPES, getFileIcon, isImageFile } from '@/lib/storage'
 import { getQuests, createQuest, requestQuestCompletion, updateQuestCompletionStatus, getQuestCompletions, updateQuest, deleteQuest } from '@/lib/quest'
 import type { Community, Quest, QuestCompletion, Post, Event, CommunityMember } from '@/lib/supabase'
-import { ArrowLeft, Plus, Users, Building2, CheckCircle, X, Clock, Flame, MessageSquare, Calendar, UserPlus, Settings, MapPin, Upload, File, Image as ImageIcon, Edit, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, Users, Building2, CheckCircle, X, Clock, MessageSquare, Calendar, UserPlus, Settings, MapPin, Upload, File, Image as ImageIcon, Edit, Trash2, Award, Heart } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
@@ -70,7 +70,6 @@ export default function CommunityDetail() {
   const [questForm, setQuestForm] = useState({
     title: '',
     description: '',
-    reward_type: 'candle' as 'candle' | 'torch',
     reward_amount: 1,
     deadline: ''
   })
@@ -264,11 +263,12 @@ export default function CommunityDetail() {
   const fetchQuests = async () => {
     try {
       setQuestsLoading(true)
+      setError('')
       const data = await getQuests(communityId, user?.id)
-      setQuests(data)
+      setQuests(data || [])
       
       // クエスト作成者の場合、各クエストの完了申請を取得
-      if (isOwner && user) {
+      if (isOwner && user && data) {
         const completionsMap: Record<string, QuestCompletion[]> = {}
         for (const quest of data) {
           if (quest.created_by === user.id) {
@@ -284,6 +284,8 @@ export default function CommunityDetail() {
       }
     } catch (error: any) {
       console.error('Error fetching quests:', error)
+      setError(error.message || 'クエストの取得に失敗しました')
+      setQuests([])
     } finally {
       setQuestsLoading(false)
     }
@@ -338,11 +340,10 @@ export default function CommunityDetail() {
         communityId,
         questForm.title,
         questForm.description,
-        questForm.reward_type,
         questForm.reward_amount,
         deadline
       )
-      setQuestForm({ title: '', description: '', reward_type: 'candle', reward_amount: 1, deadline: '' })
+      setQuestForm({ title: '', description: '', reward_amount: 1, deadline: '' })
       setShowCreateQuest(false)
       fetchQuests()
     } catch (error: any) {
@@ -550,7 +551,6 @@ export default function CommunityDetail() {
   const [editQuestForm, setEditQuestForm] = useState({
     title: '',
     description: '',
-    reward_type: 'candle' as 'candle' | 'torch',
     reward_amount: 1,
     deadline: ''
   })
@@ -591,7 +591,6 @@ export default function CommunityDetail() {
       await updateQuest(editingQuestId, {
         title: editQuestForm.title,
         description: editQuestForm.description,
-        reward_type: editQuestForm.reward_type,
         reward_amount: editQuestForm.reward_amount,
         deadline
       })
@@ -729,8 +728,6 @@ export default function CommunityDetail() {
   }
 
   const isGuild = community.community_type === 'guild'
-  const rewardLabel = isGuild ? 'キャンドル' : 'トーチ'
-  const rewardIcon = isGuild ? '🕯️' : '🔥'
   const canViewContent = isMember || isOwner
   const isPublicCommunity = community.is_public !== false // デフォルトはtrue
 
@@ -1012,7 +1009,7 @@ export default function CommunityDetail() {
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                <Flame className="h-4 w-4 inline mr-2" />
+                <Award className="h-4 w-4 inline mr-2" />
                 クエスト
               </button>
             </div>
@@ -1125,10 +1122,10 @@ export default function CommunityDetail() {
                                       <span>期限: {formatDateTime(item.deadline)}</span>
                                     </span>
                                   )}
-                                  {item.reward_type && item.reward_amount && (
+                                  {item.reward_amount && (
                                     <span className="flex items-center space-x-1">
-                                      <Flame className="h-3 w-3" />
-                                      <span>報酬: {item.reward_amount}{item.reward_type === 'candle' ? 'キャンドル' : 'トーチ'}</span>
+                                      <Award className="h-3 w-3" />
+                                      <span>報酬: {item.reward_amount}ポイント</span>
                                     </span>
                                   )}
                                   {item.creator && (
@@ -1157,9 +1154,15 @@ export default function CommunityDetail() {
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex-1">
                               <Link href={`/posts/${item.id}`} className="hover:underline">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-1">{item.title}</h3>
+                                {item.category === 'chat' ? (
+                                  <p className="text-lg font-semibold text-gray-900 mb-1 line-clamp-1">{item.content}</p>
+                                ) : (
+                                  <h3 className="text-lg font-semibold text-gray-900 mb-1">{item.title}</h3>
+                                )}
                               </Link>
-                              <p className="text-sm text-gray-600 line-clamp-1">{item.content}</p>
+                              {item.category !== 'chat' && (
+                                <p className="text-sm text-gray-600 line-clamp-1">{item.content}</p>
+                              )}
                               {/* 写真表示 */}
                               {item.image_url && (
                                 <div className="mt-2">
@@ -1181,7 +1184,7 @@ export default function CommunityDetail() {
                                 </div>
                                 <span>{formatDate(item.created_at)}</span>
                                 <div className="flex items-center space-x-1">
-                                  <Flame className="h-3 w-3" />
+                                  <Heart className="h-3 w-3 text-red-500" />
                                   <span>{item.likes_count}</span>
                                 </div>
                                 <div className="flex items-center space-x-1">
@@ -1722,15 +1725,20 @@ export default function CommunityDetail() {
 
             {/* クエスト */}
             {activeTab === 'quests' && (
-              <div className="card">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-semibold text-gray-900">クエスト</h2>
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+                {error && (
+                  <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg">
+                    <p className="text-sm">{error}</p>
+                  </div>
+                )}
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">クエスト</h2>
                   {isMember && (
                     <button
                       onClick={() => setShowCreateQuest(!showCreateQuest)}
-                      className="btn-primary flex items-center"
+                      className="px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center"
                     >
-                      <Plus className="h-4 w-4 mr-2" />
+                      <Plus className="h-5 w-5 mr-2" />
                       クエストを作成
                     </button>
                   )}
@@ -1769,20 +1777,7 @@ export default function CommunityDetail() {
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
-                            報酬タイプ
-                          </label>
-                          <select
-                            value={questForm.reward_type}
-                            onChange={(e) => setQuestForm(prev => ({ ...prev, reward_type: e.target.value as 'candle' | 'torch' }))}
-                            className="input-field"
-                          >
-                            <option value="candle">🕯️ キャンドル（ギルド）</option>
-                            <option value="torch">🔥 トーチ（公式コミュニティ）</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            報酬数
+                            報酬ポイント
                           </label>
                           <input
                             type="number"
@@ -1812,7 +1807,7 @@ export default function CommunityDetail() {
                           type="button"
                           onClick={() => {
                             setShowCreateQuest(false)
-                            setQuestForm({ title: '', description: '', reward_type: 'candle', reward_amount: 1, deadline: '' })
+                            setQuestForm({ title: '', description: '', reward_amount: 1, deadline: '' })
                           }}
                           className="btn-secondary"
                         >
@@ -1831,17 +1826,17 @@ export default function CommunityDetail() {
                     ))}
                   </div>
                 ) : quests.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">クエストがありません</p>
+                  <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
+                    <Award className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500 text-lg font-medium mb-2">クエストがありません</p>
                     {isMember && (
-                      <p className="text-sm text-gray-400 mt-2">最初のクエストを作成してみましょう</p>
+                      <p className="text-sm text-gray-400">最初のクエストを作成してみましょう</p>
                     )}
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {quests.map((quest) => (
-                      <div key={quest.id} id={`quest-${quest.id}`} className="border border-gray-200 rounded-lg p-4 scroll-mt-4">
+                      <div key={quest.id} id={`quest-${quest.id}`} className="bg-gray-50 rounded-xl p-5 border border-gray-200 hover:bg-white hover:shadow-md transition-all duration-200 scroll-mt-4">
                         {editingQuestId === quest.id ? (
                           <form onSubmit={handleEditQuest} className="space-y-4">
                             <div>
@@ -1867,32 +1862,17 @@ export default function CommunityDetail() {
                                 className="input-field"
                               />
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                  報酬タイプ
-                                </label>
-                                <select
-                                  value={editQuestForm.reward_type}
-                                  onChange={(e) => setEditQuestForm(prev => ({ ...prev, reward_type: e.target.value as 'candle' | 'torch' }))}
-                                  className="input-field"
-                                >
-                                  <option value="candle">🕯️ キャンドル（ギルド）</option>
-                                  <option value="torch">🔥 トーチ（公式コミュニティ）</option>
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                  報酬数
-                                </label>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={editQuestForm.reward_amount}
-                                  onChange={(e) => setEditQuestForm(prev => ({ ...prev, reward_amount: parseInt(e.target.value) || 1 }))}
-                                  className="input-field"
-                                />
-                              </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                報酬ポイント
+                              </label>
+                              <input
+                                type="number"
+                                min="1"
+                                value={editQuestForm.reward_amount}
+                                onChange={(e) => setEditQuestForm(prev => ({ ...prev, reward_amount: parseInt(e.target.value) || 1 }))}
+                                className="input-field"
+                              />
                             </div>
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1916,7 +1896,6 @@ export default function CommunityDetail() {
                                   setEditQuestForm({
                                     title: '',
                                     description: '',
-                                    reward_type: 'candle',
                                     reward_amount: 1,
                                     deadline: ''
                                   })
@@ -1941,7 +1920,6 @@ export default function CommunityDetail() {
                                           setEditQuestForm({
                                             title: quest.title,
                                             description: quest.description || '',
-                                            reward_type: quest.reward_type,
                                             reward_amount: quest.reward_amount,
                                             deadline: quest.deadline ? new Date(quest.deadline).toISOString().slice(0, 16) : ''
                                           })
@@ -1971,10 +1949,12 @@ export default function CommunityDetail() {
                                   <span>期限: {formatDateTime(quest.deadline)}</span>
                                 </span>
                               )}
-                              <span className="flex items-center space-x-1">
-                                <span>{rewardIcon}</span>
-                                <span>報酬: {quest.reward_amount}{rewardLabel}</span>
-                              </span>
+                              {quest.reward_amount && (
+                                <span className="flex items-center space-x-1">
+                                  <Award className="h-3 w-3" />
+                                  <span>報酬: {quest.reward_amount}ポイント</span>
+                                </span>
+                              )}
                             </div>
                           </div>
                           <div className="ml-4">

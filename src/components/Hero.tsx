@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { MessageCircle, Users, Flame, Calendar, Sparkles, MessageSquare } from 'lucide-react'
+import { MessageCircle, Users, Calendar, Sparkles, MessageSquare, Award } from 'lucide-react'
 
 export function Hero() {
   return (
@@ -60,7 +60,7 @@ export function Hero() {
 
             <div className="card text-center hover:shadow-lg transition-shadow">
               <div className="bg-purple-100 rounded-full w-14 h-14 flex items-center justify-center mx-auto mb-4">
-                <Flame className="h-7 w-7 text-purple-600" />
+                <Award className="h-7 w-7 text-purple-600" />
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">クエスト</h3>
               <p className="text-sm text-gray-600">

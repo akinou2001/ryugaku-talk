@@ -393,7 +393,7 @@ export default function ChatList() {
               {conversations.map((conversation) => {
                 const isUnread = conversation.unreadCount > 0
                 const lastMessagePreview = conversation.lastMessage?.content || ''
-                const isCandleMessage = lastMessagePreview.includes('🕯️')
+                const isCandleMessage = false
 
                 return (
                   <Link

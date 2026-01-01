@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Quest, QuestCompletion, QuestStatus, QuestRewardType, QuestCompletionStatus } from './supabase'
+import type { Quest, QuestCompletion, QuestStatus, QuestCompletionStatus } from './supabase'
 
 /**
  * コミュニティのクエスト一覧を取得
@@ -10,7 +10,7 @@ export async function getQuests(communityId: string, userId?: string) {
     .select(`
       *,
       community:communities(id, name, community_type),
-      creator:profiles(id, name)
+      creator:profiles(id, name, icon_url)
     `)
     .eq('community_id', communityId)
     .eq('status', 'active')
@@ -49,7 +49,6 @@ export async function createQuest(
   communityId: string,
   title: string,
   description?: string,
-  rewardType: QuestRewardType = 'candle',
   rewardAmount: number = 1,
   deadline?: string
 ) {
@@ -73,7 +72,6 @@ export async function createQuest(
       description,
       created_by: user.id,
       creator_profile: profile || null,
-      reward_type: rewardType,
       reward_amount: rewardAmount,
       deadline: deadline || null,
       status: 'active'
@@ -101,7 +99,6 @@ export async function updateQuest(
   updates: {
     title?: string
     description?: string
-    reward_type?: QuestRewardType
     reward_amount?: number
     deadline?: string
   }
@@ -261,7 +258,7 @@ export async function updateQuestCompletionStatus(
     .from('quest_completions')
     .select(`
       *,
-      quest:quests(created_by, reward_type, reward_amount, community:communities(community_type))
+      quest:quests(created_by, reward_amount, community:communities(community_type))
     `)
     .eq('id', completionId)
     .single()
@@ -288,7 +285,6 @@ export async function updateQuestCompletionStatus(
     // スコアを更新
     await updateUserScore(
       completion.user_id,
-      quest.reward_type,
       quest.reward_amount
     )
   }
@@ -313,11 +309,10 @@ export async function updateQuestCompletionStatus(
 }
 
 /**
- * ユーザースコアを更新
+ * ユーザースコアを更新（将来の拡張用、現在は使用しない）
  */
 export async function updateUserScore(
   userId: string,
-  rewardType: QuestRewardType,
   amount: number
 ) {
   // スコアレコードを取得または作成
@@ -332,12 +327,6 @@ export async function updateUserScore(
       updated_at: new Date().toISOString()
     }
 
-    if (rewardType === 'candle') {
-      updateData.candle_count = (existing.candle_count || 0) + amount
-    } else if (rewardType === 'torch') {
-      updateData.torch_count = (existing.torch_count || 0) + amount
-    }
-
     const { error } = await supabase
       .from('user_scores')
       .update(updateData)
@@ -349,17 +338,7 @@ export async function updateUserScore(
     }
   } else {
     const insertData: any = {
-      user_id: userId,
-      flame_count: 0,
-      candle_count: 0,
-      torch_count: 0,
-      candles_received_count: 0
-    }
-
-    if (rewardType === 'candle') {
-      insertData.candle_count = amount
-    } else if (rewardType === 'torch') {
-      insertData.torch_count = amount
+      user_id: userId
     }
 
     const { error } = await supabase
@@ -382,7 +361,7 @@ export async function getQuestCompletions(questId: string) {
     .select(`
       *,
       user:profiles(id, name),
-      quest:quests(title, reward_type, reward_amount)
+      quest:quests(title, reward_amount)
     `)
     .eq('quest_id', questId)
     .order('created_at', { ascending: false })
@@ -431,7 +410,7 @@ export async function getUserScore(userId: string) {
 }
 
 /**
- * キャンドルを送信（週1回まで）
+ * キャンドルを送信（週1回まで）- 現在は使用しない
  */
 export async function sendCandle(senderId: string, receiverId: string) {
   const now = new Date()
@@ -470,7 +449,7 @@ export async function sendCandle(senderId: string, receiverId: string) {
   }
 
   // 受信者のスコアを更新
-  await updateUserScore(receiverId, 'candle', 1)
+  await updateUserScore(receiverId, 1)
 
   // 送信者のスコアも更新（送信回数の記録）
   const { data: senderScore } = await supabase

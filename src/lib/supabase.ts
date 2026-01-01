@@ -100,6 +100,7 @@ export interface Post {
   post_type?: 'announcement' | 'event' | 'quest' | 'normal' // コミュニティ限定投稿の種別
   attachments?: Array<{ url: string; filename: string; type: string }> // ファイル添付（JSONB形式）
   image_url?: string // 写真1枚用
+  urgency_level?: 'low' | 'normal' | 'high' | 'urgent' // 質問の緊急度
   created_at: string
   updated_at: string
 }
@@ -149,11 +150,8 @@ export interface Community {
   owner_id: string
   owner?: User
   visibility: CommunityVisibility
-<<<<<<< HEAD
   is_public?: boolean // 誰でも参加可能か、承認制か
   community_type?: 'guild' | 'official' // ギルド or 公式コミュニティ
-=======
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
   created_at: string
   updated_at: string
   // 集計情報（クエリ時に追加）
@@ -241,13 +239,9 @@ export interface Event {
   location?: string
   online_url?: string
   registration_deadline?: string
-<<<<<<< HEAD
   deadline?: string // 締切日時（registration_deadlineの別名）
   capacity?: number
   attachments?: Array<{ url: string; filename: string; type: string }> // ファイル添付（JSONB形式）
-=======
-  capacity?: number
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
   created_by?: string
   creator?: User
   created_at: string
@@ -268,10 +262,8 @@ export interface EventParticipant {
   registered_at: string
 }
 
-<<<<<<< HEAD
 // クエスト機能の型定義
 export type QuestStatus = 'active' | 'completed' | 'cancelled'
-export type QuestRewardType = 'candle' | 'torch'
 export type QuestCompletionStatus = 'pending' | 'approved' | 'rejected'
 
 export interface Quest {
@@ -284,7 +276,6 @@ export interface Quest {
   creator?: User
   creator_profile?: any // 作成者のプロフィール情報（スナップショット）
   status: QuestStatus
-  reward_type: QuestRewardType
   reward_amount: number
   deadline?: string // クエストの期限
   created_at: string
@@ -310,16 +301,11 @@ export interface QuestCompletion {
   updated_at: string
 }
 
-// スコアシステムの型定義
+// スコアシステムの型定義（将来の拡張用に保持、現在は使用しない）
 export interface UserScore {
   id: string
   user_id: string
   user?: User
-  flame_count: number // 通常のいいねや質問への回答で獲得
-  candle_count: number // ギルドのクエストクリアで獲得
-  torch_count: number // 公式コミュニティのクエストクリアで獲得
-  candles_received_count: number // 週1回のキャンドル送信で受け取った数
-  last_candle_sent_at?: string // 最後にキャンドルを送った日時
   created_at: string
   updated_at: string
 }
@@ -335,7 +321,4 @@ export interface CandleSend {
   sent_at: string
   week_start: string // 週の開始日（月曜日）
 }
-
-=======
->>>>>>> 74e6d02cb630e1ecc834664bdf7f7c83cc757fe6
 

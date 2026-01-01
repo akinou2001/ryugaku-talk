@@ -6,7 +6,7 @@ import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import type { Post, Comment } from '@/lib/supabase'
 import { updateUserScore } from '@/lib/quest'
-import { Flame, MessageSquare, Share, Flag, Clock, User, MapPin, GraduationCap, Edit, Trash2, MoreVertical } from 'lucide-react'
+import { Heart, MessageSquare, Share, Flag, Clock, User, MapPin, GraduationCap, Edit, Trash2, MoreVertical } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
@@ -141,49 +141,12 @@ export default function PostDetail() {
         setLiked(true)
         setPost(prev => prev ? { ...prev, likes_count: prev.likes_count + 1 } : null)
         
-        // 投稿者に「火」を加算（いいねされた側）
-        if (post?.author_id) {
-          try {
-            await addFlameToUser(post.author_id)
-          } catch (flameError) {
-            console.error('Error adding flame:', flameError)
-          }
-        }
       }
     } catch (error: any) {
       console.error('Error toggling like:', error)
     }
   }
 
-  // 「火」をユーザーに加算する関数
-  const addFlameToUser = async (userId: string) => {
-    // スコアレコードを取得または作成
-    const { data: existing } = await supabase
-      .from('user_scores')
-      .select('*')
-      .eq('user_id', userId)
-      .single()
-
-    if (existing) {
-      await supabase
-        .from('user_scores')
-        .update({
-          flame_count: (existing.flame_count || 0) + 1,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', userId)
-    } else {
-      await supabase
-        .from('user_scores')
-        .insert({
-          user_id: userId,
-          flame_count: 1,
-          candle_count: 0,
-          torch_count: 0,
-          candles_received_count: 0
-        })
-    }
-  }
 
   const handleComment = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -224,14 +187,6 @@ export default function PostDetail() {
           .eq('id', user.id)
       }
 
-      // 質問への回答の場合、投稿者に「火」を加算
-      if (post?.category === 'question' && post?.author_id) {
-        try {
-          await addFlameToUser(post.author_id)
-        } catch (flameError) {
-          console.error('Error adding flame for answer:', flameError)
-        }
-      }
 
       setNewComment('')
       fetchComments()
@@ -319,34 +274,39 @@ export default function PostDetail() {
 
   const getCategoryLabel = (category: string) => {
     switch (category) {
-      case 'question': return '質問'
-      case 'diary': return '日記'
-      case 'chat': return 'つぶやき'
-      case 'information': return 'つぶやき' // 後方互換性
+      case 'question': return '❓ 質問'
+      case 'diary': return '📝 日記'
+      case 'chat': return '💬 つぶやき'
+      case 'information': return '💬 つぶやき' // 後方互換性
       default: return category
     }
   }
 
   const getCategoryColor = (category: string) => {
     switch (category) {
-      case 'question': return 'bg-blue-100 text-blue-800'
-      case 'diary': return 'bg-green-100 text-green-800'
-      case 'chat': return 'bg-purple-100 text-purple-800'
-      case 'information': return 'bg-purple-100 text-purple-800' // 後方互換性
-      default: return 'bg-gray-100 text-gray-800'
+      case 'question': return 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
+      case 'diary': return 'bg-gradient-to-r from-green-500 to-green-600 text-white'
+      case 'chat': return 'bg-gradient-to-r from-purple-500 to-purple-600 text-white'
+      case 'information': return 'bg-gradient-to-r from-purple-500 to-purple-600 text-white' // 後方互換性
+      default: return 'bg-gradient-to-r from-gray-500 to-gray-600 text-white'
     }
   }
 
+  // スケルトンローディング
+  const SkeletonCard = () => (
+    <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 animate-pulse">
+      <div className="h-8 bg-gray-200 rounded mb-4"></div>
+      <div className="h-4 bg-gray-200 rounded mb-2"></div>
+      <div className="h-4 bg-gray-200 rounded mb-4"></div>
+      <div className="h-32 bg-gray-200 rounded"></div>
+    </div>
+  )
+
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded mb-4"></div>
-            <div className="h-4 bg-gray-200 rounded mb-2"></div>
-            <div className="h-4 bg-gray-200 rounded mb-4"></div>
-            <div className="h-32 bg-gray-200 rounded"></div>
-          </div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+        <div className="container mx-auto px-4 py-8 max-w-4xl">
+          <SkeletonCard />
         </div>
       </div>
     )
@@ -354,37 +314,41 @@ export default function PostDetail() {
 
   if (error || !post) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">投稿が見つかりません</h1>
-          <p className="text-gray-600 mb-6">{error || 'この投稿は存在しないか、削除されました。'}</p>
-          <button
-            onClick={() => router.push('/board')}
-            className="btn-primary"
-          >
-            掲示板に戻る
-          </button>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+        <div className="container mx-auto px-4 py-8 max-w-4xl">
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 text-center py-16">
+            <h1 className="text-3xl font-bold text-gray-900 mb-4">投稿が見つかりません</h1>
+            <p className="text-gray-600 mb-6 text-lg">{error || 'この投稿は存在しないか、削除されました。'}</p>
+            <button
+              onClick={() => router.push('/board')}
+              className="px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+            >
+              掲示板に戻る
+            </button>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
+      <div className="container mx-auto px-4 py-8 max-w-4xl">
         {/* 投稿ヘッダー */}
-        <div className="card mb-6">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(post.category)}`}>
+            <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${getCategoryColor(post.category)}`}>
               {getCategoryLabel(post.category)}
             </span>
-            <div className="flex items-center text-sm text-gray-500">
+            <div className="flex items-center text-sm text-gray-500 font-medium">
               <Clock className="h-4 w-4 mr-1" />
               {formatDate(post.created_at)}
             </div>
           </div>
 
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">{post.title}</h1>
+          {post.category !== 'chat' && (
+            <h1 className="text-4xl font-bold text-gray-900 mb-6">{post.title}</h1>
+          )}
 
           {/* 投稿者情報 */}
           <div className="flex items-center space-x-4 mb-6 flex-wrap">
@@ -433,7 +397,7 @@ export default function PostDetail() {
               {post.tags.map((tag, index) => (
                 <span
                   key={index}
-                  className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm"
+                  className="px-3 py-1.5 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-full text-sm font-medium border border-gray-300"
                 >
                   #{tag}
                 </span>
@@ -444,11 +408,19 @@ export default function PostDetail() {
           {/* 投稿内容 */}
           {!showEditForm ? (
             <>
-              <div className="prose max-w-none">
-                <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
-                  {post.content}
+              {post.category === 'chat' ? (
+                <div className="prose max-w-none">
+                  <div className="whitespace-pre-wrap text-gray-800 leading-relaxed text-xl">
+                    {post.content}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="prose max-w-none">
+                  <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
+                    {post.content}
+                  </div>
+                </div>
+              )}
 
               {/* 写真表示 */}
               {post.image_url && (
@@ -524,17 +496,17 @@ export default function PostDetail() {
             <div className="flex items-center space-x-6">
               <button
                 onClick={handleLike}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
+                className={`flex items-center space-x-2 px-5 py-2.5 rounded-xl font-semibold transition-all duration-200 ${
                   liked 
-                    ? 'bg-orange-100 text-orange-600' 
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    ? 'bg-gradient-to-r from-red-50 to-red-100 text-red-600 border-2 border-red-200 shadow-md' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-2 border-transparent'
                 }`}
               >
-                <Flame className={`h-5 w-5 ${liked ? 'text-orange-500 fill-current' : 'text-gray-500'}`} />
+                <Heart className={`h-5 w-5 ${liked ? 'text-red-500 fill-current' : 'text-gray-500'}`} />
                 <span>{post.likes_count}</span>
               </button>
-              <div className="flex items-center space-x-2 text-gray-600">
-                <MessageSquare className="h-5 w-5" />
+              <div className="flex items-center space-x-2 px-5 py-2.5 bg-gray-100 text-gray-600 rounded-xl font-semibold">
+                <MessageSquare className="h-5 w-5 text-primary-500" />
                 <span>{post.comments_count}</span>
               </div>
             </div>
@@ -545,7 +517,7 @@ export default function PostDetail() {
                   {post.category !== 'chat' && (
                     <button
                       onClick={() => setShowEditForm(!showEditForm)}
-                      className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                      className="flex items-center space-x-2 px-4 py-2.5 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
                     >
                       <Edit className="h-5 w-5" />
                       <span>編集</span>
@@ -554,18 +526,18 @@ export default function PostDetail() {
                   <button
                     onClick={handleDelete}
                     disabled={isDeleting}
-                    className="flex items-center space-x-2 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors disabled:opacity-50"
+                    className="flex items-center space-x-2 px-4 py-2.5 bg-gradient-to-r from-red-50 to-red-100 text-red-600 border-2 border-red-200 rounded-xl font-semibold hover:from-red-100 hover:to-red-200 transition-all duration-200 disabled:opacity-50"
                   >
                     <Trash2 className="h-5 w-5" />
                     <span>{isDeleting ? '削除中...' : '削除'}</span>
                   </button>
                 </>
               )}
-              <button className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors">
+              <button className="flex items-center space-x-2 px-4 py-2.5 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all duration-200">
                 <Share className="h-5 w-5" />
                 <span>共有</span>
               </button>
-              <button className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors">
+              <button className="flex items-center space-x-2 px-4 py-2.5 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all duration-200">
                 <Flag className="h-5 w-5" />
                 <span>通報</span>
               </button>
@@ -574,8 +546,8 @@ export default function PostDetail() {
         </div>
 
         {/* コメントセクション */}
-        <div className="card">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">コメント ({comments.length})</h2>
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">コメント ({comments.length})</h2>
 
           {/* コメント投稿フォーム */}
           {user ? (
@@ -586,30 +558,30 @@ export default function PostDetail() {
                   onChange={(e) => setNewComment(e.target.value)}
                   placeholder="コメントを入力してください..."
                   rows={3}
-                  className="flex-1 input-field"
+                  className="flex-1 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all resize-none"
                 />
                 <button
                   type="submit"
                   disabled={commentLoading || !newComment.trim()}
-                  className="btn-primary self-start"
+                  className="px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none self-start"
                 >
                   {commentLoading ? '投稿中...' : '投稿'}
                 </button>
               </div>
             </form>
           ) : (
-            <div className="mb-8 p-4 bg-gray-50 rounded-lg text-center">
-              <p className="text-gray-600 mb-4">コメントするにはログインが必要です</p>
+            <div className="mb-8 p-6 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl text-center border border-gray-200">
+              <p className="text-gray-600 mb-4 font-medium">コメントするにはログインが必要です</p>
               <div className="flex space-x-4 justify-center">
                 <button
                   onClick={() => router.push('/auth/signin')}
-                  className="btn-primary"
+                  className="px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
                 >
                   ログイン
                 </button>
                 <button
                   onClick={() => router.push('/auth/signup')}
-                  className="btn-secondary"
+                  className="px-6 py-3 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
                 >
                   新規登録
                 </button>
@@ -620,30 +592,30 @@ export default function PostDetail() {
           {/* コメント一覧 */}
           <div className="space-y-6">
             {comments.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">まだコメントがありません</p>
+              <p className="text-gray-500 text-center py-12 text-lg font-medium">まだコメントがありません</p>
             ) : (
               comments.map((comment) => (
-                <div key={comment.id} className="border-b border-gray-200 pb-6 last:border-b-0">
-                  <div className="flex items-center justify-between mb-2">
+                <div key={comment.id} className="bg-gray-50 rounded-xl p-5 border border-gray-200 hover:bg-white hover:shadow-md transition-all duration-200">
+                  <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-2">
                       <UserAvatar 
                         iconUrl={comment.author?.icon_url} 
                         name={comment.author?.name} 
                         size="sm"
                       />
-                      <span className="font-medium text-gray-900">{comment.author?.name || '匿名'}</span>
+                      <span className="font-semibold text-gray-900">{comment.author?.name || '匿名'}</span>
                     </div>
-                    <span className="text-sm text-gray-500">{formatDate(comment.created_at)}</span>
+                    <span className="text-sm text-gray-500 font-medium">{formatDate(comment.created_at)}</span>
                   </div>
-                  <div className="text-gray-800 whitespace-pre-wrap">
+                  <div className="text-gray-800 whitespace-pre-wrap leading-relaxed mb-4">
                     {comment.content}
                   </div>
-                  <div className="flex items-center space-x-4 mt-4">
-                    <button className="flex items-center space-x-1 text-gray-500 hover:text-gray-700">
-                      <Flame className="h-4 w-4 text-orange-500" />
+                  <div className="flex items-center space-x-5 pt-3 border-t border-gray-200">
+                    <button className="flex items-center space-x-1.5 text-gray-600 hover:text-red-600 font-semibold transition-colors">
+                      <Heart className="h-4 w-4 text-red-500" />
                       <span>{comment.likes_count}</span>
                     </button>
-                    <button className="text-gray-500 hover:text-gray-700">
+                    <button className="text-gray-600 hover:text-primary-600 font-semibold transition-colors">
                       返信
                     </button>
                   </div>

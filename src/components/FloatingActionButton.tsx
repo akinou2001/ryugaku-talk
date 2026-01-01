@@ -2,13 +2,22 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, MessageCircle, X, HelpCircle, BookOpen, MessageSquare } from 'lucide-react'
+import { Plus, MessageCircle, X, HelpCircle, BookOpen, MessageSquare, Sparkles } from 'lucide-react'
 
 export function FloatingActionButton() {
   const [isOpen, setIsOpen] = useState(false)
   const router = useRouter()
 
   const actions = [
+    {
+      id: 'ai',
+      label: 'AIコンシェルジュ',
+      icon: Sparkles,
+      onClick: () => {
+        router.push('/ai')
+        setIsOpen(false)
+      }
+    },
     {
       id: 'question',
       label: '質問する',
