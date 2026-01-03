@@ -57,3 +57,4 @@ export function getCountryCoordinates(countryName: string): { lat: number; lng: 
 export const defaultMapCenter = { lat: 20, lng: 0 }
 export const defaultZoom = 2
 
+
