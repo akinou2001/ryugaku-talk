@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { Post } from '@/lib/supabase'
+import type { Post, User } from '@/lib/supabase'
 import { getCountryCoordinates, defaultMapCenter, defaultZoom } from '@/lib/countryCoordinates'
 
 // Leafletのデフォルトアイコンの問題を修正
@@ -16,14 +16,22 @@ if (typeof window !== 'undefined') {
   })
 }
 
+interface UserPostData {
+  user: User
+  posts: Post[]
+  displayPost: Post
+  displayType: 'question' | 'diary' | 'chat' | 'normal'
+}
+
 interface MapViewProps {
   posts: Post[]
+  userPostData?: UserPostData[]
   onMarkerClick?: (post: Post) => void
   selectedPostId?: string | null
 }
 
 // 投稿種別に応じた色とアイコンを取得
-function getCategoryStyle(category: string, urgencyLevel?: string) {
+function getCategoryStyle(category: string, urgencyLevel?: string, isResolved?: boolean) {
   const baseStyles = {
     question: {
       bgColor: '#3B82F6', // 青
@@ -47,10 +55,10 @@ function getCategoryStyle(category: string, urgencyLevel?: string) {
 
   const style = baseStyles[category as keyof typeof baseStyles] || baseStyles.question
 
-  // 緊急度に応じたリングの色
+  // 緊急度に応じたリングの色（質問のみ、未解決の場合）
   let ringColor = style.borderColor
   let ringWidth = 2
-  if (category === 'question' && urgencyLevel) {
+  if (category === 'question' && !isResolved && urgencyLevel) {
     switch (urgencyLevel) {
       case 'urgent':
         ringColor = '#EF4444' // 赤
@@ -90,25 +98,43 @@ function getOffsetCoordinates(baseCoords: { lat: number; lng: number }, index: n
   }
 }
 
+// 24時間以内かどうかを判定
+function isWithin24Hours(createdAt: string): boolean {
+  const now = new Date()
+  const postDate = new Date(createdAt)
+  const hoursSincePost = (now.getTime() - postDate.getTime()) / (1000 * 60 * 60)
+  return hoursSincePost <= 24
+}
+
 // カスタムマーカーアイコンを作成
-function createMarkerIcon(post: Post, isSelected: boolean) {
-  const style = getCategoryStyle(post.category, post.urgency_level)
+function createMarkerIcon(
+  post: Post, 
+  isSelected: boolean,
+  userPostData?: UserPostData
+) {
+  const now = new Date()
+  const isDiaryRecent = post.category === 'diary' && isWithin24Hours(post.created_at)
+  const isQuestionUnresolved = post.category === 'question' && !post.is_resolved
+  const isChat = post.category === 'chat'
+  
+  const style = getCategoryStyle(post.category, post.urgency_level, post.is_resolved)
   const size = isSelected ? 40 : 32
   const scale = isSelected ? 1.2 : 1
 
-  // 投稿者のアイコン画像URL（デフォルトアイコンは使用しない）
+  // 投稿者のアイコン画像URL
   const avatarUrl = post.author?.icon_url
   const authorName = post.author?.name || '匿名'
-  
-  // デフォルトアイコンの背景色（名前の最初の文字から生成）
   const defaultBgColor = style.bgColor
   const initials = authorName.charAt(0).toUpperCase()
+
+  // つぶやきの内容（先頭10文字）
+  const chatPreview = isChat ? post.content.substring(0, 10) + (post.content.length > 10 ? '...' : '') : ''
 
   const iconHtml = `
     <div class="custom-marker-wrapper" style="
       position: relative;
-      width: ${size * 1.6}px;
-      height: ${size * 1.6}px;
+      width: ${size * 1.8}px;
+      height: ${size * 1.8}px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -119,14 +145,28 @@ function createMarkerIcon(post: Post, isSelected: boolean) {
       <!-- 外側のリング（投稿種別と緊急度表示） -->
       <div style="
         position: absolute;
-        width: ${size * 1.6}px;
-        height: ${size * 1.6}px;
+        width: ${size * 1.8}px;
+        height: ${size * 1.8}px;
         border-radius: 50%;
         border: ${style.ringWidth}px solid ${style.ringColor};
         background: rgba(255, 255, 255, 0.9);
         box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        animation: ${isSelected ? 'pulse 2s infinite' : 'none'};
+        ${isQuestionUnresolved ? 'animation: pulse-ring 2s infinite;' : ''}
+        ${isDiaryRecent ? 'animation: sparkle 2s infinite;' : ''}
       "></div>
+      
+      <!-- キラキラエフェクト（24時間以内の日記） -->
+      ${isDiaryRecent ? `
+        <div style="
+          position: absolute;
+          width: ${size * 1.8}px;
+          height: ${size * 1.8}px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, transparent 70%);
+          animation: sparkle-rotate 3s linear infinite;
+          pointer-events: none;
+        "></div>
+      ` : ''}
       
       <!-- 投稿種別の形状インジケーター（小さなバッジ） -->
       <div style="
@@ -163,6 +203,7 @@ function createMarkerIcon(post: Post, isSelected: boolean) {
         display: flex;
         align-items: center;
         justify-content: center;
+        ${isDiaryRecent ? 'animation: sparkle-glow 2s infinite;' : ''}
       ">
         ${avatarUrl ? `
           <img 
@@ -190,16 +231,64 @@ function createMarkerIcon(post: Post, isSelected: boolean) {
           ${initials}
         </div>
       </div>
+      
+      <!-- つぶやきの吹き出し -->
+      ${isChat && chatPreview ? `
+        <div style="
+          position: absolute;
+          top: ${size * 1.2}px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: white;
+          border: 2px solid ${style.bgColor};
+          border-radius: 12px;
+          padding: 4px 8px;
+          font-size: 10px;
+          color: #333;
+          white-space: nowrap;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+          z-index: 10;
+          max-width: 80px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        ">
+          ${chatPreview}
+        </div>
+      ` : ''}
     </div>
     <style>
-      @keyframes pulse {
+      @keyframes pulse-ring {
         0%, 100% {
           transform: scale(1);
           opacity: 1;
         }
         50% {
-          transform: scale(1.1);
-          opacity: 0.8;
+          transform: scale(1.15);
+          opacity: 0.7;
+        }
+      }
+      @keyframes sparkle {
+        0%, 100% {
+          box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7);
+        }
+        50% {
+          box-shadow: 0 0 0 8px rgba(255, 215, 0, 0);
+        }
+      }
+      @keyframes sparkle-rotate {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes sparkle-glow {
+        0%, 100% {
+          filter: brightness(1);
+        }
+        50% {
+          filter: brightness(1.3);
         }
       }
       .custom-marker-wrapper:hover {
@@ -211,12 +300,12 @@ function createMarkerIcon(post: Post, isSelected: boolean) {
   return L.divIcon({
     html: iconHtml,
     className: 'custom-div-icon',
-    iconSize: [size * 1.6, size * 1.6],
-    iconAnchor: [size * 0.8, size * 0.8],
+    iconSize: [size * 1.8, size * 1.8],
+    iconAnchor: [size * 0.9, size * 0.9],
   })
 }
 
-export function MapView({ posts, onMarkerClick, selectedPostId }: MapViewProps) {
+export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: MapViewProps) {
   const mapRef = useRef<L.Map | null>(null)
   const markersRef = useRef<L.Marker[]>([])
 
@@ -244,9 +333,9 @@ export function MapView({ posts, onMarkerClick, selectedPostId }: MapViewProps) 
     markersRef.current.forEach(marker => marker.remove())
     markersRef.current = []
 
-    // 投稿を国ごとにグループ化（位置をずらすため）
+    // 投稿を国ごとにグループ化
     const postsByCountry = posts.reduce((acc, post) => {
-      const country = post.study_abroad_destination || '不明'
+      const country = post.study_abroad_destination || post.author?.study_abroad_destination || '不明'
       if (!acc[country]) {
         acc[country] = []
       }
@@ -262,12 +351,15 @@ export function MapView({ posts, onMarkerClick, selectedPostId }: MapViewProps) 
       countryPosts.forEach((post, index) => {
         const coords = getOffsetCoordinates(baseCoords, index, countryPosts.length)
         const isSelected = selectedPostId === post.id
+        
+        // ユーザーデータを取得
+        const userData = userPostData?.find(data => data.displayPost.id === post.id)
 
-        const icon = createMarkerIcon(post, isSelected)
+        const icon = createMarkerIcon(post, isSelected, userData)
         const marker = L.marker([coords.lat, coords.lng], { icon }).addTo(map)
 
         // ポップアップを作成
-        const style = getCategoryStyle(post.category, post.urgency_level)
+        const style = getCategoryStyle(post.category, post.urgency_level, post.is_resolved)
         const avatarUrl = post.author?.icon_url
         const authorName = post.author?.name || '匿名'
         const initials = authorName.charAt(0).toUpperCase()
@@ -317,7 +409,7 @@ export function MapView({ posts, onMarkerClick, selectedPostId }: MapViewProps) 
                 </div>
               </div>
             </div>
-            ${post.category === 'question' && post.urgency_level ? `
+            ${post.category === 'question' && post.urgency_level && !post.is_resolved ? `
               <div style="
                 display: inline-block;
                 padding: 2px 8px;
@@ -354,11 +446,11 @@ export function MapView({ posts, onMarkerClick, selectedPostId }: MapViewProps) 
 
         // ホバー時の効果
         marker.on('mouseover', () => {
-          marker.setIcon(createMarkerIcon(post, true))
+          marker.setIcon(createMarkerIcon(post, true, userData))
         })
 
         marker.on('mouseout', () => {
-          marker.setIcon(createMarkerIcon(post, isSelected))
+          marker.setIcon(createMarkerIcon(post, isSelected, userData))
         })
 
         markersRef.current.push(marker)
@@ -378,7 +470,7 @@ export function MapView({ posts, onMarkerClick, selectedPostId }: MapViewProps) 
       markersRef.current.forEach(marker => marker.remove())
       markersRef.current = []
     }
-  }, [posts, onMarkerClick, selectedPostId])
+  }, [posts, userPostData, onMarkerClick, selectedPostId])
 
   return (
     <>
@@ -409,4 +501,3 @@ export function MapView({ posts, onMarkerClick, selectedPostId }: MapViewProps) 
     </>
   )
 }
-
