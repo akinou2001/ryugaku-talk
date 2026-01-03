@@ -38,8 +38,8 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/ai" className="text-gray-600 hover:text-primary-600 transition-colors">
-                  AI検索
+                <Link href="/map" className="text-gray-600 hover:text-primary-600 transition-colors">
+                  眺める
                 </Link>
               </li>
               <li>

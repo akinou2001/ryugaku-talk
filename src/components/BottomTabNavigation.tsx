@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { Home, Search } from 'lucide-react'
+import { Home, Eye, Users } from 'lucide-react'
 
 export function BottomTabNavigation() {
   const pathname = usePathname()
@@ -15,16 +15,28 @@ export function BottomTabNavigation() {
       path: '/timeline'
     },
     {
-      id: 'ai-search',
-      label: 'AI検索',
-      icon: Search,
-      path: '/ai'
+      id: 'map',
+      label: '眺める',
+      icon: Eye,
+      path: '/map'
+    },
+    {
+      id: 'communities',
+      label: 'コミュニティ',
+      icon: Users,
+      path: '/communities'
     }
   ]
 
   const isActive = (path: string) => {
     if (path === '/timeline') {
       return pathname === '/timeline' || pathname === '/board' || pathname === '/diary'
+    }
+    if (path === '/map') {
+      return pathname === '/map'
+    }
+    if (path === '/communities') {
+      return pathname?.startsWith('/communities')
     }
     return pathname === path
   }
