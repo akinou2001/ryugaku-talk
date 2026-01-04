@@ -2,22 +2,13 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, MessageCircle, X, HelpCircle, BookOpen, MessageSquare, Sparkles } from 'lucide-react'
+import { Plus, MessageCircle, X, HelpCircle, BookOpen, MessageSquare } from 'lucide-react'
 
 export function FloatingActionButton() {
   const [isOpen, setIsOpen] = useState(false)
   const router = useRouter()
 
   const actions = [
-    {
-      id: 'ai',
-      label: 'AIコンシェルジュ',
-      icon: Sparkles,
-      onClick: () => {
-        router.push('/ai')
-        setIsOpen(false)
-      }
-    },
     {
       id: 'question',
       label: '質問する',
@@ -57,21 +48,22 @@ export function FloatingActionButton() {
   ]
 
   return (
-    <div className="fixed bottom-6 right-6 z-50">
+    <div className="fixed bottom-6 right-6 z-[9999]">
       {/* アクションボタン */}
       {isOpen && (
-        <div className="absolute bottom-16 right-0 flex flex-col items-end space-y-3 mb-2">
+        <div className="absolute bottom-16 right-0 flex flex-col items-end space-y-3 mb-2 z-[9999]">
           {actions.map((action, index) => {
             const Icon = action.icon
             return (
               <button
                 key={action.id}
                 onClick={action.onClick}
-                className="flex items-center space-x-2 bg-white rounded-full shadow-lg px-4 py-3 text-gray-700 hover:bg-gray-50 transition-all fab-action-button"
+                className="flex items-center space-x-2 bg-white rounded-full shadow-lg px-3 lg:px-4 py-3 text-gray-700 hover:bg-gray-50 transition-all fab-action-button"
                 style={{ animationDelay: `${index * 50}ms` }}
+                title={action.label}
               >
-                <span className="text-sm font-medium whitespace-nowrap">{action.label}</span>
-                <Icon className="h-5 w-5" />
+                <Icon className="h-5 w-5 flex-shrink-0" />
+                <span className="text-sm font-medium whitespace-nowrap hidden lg:inline">{action.label}</span>
               </button>
             )
           })}

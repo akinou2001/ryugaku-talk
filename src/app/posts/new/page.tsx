@@ -10,6 +10,7 @@ import { requestQuestCompletion } from '@/lib/quest'
 import type { Quest } from '@/lib/supabase'
 import { uploadFile, validateFileType, validateFileSize, FILE_TYPES, isImageFile } from '@/lib/storage'
 import { ArrowLeft, Save, X, Search, ChevronLeft, ChevronRight, Flame, Image as ImageIcon, Upload } from 'lucide-react'
+import { MarkdownEditor } from '@/components/MarkdownEditor'
 
 export default function NewPost() {
   const { user } = useAuth()
@@ -36,9 +37,13 @@ export default function NewPost() {
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set())
   const countryScrollRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const [profileLoaded, setProfileLoaded] = useState(false)
-  const [postImage, setPostImage] = useState<File | null>(null)
-  const [postImagePreview, setPostImagePreview] = useState<string | null>(null)
   const [imageUploading, setImageUploading] = useState(false)
+  // 複数画像（最大4枚）
+  const [postImages, setPostImages] = useState<File[]>([])
+  const [postImagePreviews, setPostImagePreviews] = useState<string[]>([])
+  const [coverImageIndex, setCoverImageIndex] = useState<number | null>(null) // カバー写真のインデックス
+  // アップロード済み画像URL（リアルタイム置き換え用）
+  const [uploadedImageUrls, setUploadedImageUrls] = useState<string[]>([])
   
   // タイムラインのチップで使っているタグ
   const availableTags = [
@@ -224,7 +229,7 @@ export default function NewPost() {
         // 留学先を取得（カンマ区切りの文字列または単一の文字列）
         const destinations = data.study_abroad_destination 
           ? (data.study_abroad_destination.includes(',') 
-              ? data.study_abroad_destination.split(',').map(d => d.trim()) 
+              ? data.study_abroad_destination.split(',').map((d: string) => d.trim()) 
               : [data.study_abroad_destination])
           : []
         
@@ -261,7 +266,7 @@ export default function NewPost() {
           'summer-school': 'サマースクール'
         }
         
-        detailTags.forEach(detail => {
+        detailTags.forEach((detail: string) => {
           if (detailTagMap[detail] && availableTags.includes(detailTagMap[detail])) {
             autoTags.push(detailTagMap[detail])
           }
@@ -355,20 +360,32 @@ export default function NewPost() {
         finalTags.push(`quest:${selectedQuestId}`)
       }
       
-      // 写真をアップロード
-      let imageUrl: string | undefined = undefined
-      if (postImage) {
+      // 写真をアップロード（最大4枚）
+      // 既にアップロード済みの画像URLを使用（リアルタイムアップロード済み）
+      let images: string[] = uploadedImageUrls
+      let coverImageUrl: string | undefined = undefined
+      
+      // まだアップロードされていない画像があればアップロード
+      if (postImages.length > uploadedImageUrls.length) {
         setImageUploading(true)
         try {
-          // ファイルタイプとサイズを検証
-          if (!validateFileType(postImage, FILE_TYPES.POST_IMAGE)) {
-            throw new Error('写真はJPEG、PNG、GIF、WebP形式のみ対応しています')
+          const remainingImages = postImages.slice(uploadedImageUrls.length)
+          const newUploadedImages: string[] = []
+          for (const image of remainingImages) {
+            if (!validateFileType(image, FILE_TYPES.POST_IMAGE)) {
+              throw new Error('写真はJPEG、PNG、GIF、WebP形式のみ対応しています')
+            }
+            if (!validateFileSize(image, 5)) {
+              throw new Error('写真は5MB以下である必要があります')
+            }
+            const url = await uploadFile(image, 'post-images', user.id)
+            newUploadedImages.push(url)
           }
-          if (!validateFileSize(postImage, 5)) { // 5MB制限
-            throw new Error('写真は5MB以下である必要があります')
+          images = [...uploadedImageUrls, ...newUploadedImages]
+          // カバー写真を設定
+          if (coverImageIndex !== null && coverImageIndex < images.length) {
+            coverImageUrl = images[coverImageIndex]
           }
-          
-          imageUrl = await uploadFile(postImage, 'post-images', user.id)
         } catch (error: any) {
           setError(error.message || '写真のアップロードに失敗しました')
           setLoading(false)
@@ -377,12 +394,30 @@ export default function NewPost() {
         } finally {
           setImageUploading(false)
         }
+      } else if (images.length > 0) {
+        // カバー写真を設定
+        if (coverImageIndex !== null && coverImageIndex < images.length) {
+          coverImageUrl = images[coverImageIndex]
+        }
+      }
+
+      // Markdown内の画像プレースホルダーは既にリアルタイムで置き換え済み
+      // 念のため、残っているプレースホルダーがあれば置き換え
+      let finalContent = formData.content
+      if (images.length > 0 && (category === 'diary' || category === 'official')) {
+        images.forEach((url, index) => {
+          const placeholder = `[画像${index + 1}]`
+          const regex = new RegExp(`\\[画像${index + 1}\\]`, 'g')
+          if (finalContent.includes(placeholder)) {
+            finalContent = finalContent.replace(regex, url)
+          }
+        })
       }
 
       // 複数の国を選択している場合は、最初の1つを保存（将来的には配列フィールドを追加）
       const postData: any = {
         title: title,
-        content: formData.content,
+        content: finalContent,
         category: category,
         tags: finalTags,
         study_abroad_destination: formData.study_abroad_destinations.length > 0 ? formData.study_abroad_destinations[0] : null,
@@ -391,7 +426,9 @@ export default function NewPost() {
         official_category: isVerifiedOrganization && formData.is_official ? formData.official_category : null,
         community_id: formData.community_id || null,
         post_type: postType,
-        image_url: imageUrl || null,
+        images: images.length > 0 ? images : null, // 複数画像
+        cover_image_url: coverImageUrl || null, // カバー写真
+        is_pro: false, // すべての投稿で同じ機能のためfalse
         urgency_level: category === 'question' ? formData.urgency_level : null
       }
 
@@ -530,6 +567,7 @@ export default function NewPost() {
             </select>
           </div>
 
+
           {/* 組織アカウント用の公式投稿オプション */}
           {isVerifiedOrganization && formData.category === 'official' && (
             <>
@@ -620,85 +658,190 @@ export default function NewPost() {
           {/* 内容 */}
           <div>
             <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-2">
-              内容 *
+              内容 * {(formData.category === 'diary' || formData.category === 'official') && <span className="text-xs text-gray-500">(Markdown形式対応)</span>}
             </label>
-            <textarea
-              id="content"
-              name="content"
-              value={formData.content}
-              onChange={handleChange}
-              required
-              rows={8}
-              placeholder="投稿の内容を入力してください"
-              className="input-field"
+            {(formData.category === 'diary' || formData.category === 'official') ? (
+              <MarkdownEditor
+                value={formData.content}
+                onChange={(newValue) => setFormData(prev => ({ ...prev, content: newValue }))}
+                placeholder="# タイトル\n\n本文をMarkdown形式で記述できます。\n\n## 見出し\n\n- リスト項目1\n- リスト項目2\n\n**太字**や*斜体*も使えます。"
+                rows={15}
+              onImageSelect={async (file) => {
+                // 画像をアップロードしてMarkdownに挿入
+                if (postImages.length >= 4) {
+                  setError('写真は最大4枚までアップロードできます')
+                  return
+                }
+
+                // バリデーション
+                if (!validateFileType(file, FILE_TYPES.POST_IMAGE)) {
+                  setError('写真はJPEG、PNG、GIF、WebP形式のみ対応しています')
+                  return
+                }
+                if (!validateFileSize(file, 5)) {
+                  setError('写真は5MB以下である必要があります')
+                  return
+                }
+
+                // プレビューを追加
+                const reader = new FileReader()
+                reader.onloadend = () => {
+                  setPostImagePreviews(prev => [...prev, reader.result as string])
+                  // 最初の画像を自動的にカバー写真に設定
+                  if (postImagePreviews.length === 0) {
+                    setCoverImageIndex(0)
+                  }
+                }
+                reader.readAsDataURL(file)
+
+                // 画像を配列に追加
+                const newImages = [...postImages, file]
+                setPostImages(newImages)
+
+                // 画像を即座にアップロードしてURLを取得
+                try {
+                  setImageUploading(true)
+                  const imageIndex = postImages.length
+                  const placeholder = `[画像${imageIndex + 1}]`
+                  const url = await uploadFile(file, 'post-images', user.id)
+                  
+                  // アップロード済みURLを保存
+                  setUploadedImageUrls(prev => [...prev, url])
+                  
+                  // Markdown内のプレースホルダーを実際のURLに置き換え
+                  const updatedContent = formData.content.replace(
+                    new RegExp(`\\[画像${imageIndex + 1}\\]`, 'g'),
+                    url
+                  )
+                  setFormData(prev => ({ ...prev, content: updatedContent }))
+                } catch (error: any) {
+                  setError(error.message || '画像のアップロードに失敗しました')
+                  // エラー時は画像を削除
+                  setPostImages(prev => prev.filter((_, i) => i !== postImages.length))
+                  setPostImagePreviews(prev => prev.slice(0, -1))
+                } finally {
+                  setImageUploading(false)
+                }
+              }}
+              uploadedImages={postImagePreviews}
             />
+            ) : (
+              <textarea
+                id="content"
+                name="content"
+                value={formData.content}
+                onChange={handleChange}
+                required
+                rows={8}
+                placeholder="投稿の内容を入力してください"
+                className="input-field"
+              />
+            )}
           </div>
 
-          {/* 写真アップロード（1枚のみ） */}
+          {/* 写真アップロード（最大4枚） */}
           <div>
-            <label htmlFor="post_image" className="block text-sm font-medium text-gray-700 mb-2">
-              写真（1枚のみ、オプション）
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              写真（最大4枚、オプション）
             </label>
-            <div className="space-y-2">
-              {!postImage && (
-                <label className="flex items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-primary-500 transition-colors">
-                  <div className="flex flex-col items-center space-y-2">
-                    <ImageIcon className="h-8 w-8 text-gray-400" />
-                    <span className="text-sm text-gray-600">写真を選択</span>
-                    <span className="text-xs text-gray-500">JPEG、PNG、GIF、WebP（5MB以下）</span>
-                  </div>
-                  <input
-                    type="file"
-                    id="post_image"
-                    accept="image/jpeg,image/png,image/gif,image/webp"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        if (!validateFileType(file, FILE_TYPES.POST_IMAGE)) {
-                          setError('写真はJPEG、PNG、GIF、WebP形式のみ対応しています')
-                          return
-                        }
-                        if (!validateFileSize(file, 5)) {
-                          setError('写真は5MB以下である必要があります')
-                          return
-                        }
-                        setPostImage(file)
-                        const reader = new FileReader()
-                        reader.onloadend = () => {
-                          setPostImagePreview(reader.result as string)
-                        }
-                        reader.readAsDataURL(file)
-                      }
-                    }}
-                    className="hidden"
-                    disabled={imageUploading}
-                  />
-                </label>
-              )}
-              {postImage && postImagePreview && (
-                <div className="relative">
-                  <img
-                    src={postImagePreview}
-                    alt="プレビュー"
-                    className="w-full h-64 object-cover rounded-lg border border-gray-200"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPostImage(null)
-                      setPostImagePreview(null)
-                    }}
-                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                  <div className="mt-2 text-sm text-gray-600">
-                    {postImage.name} ({(postImage.size / 1024 / 1024).toFixed(2)} MB)
-                  </div>
+              <div className="space-y-4">
+                {/* 画像グリッド */}
+                <div className="grid grid-cols-2 gap-4">
+                  {postImagePreviews.map((preview, index) => (
+                    <div key={index} className="relative group">
+                      <img
+                        src={preview}
+                        alt={`画像 ${index + 1}`}
+                        className="w-full h-48 object-cover rounded-lg border-2 border-gray-200"
+                      />
+                      {coverImageIndex === index && (
+                        <div className="absolute top-2 left-2 bg-green-500 text-white px-2 py-1 rounded text-xs font-semibold">
+                          カバー写真
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all rounded-lg flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCoverImageIndex(index)}
+                          className={`px-3 py-1 rounded text-sm font-semibold transition-all ${
+                            coverImageIndex === index
+                              ? 'bg-green-500 text-white'
+                              : 'bg-white text-gray-700 opacity-0 group-hover:opacity-100'
+                          }`}
+                        >
+                          {coverImageIndex === index ? 'カバー写真' : 'カバーに設定'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newImages = postImages.filter((_, i) => i !== index)
+                            const newPreviews = postImagePreviews.filter((_, i) => i !== index)
+                            setPostImages(newImages)
+                            setPostImagePreviews(newPreviews)
+                            if (coverImageIndex === index) {
+                              setCoverImageIndex(newImages.length > 0 ? 0 : null)
+                            } else if (coverImageIndex !== null && coverImageIndex > index) {
+                              setCoverImageIndex(coverImageIndex - 1)
+                            }
+                          }}
+                          className="px-3 py-1 bg-red-500 text-white rounded text-sm font-semibold opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          削除
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {postImagePreviews.length < 4 && (
+                    <label className="flex items-center justify-center h-48 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-primary-500 transition-colors">
+                      <div className="flex flex-col items-center space-y-2">
+                        <ImageIcon className="h-8 w-8 text-gray-400" />
+                        <span className="text-sm text-gray-600">写真を追加</span>
+                        <span className="text-xs text-gray-500">({postImagePreviews.length}/4)</span>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            if (!validateFileType(file, FILE_TYPES.POST_IMAGE)) {
+                              setError('写真はJPEG、PNG、GIF、WebP形式のみ対応しています')
+                              return
+                            }
+                            if (!validateFileSize(file, 5)) {
+                              setError('写真は5MB以下である必要があります')
+                              return
+                            }
+                            if (postImages.length >= 4) {
+                              setError('写真は最大4枚までアップロードできます')
+                              return
+                            }
+                            const newImages = [...postImages, file]
+                            setPostImages(newImages)
+                            const reader = new FileReader()
+                            reader.onloadend = () => {
+                              setPostImagePreviews(prev => [...prev, reader.result as string])
+                              // 最初の画像を自動的にカバー写真に設定
+                              if (postImagePreviews.length === 0) {
+                                setCoverImageIndex(0)
+                              }
+                            }
+                            reader.readAsDataURL(file)
+                          }
+                        }}
+                        className="hidden"
+                        disabled={imageUploading}
+                      />
+                    </label>
+                  )}
                 </div>
-              )}
+                {postImagePreviews.length > 0 && coverImageIndex === null && (
+                  <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded">
+                    カバー写真を選択してください。投稿一覧で目立つように表示されます。
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
 
           {/* タグ選択 */}
           <div>

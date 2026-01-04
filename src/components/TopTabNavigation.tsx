@@ -1,13 +1,15 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { Home, Eye, Users } from 'lucide-react'
+import { Home, Eye, Users, ShieldCheck } from 'lucide-react'
 import { useAuth } from './Providers'
 
 export function TopTabNavigation() {
   const pathname = usePathname()
   const router = useRouter()
   const { user } = useAuth()
+
+  const isOrganizationVerified = user && user.account_type !== 'individual' && user.verification_status === 'verified'
 
   const tabs = [
     {
@@ -27,18 +29,27 @@ export function TopTabNavigation() {
       label: 'コミュニティ',
       icon: Users,
       path: '/communities'
-    }
+    },
+    ...(isOrganizationVerified ? [{
+      id: 'safety-check',
+      label: '安否確認',
+      icon: ShieldCheck,
+      path: '/safety-check'
+    }] : [])
   ]
 
   const isActive = (path: string) => {
     if (path === '/timeline') {
-      return pathname === '/timeline' || pathname === '/board' || pathname === '/diary'
+      return pathname === '/timeline' || pathname === '/diary'
     }
     if (path === '/map') {
       return pathname === '/map'
     }
     if (path === '/communities') {
       return pathname?.startsWith('/communities')
+    }
+    if (path === '/safety-check') {
+      return pathname?.startsWith('/safety-check')
     }
     return pathname === path
   }
@@ -60,14 +71,15 @@ export function TopTabNavigation() {
               <button
                 key={tab.id}
                 onClick={() => router.push(tab.path)}
-                className={`flex items-center space-x-2 px-6 py-3 border-b-2 transition-colors ${
+                className={`flex items-center space-x-2 px-3 lg:px-6 py-3 border-b-2 transition-colors ${
                   active
                     ? 'border-primary-600 text-primary-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
+                title={tab.label}
               >
-                <Icon className="h-5 w-5" />
-                <span className={`font-medium ${active ? 'text-primary-600' : ''}`}>
+                <Icon className="h-5 w-5 flex-shrink-0" />
+                <span className={`font-medium hidden lg:inline ${active ? 'text-primary-600' : ''}`}>
                   {tab.label}
                 </span>
               </button>

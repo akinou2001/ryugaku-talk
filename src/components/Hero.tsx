@@ -30,10 +30,6 @@ export function Hero() {
               <Sparkles className="h-5 w-5" />
               <span>タイムラインを見る</span>
             </Link>
-            <Link href="/board" className="btn-secondary text-lg px-8 py-3 flex items-center justify-center space-x-2">
-              <MessageSquare className="h-5 w-5" />
-              <span>掲示板を見る</span>
-            </Link>
           </div>
 
           {/* 主要機能のハイライト */}

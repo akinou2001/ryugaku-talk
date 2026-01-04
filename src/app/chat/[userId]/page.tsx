@@ -8,6 +8,7 @@ import type { User, Message } from '@/lib/supabase'
 import { ArrowLeft, Send, User as UserIcon, Clock, Check, CheckCheck, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
+import { notifyDM } from '@/lib/notifications'
 
 export default function ChatDetail() {
   const { user } = useAuth()
@@ -165,6 +166,14 @@ export default function ChatDetail() {
         console.error('Error sending message:', error)
         return
       }
+
+      // 受信者に通知を送信
+      const messagePreview = newMessage.trim().substring(0, 50)
+      await notifyDM(
+        userId,
+        user.name || '匿名',
+        messagePreview
+      )
 
       setMessages((prev) => [...prev, data])
       setNewMessage('')

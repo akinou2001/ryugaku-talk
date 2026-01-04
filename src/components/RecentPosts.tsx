@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
-import { MessageCircle, MessageSquare, Clock, Heart } from 'lucide-react'
+import { MessageCircle, MessageSquare, Clock, Heart, HelpCircle, BookOpen } from 'lucide-react'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
 
@@ -52,12 +52,22 @@ export function RecentPosts() {
     return date.toLocaleDateString('ja-JP')
   }
 
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'question': return HelpCircle
+      case 'diary': return BookOpen
+      case 'chat': return MessageCircle
+      case 'information': return MessageCircle // 後方互換性
+      default: return MessageCircle
+    }
+  }
+
   const getCategoryLabel = (category: string) => {
     switch (category) {
-      case 'question': return '❓ 質問'
-      case 'diary': return '📝 日記'
-      case 'chat': return '💬 つぶやき'
-      case 'information': return '💬 つぶやき' // 後方互換性
+      case 'question': return '質問'
+      case 'diary': return '日記'
+      case 'chat': return 'つぶやき'
+      case 'information': return 'つぶやき' // 後方互換性
       default: return category
     }
   }
@@ -93,7 +103,7 @@ export function RecentPosts() {
     <section className="py-12">
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-3xl font-bold text-gray-900">最近の投稿</h2>
-        <Link href="/board" className="btn-primary">
+        <Link href="/timeline" className="btn-primary">
           すべて見る
         </Link>
       </div>
@@ -119,7 +129,11 @@ export function RecentPosts() {
             return (
             <Link key={post.id} href={`/posts/${post.id}`} className={`card hover:shadow-md transition-shadow ${getOrganizationBorderColor()}`}>
               <div className="flex items-center justify-between mb-3">
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(post.category)}`}>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${getCategoryColor(post.category)}`}>
+                  {(() => {
+                    const Icon = getCategoryIcon(post.category)
+                    return <Icon className="h-3 w-3 text-white" />
+                  })()}
                   {getCategoryLabel(post.category)}
                 </span>
                 <span className="text-sm text-gray-500 flex items-center">

@@ -2,10 +2,12 @@
 
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
-import { MessageCircle, MessageSquare, Clock, Search, MapPin, GraduationCap, Sparkles, Users, BookOpen, HelpCircle, Briefcase, Home, GraduationCap as LearnIcon, ChevronLeft, ChevronRight, Filter, X, Calendar, Award, TrendingUp, Heart, Eye } from 'lucide-react'
+import { MessageCircle, MessageSquare, Clock, Search, MapPin, GraduationCap, Sparkles, Users, BookOpen, HelpCircle, Briefcase, Home, GraduationCap as LearnIcon, ChevronLeft, ChevronRight, Filter, X, Calendar, Award, TrendingUp, Heart, Eye, CheckCircle2 } from 'lucide-react'
 import { AccountBadge } from '@/components/AccountBadge'
+import { StudentStatusBadge } from '@/components/StudentStatusBadge'
 import { useAuth } from '@/components/Providers'
 import { getUserCommunities } from '@/lib/community'
 import { UserAvatar } from '@/components/UserAvatar'
@@ -29,6 +31,7 @@ type CommunityPost = {
     account_type?: string
     verification_status?: string
     organization_name?: string
+    languages?: string[]
   }
   event_date?: string
   location?: string
@@ -50,6 +53,7 @@ type TimelineItem = Post | {
     account_type?: string
     verification_status?: string
     organization_name?: string
+    languages?: string[]
   }
   event_date?: string
   location?: string
@@ -59,6 +63,7 @@ type TimelineItem = Post | {
 
 export default function Timeline() {
   const { user } = useAuth()
+  const router = useRouter()
   const [posts, setPosts] = useState<Post[]>([])
   const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([])
   const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>([])
@@ -310,7 +315,7 @@ export default function Timeline() {
           .select(`
             *,
             community:communities(id, name),
-            author:profiles(id, name, icon_url, account_type, verification_status, organization_name)
+            author:profiles(id, name, icon_url, account_type, verification_status, organization_name, languages)
           `)
           .in('community_id', ids)
           .order('created_at', { ascending: false }),
@@ -319,7 +324,7 @@ export default function Timeline() {
           .select(`
             *,
             community:communities(id, name),
-            creator:profiles(id, name, account_type, verification_status, organization_name)
+            creator:profiles(id, name, account_type, verification_status, organization_name, languages)
           `)
           .in('community_id', ids)
           .order('event_date', { ascending: false }),
@@ -328,7 +333,7 @@ export default function Timeline() {
           .select(`
             *,
             community:communities(id, name),
-            creator:profiles(id, name, account_type, verification_status, organization_name)
+            creator:profiles(id, name, account_type, verification_status, organization_name, languages)
           `)
           .in('community_id', ids)
           .eq('status', 'active')
@@ -431,7 +436,7 @@ export default function Timeline() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, account_type, verification_status, organization_name, study_abroad_destination, icon_url)
+          author:profiles(name, account_type, verification_status, organization_name, study_abroad_destination, icon_url, languages)
         `)
 
       // コミュニティ限定投稿は除外（通常のタイムラインでは表示しない）
@@ -652,12 +657,22 @@ export default function Timeline() {
     return date.toLocaleDateString('ja-JP')
   }
 
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'question': return HelpCircle
+      case 'diary': return BookOpen
+      case 'chat': return MessageCircle
+      case 'information': return MessageCircle // 後方互換性
+      default: return MessageCircle
+    }
+  }
+
   const getCategoryLabel = (category: string) => {
     switch (category) {
-      case 'question': return '❓ 質問'
-      case 'diary': return '📝 日記'
-      case 'chat': return '💬 つぶやき'
-      case 'information': return '💬 つぶやき' // 後方互換性
+      case 'question': return '質問'
+      case 'diary': return '日記'
+      case 'chat': return 'つぶやき'
+      case 'information': return 'つぶやき' // 後方互換性
       case 'official': return '公式'
       default: return category
     }
@@ -1236,7 +1251,7 @@ export default function Timeline() {
                   <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-2xl hover:border-primary-200 transition-all duration-300 transform hover:-translate-y-1">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center space-x-2 flex-wrap gap-2">
-                        <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${
+                        <span className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 ${
                           post.type === 'post' 
                             ? (post as any).category === 'chat' 
                               ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white'
@@ -1248,11 +1263,17 @@ export default function Timeline() {
                             : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white'
                         }`}>
                           {post.type === 'post' 
-                            ? (post as any).category === 'chat' 
-                              ? '💬 つぶやき'
-                              : (post as any).category === 'question'
-                              ? '❓ 質問'
-                              : '📝 日記'
+                            ? (() => {
+                                const category = (post as any).category
+                                const Icon = category === 'chat' ? MessageCircle : category === 'question' ? HelpCircle : BookOpen
+                                const label = category === 'chat' ? 'つぶやき' : category === 'question' ? '質問' : '日記'
+                                return (
+                                  <>
+                                    <Icon className="h-3 w-3 text-white" />
+                                    {label}
+                                  </>
+                                )
+                              })()
                             : post.type === 'event' 
                             ? '📅 イベント' 
                             : '🎯 クエスト'}
@@ -1318,12 +1339,16 @@ export default function Timeline() {
                             <span className="text-sm text-gray-600 font-medium">{post.creator.name}</span>
                             {post.creator.account_type && post.creator.account_type !== 'individual' && (
                               <AccountBadge 
-                                accountType={post.creator.account_type} 
-                                verificationStatus={post.creator.verification_status}
+                                accountType={post.creator.account_type as 'educational' | 'company' | 'government'} 
+                                verificationStatus={(post.creator.verification_status || 'unverified') as 'unverified' | 'pending' | 'verified' | 'rejected'}
                                 organizationName={post.creator.organization_name}
                                 size="sm"
                               />
                             )}
+                            <StudentStatusBadge 
+                              languages={(post.creator as any).languages}
+                              size="sm"
+                            />
                           </>
                         ) : (
                           <span className="text-sm text-gray-600 font-medium">コミュニティ</span>
@@ -1361,9 +1386,45 @@ export default function Timeline() {
               <Link key={post.id} href={`/posts/${post.id}`} className={`block group ${getOrganizationBorderColor()}`} onClick={(e) => e.stopPropagation()}>
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-2xl hover:border-primary-200 transition-all duration-300 transform hover:-translate-y-1">
                   <div className="flex items-center justify-between mb-4">
-                    <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${getCategoryColor(post.category)}`}>
-                      {getCategoryLabel(post.category)}
-                    </span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 ${getCategoryColor(post.category)}`}>
+                        {(() => {
+                          const Icon = getCategoryIcon(post.category)
+                          return <Icon className="h-3 w-3 text-white" />
+                        })()}
+                        {getCategoryLabel(post.category)}
+                      </span>
+                      {/* 解決済みバッジ（質問のみ） */}
+                      {post.category === 'question' && post.is_resolved && (
+                        <span className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 bg-gradient-to-r from-green-500 to-green-600 text-white">
+                          <CheckCircle2 className="h-3 w-3 text-white" />
+                          解決済み
+                        </span>
+                      )}
+                      {/* ロケーションタグ（投稿種別タグの横に表示） */}
+                      {post.study_abroad_destination && (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            const location = post.study_abroad_destination
+                            if (location) {
+                              setSelectedLocations(prev => {
+                                if (prev.includes(location)) {
+                                  return prev.filter(l => l !== location)
+                                } else {
+                                  return [...prev, location]
+                                }
+                              })
+                            }
+                          }}
+                          className="inline-flex items-center space-x-1 px-3 py-1.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-semibold hover:from-primary-100 hover:to-primary-200 transition-all border border-primary-200"
+                        >
+                          <MapPin className="h-3 w-3" />
+                          <span>{post.study_abroad_destination}</span>
+                        </button>
+                      )}
+                    </div>
                     <span className="text-sm text-gray-500 flex items-center font-medium">
                       <Clock className="h-4 w-4 mr-1" />
                       {formatDate(post.created_at)}
@@ -1386,7 +1447,15 @@ export default function Timeline() {
                   )}
 
                   {/* 写真表示 */}
-                  {post.image_url && (
+                  {post.cover_image_url ? (
+                    <div className="mb-4 rounded-xl overflow-hidden border-2 border-primary-200 shadow-lg relative">
+                      <img
+                        src={post.cover_image_url}
+                        alt="カバー写真"
+                        className="w-full h-64 object-cover"
+                      />
+                    </div>
+                  ) : post.image_url ? (
                     <div className="mb-4 rounded-xl overflow-hidden border border-gray-200">
                       <img
                         src={post.image_url}
@@ -1394,33 +1463,7 @@ export default function Timeline() {
                         className="w-full max-w-md h-auto object-cover"
                       />
                     </div>
-                  )}
-
-                  {/* ロケーションタグ */}
-                  {post.study_abroad_destination && (
-                    <div className="mb-4">
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          const location = post.study_abroad_destination
-                          if (location) {
-                            setSelectedLocations(prev => {
-                              if (prev.includes(location)) {
-                                return prev.filter(l => l !== location)
-                              } else {
-                                return [...prev, location]
-                              }
-                            })
-                          }
-                        }}
-                        className="inline-flex items-center space-x-1 px-3 py-1.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-semibold hover:from-primary-100 hover:to-primary-200 transition-all border border-primary-200"
-                      >
-                        <MapPin className="h-3 w-3" />
-                        <span>{post.study_abroad_destination}</span>
-                      </button>
-                    </div>
-                  )}
+                  ) : null}
                   
                   <div className="flex items-center justify-between pt-4 border-t border-gray-100">
                     <div className="flex items-center space-x-4 text-sm text-gray-600 flex-wrap gap-3">
@@ -1431,24 +1474,35 @@ export default function Timeline() {
                           size="sm"
                         />
                         {post.author_id ? (
-                          <Link 
-                            href={`/profile/${post.author_id}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-primary-600 hover:text-primary-800 font-semibold transition-colors"
+                          <span
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              router.push(`/profile/${post.author_id}`)
+                            }}
+                            className="text-primary-600 hover:text-primary-800 font-semibold transition-colors cursor-pointer"
                           >
                             {post.author?.name || '匿名'}
-                          </Link>
+                          </span>
                         ) : (
                           <span className="font-medium">{post.author?.name || '匿名'}</span>
                         )}
                       </div>
                       {post.author && (
-                        <AccountBadge 
-                          accountType={post.author.account_type} 
-                          verificationStatus={post.author.verification_status}
-                          organizationName={post.author.organization_name}
-                          size="sm"
-                        />
+                        <>
+                          {post.author.account_type && post.author.account_type !== 'individual' && (
+                            <AccountBadge 
+                              accountType={post.author.account_type} 
+                              verificationStatus={post.author.verification_status}
+                              organizationName={post.author.organization_name}
+                              size="sm"
+                            />
+                          )}
+                          <StudentStatusBadge 
+                            languages={post.author.languages}
+                            size="sm"
+                          />
+                        </>
                       )}
                       {post.university && (
                         <span className="flex items-center text-gray-600">

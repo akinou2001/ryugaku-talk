@@ -6,7 +6,7 @@ import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import type { User, Post, UserScore } from '@/lib/supabase'
 import { getUserScore } from '@/lib/quest'
-import { User as UserIcon, MapPin, GraduationCap, Calendar, MessageSquare, Edit, Settings, Send, Building2, Heart } from 'lucide-react'
+import { User as UserIcon, MapPin, GraduationCap, Calendar, MessageSquare, Edit, Settings, Send, Building2, Heart, HelpCircle, BookOpen, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
@@ -118,12 +118,22 @@ export default function Profile() {
     })
   }
 
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'question': return HelpCircle
+      case 'diary': return BookOpen
+      case 'chat': return MessageCircle
+      case 'information': return MessageCircle // 後方互換性
+      default: return MessageCircle
+    }
+  }
+
   const getCategoryLabel = (category: string) => {
     switch (category) {
-      case 'question': return '❓ 質問'
-      case 'diary': return '📝 日記'
-      case 'chat': return '💬 つぶやき'
-      case 'information': return '💬 つぶやき' // 後方互換性
+      case 'question': return '質問'
+      case 'diary': return '日記'
+      case 'chat': return 'つぶやき'
+      case 'information': return 'つぶやき' // 後方互換性
       default: return category
     }
   }
@@ -166,8 +176,8 @@ export default function Profile() {
           <div className="bg-white rounded-2xl shadow-lg border border-gray-200 text-center py-16">
             <h1 className="text-3xl font-bold text-gray-900 mb-4">プロフィールが見つかりません</h1>
             <p className="text-gray-600 mb-6 text-lg">{error || 'このユーザーは存在しないか、プロフィールが設定されていません。'}</p>
-            <Link href="/board" className="inline-block px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200">
-              掲示板に戻る
+            <Link href="/timeline" className="inline-block px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200">
+              タイムラインに戻る
             </Link>
           </div>
         </div>
@@ -426,7 +436,11 @@ export default function Profile() {
                 <Link key={post.id} href={`/posts/${post.id}`} className="block group">
                   <div className="bg-gray-50 rounded-xl p-5 border border-gray-200 hover:bg-white hover:shadow-lg hover:border-primary-200 transition-all duration-300 transform hover:-translate-y-1">
                     <div className="flex items-center justify-between mb-3">
-                      <span className={`px-3 py-1.5 rounded-full text-xs font-bold ${getCategoryColor(post.category)}`}>
+                      <span className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 ${getCategoryColor(post.category)}`}>
+                        {(() => {
+                          const Icon = getCategoryIcon(post.category)
+                          return <Icon className="h-3 w-3 text-white" />
+                        })()}
                         {getCategoryLabel(post.category)}
                       </span>
                       <span className="text-sm text-gray-500 font-medium">{formatDate(post.created_at)}</span>

@@ -36,19 +36,19 @@ function getCategoryStyle(category: string, urgencyLevel?: string, isResolved?: 
     question: {
       bgColor: '#3B82F6', // 青
       borderColor: '#2563EB',
-      icon: '❓',
+      icon: '?', // 白色のテキストに変更
       shape: 'circle' as const,
     },
     diary: {
       bgColor: '#10B981', // 緑
       borderColor: '#059669',
-      icon: '📝',
+      icon: 'D', // 白色のテキストに変更
       shape: 'square' as const,
     },
     chat: {
       bgColor: '#8B5CF6', // 紫
       borderColor: '#7C3AED',
-      icon: '💬',
+      icon: 'C', // 白色のテキストに変更
       shape: 'diamond' as const,
     },
   }
@@ -113,11 +113,23 @@ function createMarkerIcon(
   userPostData?: UserPostData
 ) {
   const now = new Date()
-  const isDiaryRecent = post.category === 'diary' && isWithin24Hours(post.created_at)
-  const isQuestionUnresolved = post.category === 'question' && !post.is_resolved
-  const isChat = post.category === 'chat'
+  // postパラメータには既にdisplayPostが渡されているので、そのcategoryを使用
+  const postCategory = post.category || 'question' // フォールバック
   
-  const style = getCategoryStyle(post.category, post.urgency_level, post.is_resolved)
+  // デバッグログ（すべての投稿）
+  console.log('createMarkerIcon:', {
+    postId: post.id,
+    category: post.category,
+    postCategory,
+    hasUserData: !!userPostData,
+    userDataDisplayType: userPostData?.displayType
+  })
+  
+  const isDiaryRecent = postCategory === 'diary' && isWithin24Hours(post.created_at)
+  const isQuestionUnresolved = postCategory === 'question' && !post.is_resolved
+  const isChat = postCategory === 'chat'
+  
+  const style = getCategoryStyle(postCategory, post.urgency_level, post.is_resolved)
   const size = isSelected ? 40 : 32
   const scale = isSelected ? 1.2 : 1
 
@@ -181,7 +193,9 @@ function createMarkerIcon(
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: ${size * 0.2}px;
+        font-size: ${size * 0.18}px;
+        font-weight: bold;
+        color: white;
         box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         z-index: 2;
         transform: rotate(${style.shape === 'diamond' ? '45deg' : '0deg'});
@@ -335,7 +349,7 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
 
     // 投稿を国ごとにグループ化
     const postsByCountry = posts.reduce((acc, post) => {
-      const country = post.study_abroad_destination || post.author?.study_abroad_destination || '不明'
+      const country = post.author?.study_abroad_destination || '不明'
       if (!acc[country]) {
         acc[country] = []
       }
@@ -354,14 +368,27 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
         
         // ユーザーデータを取得
         const userData = userPostData?.find(data => data.displayPost.id === post.id)
+        
+        // userPostDataがある場合はdisplayPostを使用（正しいカテゴリを反映）
+        const displayPost = userData ? userData.displayPost : post
+        
+        // デバッグログ
+        if (displayPost.category === 'chat') {
+          console.log('つぶやきマーカー作成:', {
+            postId: displayPost.id,
+            category: displayPost.category,
+            displayType: userData?.displayType,
+            hasUserData: !!userData
+          })
+        }
 
-        const icon = createMarkerIcon(post, isSelected, userData)
+        const icon = createMarkerIcon(displayPost, isSelected, userData)
         const marker = L.marker([coords.lat, coords.lng], { icon }).addTo(map)
 
-        // ポップアップを作成
-        const style = getCategoryStyle(post.category, post.urgency_level, post.is_resolved)
-        const avatarUrl = post.author?.icon_url
-        const authorName = post.author?.name || '匿名'
+        // ポップアップを作成（displayPostを使用）
+        const style = getCategoryStyle(displayPost.category, displayPost.urgency_level, displayPost.is_resolved)
+        const avatarUrl = displayPost.author?.icon_url
+        const authorName = displayPost.author?.name || '匿名'
         const initials = authorName.charAt(0).toUpperCase()
         
         const popupContent = `
@@ -402,14 +429,14 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
               </div>
               <div style="flex: 1;">
                 <h3 style="font-weight: bold; margin: 0; font-size: 14px; line-height: 1.2;">
-                  ${post.category === 'chat' ? 'つぶやき' : post.title}
+                  ${displayPost.category === 'chat' ? 'つぶやき' : displayPost.title || 'タイトルなし'}
                 </h3>
                 <div style="font-size: 11px; color: #666; margin-top: 2px;">
                   ${authorName}
                 </div>
               </div>
             </div>
-            ${post.category === 'question' && post.urgency_level && !post.is_resolved ? `
+            ${displayPost.category === 'question' && displayPost.urgency_level && !displayPost.is_resolved ? `
               <div style="
                 display: inline-block;
                 padding: 2px 8px;
@@ -420,14 +447,36 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
                 font-weight: 600;
                 margin-bottom: 8px;
               ">
-                ${post.urgency_level === 'urgent' ? '緊急' : post.urgency_level === 'high' ? '高' : post.urgency_level === 'normal' ? '通常' : '低'}
+                ${displayPost.urgency_level === 'urgent' ? '緊急' : displayPost.urgency_level === 'high' ? '高' : displayPost.urgency_level === 'normal' ? '通常' : '低'}
               </div>
             ` : ''}
             <p style="font-size: 12px; color: #666; margin: 8px 0; line-height: 1.4;">
-              ${post.content.substring(0, 100)}${post.content.length > 100 ? '...' : ''}
+              ${displayPost.content.substring(0, 100)}${displayPost.content.length > 100 ? '...' : ''}
             </p>
             <div style="font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 8px; margin-top: 8px;">
               <div>📍 ${country}</div>
+              <a 
+                href="/posts/${displayPost.id}" 
+                style="
+                  display: inline-block;
+                  margin-top: 8px;
+                  padding: 6px 12px;
+                  background: ${style.bgColor};
+                  color: white;
+                  border-radius: 6px;
+                  text-decoration: none;
+                  font-size: 12px;
+                  font-weight: 600;
+                  cursor: pointer;
+                "
+                onclick="
+                  event.preventDefault();
+                  event.stopPropagation();
+                  window.location.href = '/posts/${displayPost.id}';
+                "
+              >
+                詳細を見る →
+              </a>
             </div>
           </div>
         `
@@ -437,33 +486,36 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
           maxWidth: 250,
         })
 
-        // マーカークリック時の処理
-        marker.on('click', () => {
+        // マーカークリック時の処理（displayPostを使用）- 直接遷移
+        marker.on('click', (e) => {
+          console.log('マーカークリックイベント:', displayPost.id)
+          // クリックイベントで直接遷移
           if (onMarkerClick) {
-            onMarkerClick(post)
+            console.log('onMarkerClick呼び出し:', displayPost.id)
+            onMarkerClick(displayPost)
           }
         })
-
-        // ホバー時の効果
+        
+        // マーカーホバー時にポップアップを表示
         marker.on('mouseover', () => {
-          marker.setIcon(createMarkerIcon(post, true, userData))
+          marker.openPopup()
+          // アイコンを大きく表示
+          marker.setIcon(createMarkerIcon(displayPost, true, userData))
         })
-
+        
         marker.on('mouseout', () => {
-          marker.setIcon(createMarkerIcon(post, isSelected, userData))
+          marker.closePopup()
+          // アイコンを元のサイズに戻す
+          marker.setIcon(createMarkerIcon(displayPost, isSelected, userData))
         })
 
         markersRef.current.push(marker)
       })
     })
 
-    // 地図のビューを調整（マーカーがすべて表示されるように）
-    if (markersRef.current.length > 0) {
-      const bounds = L.latLngBounds(
-        markersRef.current.map(m => m.getLatLng())
-      )
-      map.fitBounds(bounds, { padding: [80, 80] })
-    }
+    // 地図のビューは常に世界全体を表示（マーカーに合わせてズームしない）
+    // ユーザーが手動でズーム・パンできるようにする
+    map.setView([defaultMapCenter.lat, defaultMapCenter.lng], defaultZoom)
 
     return () => {
       // クリーンアップ
@@ -483,12 +535,17 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
           overflow: 'hidden',
           border: '2px solid #e5e7eb',
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+          position: 'relative',
+          zIndex: 1,
         }}
       />
       <style jsx global>{`
         .custom-div-icon {
           background: transparent !important;
           border: none !important;
+        }
+        .leaflet-container {
+          z-index: 1 !important;
         }
         .leaflet-popup-content-wrapper {
           border-radius: 12px !important;
