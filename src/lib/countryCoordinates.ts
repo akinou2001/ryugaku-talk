@@ -58,3 +58,4 @@ export const defaultMapCenter = { lat: 20, lng: 0 }
 export const defaultZoom = 2
 
 
+
