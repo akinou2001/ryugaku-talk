@@ -129,3 +129,4 @@ CHECK (account_type IN ('individual', 'educational', 'company', 'government'));
 
 
 
+

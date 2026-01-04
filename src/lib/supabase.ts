@@ -99,7 +99,10 @@ export interface Post {
   community_id?: string // コミュニティ限定投稿用
   post_type?: 'announcement' | 'event' | 'quest' | 'normal' // コミュニティ限定投稿の種別
   attachments?: Array<{ url: string; filename: string; type: string }> // ファイル添付（JSONB形式）
-  image_url?: string // 写真1枚用
+  image_url?: string // 写真1枚用（通常投稿用）
+  images?: string[] // 複数の画像URL（pro投稿用、JSONB形式）
+  cover_image_url?: string // カバー写真のURL（pro投稿用）
+  is_pro?: boolean // pro投稿かどうか（日記のみ）
   urgency_level?: 'low' | 'normal' | 'high' | 'urgent' // 質問の緊急度
   created_at: string
   updated_at: string

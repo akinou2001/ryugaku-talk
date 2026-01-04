@@ -277,14 +277,34 @@ export default function Diary() {
                       <Calendar className="h-4 w-4 text-gray-400" />
                       <span className="text-sm text-gray-500 font-medium">{formatDate(post.created_at)}</span>
                     </div>
-                    <span className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-full text-xs font-bold">
-                      📝 留学日記
+                    <span className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-full text-xs font-bold flex items-center gap-1">
+                      <BookOpen className="h-3 w-3 text-white" />
+                      留学日記
                     </span>
                   </div>
                   
                   <h2 className="text-2xl font-bold text-gray-900 mb-3 group-hover:text-primary-600 transition-colors">
                     {post.title}
                   </h2>
+                  
+                  {/* カバー写真表示 */}
+                  {post.cover_image_url ? (
+                    <div className="mb-4 rounded-xl overflow-hidden border-2 border-primary-200 shadow-lg relative">
+                      <img
+                        src={post.cover_image_url}
+                        alt="カバー写真"
+                        className="w-full h-48 object-cover"
+                      />
+                    </div>
+                  ) : post.image_url ? (
+                    <div className="mb-4 rounded-xl overflow-hidden border border-gray-200">
+                      <img
+                        src={post.image_url}
+                        alt="投稿画像"
+                        className="w-full h-48 object-cover"
+                      />
+                    </div>
+                  ) : null}
                   
                   <p className="text-gray-600 mb-4 line-clamp-1 leading-relaxed">
                     {post.content}

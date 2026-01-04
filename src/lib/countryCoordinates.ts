@@ -55,7 +55,7 @@ export function getCountryCoordinates(countryName: string): { lat: number; lng: 
 
 // デフォルト座標（世界全体を表示）
 export const defaultMapCenter = { lat: 20, lng: 0 }
-export const defaultZoom = 2
+export const defaultZoom = 2 // 世界全体が見える縮尺（1-2が適切）
 
 
 

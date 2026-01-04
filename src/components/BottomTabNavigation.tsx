@@ -1,11 +1,15 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { Home, Eye, Users } from 'lucide-react'
+import { Home, Eye, Users, ShieldCheck } from 'lucide-react'
+import { useAuth } from './Providers'
 
 export function BottomTabNavigation() {
   const pathname = usePathname()
   const router = useRouter()
+  const { user } = useAuth()
+
+  const isOrganizationVerified = user && user.account_type !== 'individual' && user.verification_status === 'verified'
 
   const tabs = [
     {
@@ -25,18 +29,27 @@ export function BottomTabNavigation() {
       label: 'コミュニティ',
       icon: Users,
       path: '/communities'
-    }
+    },
+    ...(isOrganizationVerified ? [{
+      id: 'safety-check',
+      label: '安否確認',
+      icon: ShieldCheck,
+      path: '/safety-check'
+    }] : [])
   ]
 
   const isActive = (path: string) => {
     if (path === '/timeline') {
-      return pathname === '/timeline' || pathname === '/board' || pathname === '/diary'
+      return pathname === '/timeline' || pathname === '/diary'
     }
     if (path === '/map') {
       return pathname === '/map'
     }
     if (path === '/communities') {
       return pathname?.startsWith('/communities')
+    }
+    if (path === '/safety-check') {
+      return pathname?.startsWith('/safety-check')
     }
     return pathname === path
   }
@@ -58,8 +71,8 @@ export function BottomTabNavigation() {
                   : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              <Icon className={`h-6 w-6 mb-1 ${active ? 'text-primary-600' : ''}`} />
-              <span className={`text-xs ${active ? 'font-semibold' : 'font-normal'}`}>
+              <Icon className={`h-6 w-6 mb-1 flex-shrink-0 ${active ? 'text-primary-600' : ''}`} />
+              <span className={`text-xs hidden sm:inline ${active ? 'font-semibold' : 'font-normal'}`}>
                 {tab.label}
               </span>
             </button>

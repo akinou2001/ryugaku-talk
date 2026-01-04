@@ -40,10 +40,17 @@ export function AccountBadge({
   }
 
   const getAccountTypeColor = () => {
+    // 組織アカウントは重厚感のある金色基調に変更
+    // メインカラー: #B39855, グラデーション背景: #FFF9E6
+    // 背景はグラデーション色（メインカラー系統の白色）を使用
+    const bgColor = 'bg-[#FFF9E6]'
+    const textColor = 'text-[#B39855]'
+    const borderColor = 'border-[#B39855]'
+    
     switch (accountType) {
-      case 'educational': return 'bg-blue-100 text-blue-800 border-blue-300'
-      case 'company': return 'bg-green-100 text-green-800 border-green-300'
-      case 'government': return 'bg-purple-100 text-purple-800 border-purple-300'
+      case 'educational': return `${bgColor} ${textColor} ${borderColor}`
+      case 'company': return `${bgColor} ${textColor} ${borderColor}`
+      case 'government': return `${bgColor} ${textColor} ${borderColor}`
       default: return 'bg-gray-100 text-gray-800 border-gray-300'
     }
   }

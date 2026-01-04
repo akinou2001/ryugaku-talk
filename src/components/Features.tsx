@@ -9,7 +9,7 @@ export function Features() {
       description: '質問、留学日記、つぶやきを投稿して交流できます。カテゴリ別に整理され、地域や目的で絞り込み検索も可能です。',
       color: 'text-blue-600',
       bgColor: 'bg-blue-100',
-      link: '/board'
+      link: '/timeline'
     },
     {
       icon: Sparkles,

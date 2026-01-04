@@ -4,18 +4,18 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from './Providers'
-import { Menu, X, User, LogOut, Settings, MessageCircle, Shield, Users, Building2 } from 'lucide-react'
+import { Menu, X, User, LogOut, Settings, MessageCircle, Shield, Users, Building2, Bell, ShieldCheck, Home, Eye } from 'lucide-react'
 import { isAdmin } from '@/lib/admin'
-import { TopTabNavigation } from './TopTabNavigation'
 import { UserAvatar } from './UserAvatar'
+import { usePathname } from 'next/navigation'
 
 export function Header() {
   const { user, signOut } = useAuth()
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
+  const [isMainMenuOpen, setIsMainMenuOpen] = useState(false)
   const [isAdminUser, setIsAdminUser] = useState(false)
-  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false)
   const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
     if (user) {
@@ -40,9 +40,30 @@ export function Header() {
     }
   }
 
+  // メニュー外側をクリックしたときに閉じる
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (isUserMenuOpen && !target.closest('.user-menu-container')) {
+        setIsUserMenuOpen(false)
+      }
+      if (isMainMenuOpen && !target.closest('.main-menu-container')) {
+        setIsMainMenuOpen(false)
+      }
+    }
+
+    if (isUserMenuOpen || isMainMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isUserMenuOpen, isMainMenuOpen])
+
   return (
     <>
-    <header className="bg-white shadow-sm">
+    <header className="bg-white shadow-sm relative z-[100]">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* ロゴ */}
@@ -51,49 +72,171 @@ export function Header() {
             <span className="text-xl font-bold text-gray-900">RyugakuTalk</span>
           </Link>
 
-          {/* デスクトップナビゲーション */}
-          <nav className="hidden md:flex items-center space-x-8">
-            <Link href="/timeline" className="text-gray-700 hover:text-primary-600 transition-colors">
-              タイムライン
-            </Link>
-            <Link href="/map" className="text-gray-700 hover:text-primary-600 transition-colors">
-              眺める
-            </Link>
-            {user && (
-              <Link href="/communities" className="text-gray-700 hover:text-primary-600 transition-colors">
-                コミュニティ
-              </Link>
-            )}
+          {/* ナビゲーションタブ（広い画面で表示） */}
+          <nav className="hidden xl:flex items-center space-x-1 flex-1 justify-center">
+            {(() => {
+              const isOrganizationVerified = user && user.account_type !== 'individual' && user.verification_status === 'verified'
+              
+              const tabs = [
+                {
+                  id: 'timeline',
+                  label: 'タイムライン',
+                  icon: Home,
+                  path: '/timeline'
+                },
+                {
+                  id: 'map',
+                  label: '眺める',
+                  icon: Eye,
+                  path: '/map'
+                },
+                ...(user ? [{
+                  id: 'communities',
+                  label: 'コミュニティ',
+                  icon: Users,
+                  path: '/communities'
+                }] : []),
+                ...(isOrganizationVerified ? [{
+                  id: 'safety-check',
+                  label: '安否確認',
+                  icon: ShieldCheck,
+                  path: '/safety-check'
+                }] : [])
+              ]
+
+              const isActive = (path: string) => {
+                if (path === '/timeline') {
+                  return pathname === '/timeline' || pathname === '/diary'
+                }
+                if (path === '/map') {
+                  return pathname === '/map'
+                }
+                if (path === '/communities') {
+                  return pathname?.startsWith('/communities')
+                }
+                if (path === '/safety-check') {
+                  return pathname?.startsWith('/safety-check')
+                }
+                return pathname === path
+              }
+
+              return tabs.map((tab) => {
+                const Icon = tab.icon
+                const active = isActive(tab.path)
+                
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => router.push(tab.path)}
+                    className={`flex items-center space-x-2 px-3 lg:px-6 py-3 border-b-2 transition-colors ${
+                      active
+                        ? 'border-primary-600 text-primary-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                    title={tab.label}
+                  >
+                    <Icon className="h-5 w-5 flex-shrink-0" />
+                    <span className={`font-medium ${active ? 'text-primary-600' : ''}`}>
+                      {tab.label}
+                    </span>
+                  </button>
+                )
+              })
+            })()}
           </nav>
 
           {/* ユーザーメニュー */}
-          <div className="hidden md:flex items-center space-x-4">
+          <div className="flex items-center space-x-2 md:space-x-4">
             {user ? (
-              <div className="relative">
-                <button
-                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  className="flex items-center space-x-2 text-gray-700 hover:text-primary-600 transition-colors"
+              <>
+                {/* メインメニューボタン（xl未満で表示） */}
+                <div className="relative main-menu-container xl:hidden">
+                  <button
+                    onClick={() => setIsMainMenuOpen(!isMainMenuOpen)}
+                    className="p-2 text-gray-700 hover:text-primary-600 transition-colors"
+                    aria-label="メニュー"
+                  >
+                    {isMainMenuOpen ? (
+                      <X className="h-6 w-6" />
+                    ) : (
+                      <Menu className="h-6 w-6" />
+                    )}
+                  </button>
+                  
+                  {isMainMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-[100]">
+                      <button
+                        onClick={() => {
+                          router.push('/timeline')
+                          setIsMainMenuOpen(false)
+                        }}
+                        className="flex items-center w-full px-4 py-2 text-gray-700 hover:bg-gray-50"
+                      >
+                        <Home className="h-4 w-4 mr-2" />
+                        タイムライン
+                      </button>
+                      <button
+                        onClick={() => {
+                          router.push('/map')
+                          setIsMainMenuOpen(false)
+                        }}
+                        className="flex items-center w-full px-4 py-2 text-gray-700 hover:bg-gray-50"
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        眺める
+                      </button>
+                      {user && (
+                        <button
+                          onClick={() => {
+                            router.push('/communities')
+                            setIsMainMenuOpen(false)
+                          }}
+                          className="flex items-center w-full px-4 py-2 text-gray-700 hover:bg-gray-50"
+                        >
+                          <Users className="h-4 w-4 mr-2" />
+                          コミュニティ
+                        </button>
+                      )}
+                      {user && user.account_type !== 'individual' && user.verification_status === 'verified' && (
+                        <button
+                          onClick={() => {
+                            router.push('/safety-check')
+                            setIsMainMenuOpen(false)
+                          }}
+                          className="flex items-center w-full px-4 py-2 text-gray-700 hover:bg-gray-50"
+                        >
+                          <ShieldCheck className="h-4 w-4 mr-2" />
+                          安否確認
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* 通知アイコン */}
+                <Link
+                  href="/notifications"
+                  className="relative p-2 text-gray-700 hover:text-primary-600 transition-colors"
                 >
-                  <div 
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      if (user.icon_url) {
-                        setIsAvatarModalOpen(true)
-                      }
-                    }}
-                    className="cursor-pointer"
+                  <Bell className="h-6 w-6" />
+                  {/* 未読通知バッジ（将来的に実装） */}
+                  {/* <span className="absolute top-0 right-0 h-4 w-4 bg-red-500 rounded-full text-white text-xs flex items-center justify-center">3</span> */}
+                </Link>
+                <div className="relative user-menu-container">
+                  <button
+                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                    className="flex items-center space-x-2 text-gray-700 hover:text-primary-600 transition-colors p-1"
                   >
                     <UserAvatar 
                       iconUrl={user.icon_url} 
                       name={user.name} 
                       size="sm"
                     />
-                  </div>
-                  <span>{user.name}</span>
-                </button>
+                    <span className="hidden md:inline">{user.name}</span>
+                  </button>
                 
                 {isUserMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-[100]">
                     <Link
                       href={`/profile/${user.id}`}
                       className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50"
@@ -104,14 +247,6 @@ export function Header() {
                     </Link>
                     {user.account_type !== 'individual' && (
                       <>
-                        <Link
-                          href="/communities"
-                          className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50"
-                          onClick={() => setIsUserMenuOpen(false)}
-                        >
-                          <Users className="h-4 w-4 mr-2" />
-                          コミュニティ
-                        </Link>
                         {(user.verification_status === 'unverified' || user.verification_status === 'pending' || user.verification_status === 'rejected') && (
                           <Link
                             href="/verification/request"
@@ -134,6 +269,7 @@ export function Header() {
                         管理者ダッシュボード
                       </Link>
                     )}
+                    <div className="border-t border-gray-200 my-1"></div>
                     <Link
                       href="/settings"
                       className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-50"
@@ -151,7 +287,8 @@ export function Header() {
                     </button>
                   </div>
                 )}
-              </div>
+                </div>
+              </>
             ) : (
               <div className="flex items-center space-x-2">
                 <Link href="/auth/signin" className="btn-secondary">
@@ -163,103 +300,9 @@ export function Header() {
               </div>
             )}
           </div>
-
-          {/* モバイルメニューボタン */}
-          <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden p-2"
-          >
-            {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </button>
         </div>
-
-        {/* モバイルメニュー */}
-        {isMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 py-4">
-            <nav className="flex flex-col space-y-4">
-              <Link href="/timeline" className="text-gray-700 hover:text-primary-600 transition-colors">
-                タイムライン
-              </Link>
-              <Link href="/map" className="text-gray-700 hover:text-primary-600 transition-colors">
-                眺める
-              </Link>
-              {user && (
-                <Link href="/communities" className="text-gray-700 hover:text-primary-600 transition-colors">
-                  コミュニティ
-                </Link>
-              )}
-              {user && user.account_type !== 'individual' && (user.verification_status === 'unverified' || user.verification_status === 'pending' || user.verification_status === 'rejected') && (
-                <Link href="/verification/request" className="text-gray-700 hover:text-primary-600 transition-colors">
-                  {user.verification_status === 'pending' ? '認証申請を確認' : '認証申請'}
-                </Link>
-              )}
-              
-              {user ? (
-                <div className="border-t border-gray-200 pt-4">
-                  <Link href={`/profile/${user.id}`} className="block text-gray-700 hover:text-primary-600 transition-colors mb-2">
-                    プロフィール
-                  </Link>
-                  {user.account_type !== 'individual' && (
-                    <>
-                      {user.verification_status === 'pending' && (
-                        <div className="text-xs text-yellow-600 mb-2">
-                          <Building2 className="h-4 w-4 inline mr-1" />
-                          認証審査中
-                        </div>
-                      )}
-                    </>
-                  )}
-                  {isAdminUser && (
-                    <Link href="/admin" className="block text-gray-700 hover:text-primary-600 transition-colors mb-2">
-                      管理者ダッシュボード
-                    </Link>
-                  )}
-                  <Link href="/settings" className="block text-gray-700 hover:text-primary-600 transition-colors mb-2">
-                    設定
-                  </Link>
-                  <button onClick={handleSignOut} className="text-gray-700 hover:text-primary-600 transition-colors">
-                    ログアウト
-                  </button>
-                </div>
-              ) : (
-                <div className="border-t border-gray-200 pt-4 flex flex-col space-y-2">
-                  <Link href="/auth/signin" className="btn-secondary text-center">
-                    ログイン
-                  </Link>
-                  <Link href="/auth/signup" className="btn-primary text-center">
-                    新規登録
-                  </Link>
-                </div>
-              )}
-            </nav>
-          </div>
-        )}
       </div>
     </header>
-      <TopTabNavigation />
-      
-      {/* アバター拡大表示モーダル */}
-      {isAvatarModalOpen && user?.icon_url && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
-          onClick={() => setIsAvatarModalOpen(false)}
-        >
-          <div className="relative max-w-2xl max-h-[90vh] p-4">
-            <button
-              onClick={() => setIsAvatarModalOpen(false)}
-              className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors z-10"
-            >
-              <X className="h-6 w-6" />
-            </button>
-            <img
-              src={user.icon_url}
-              alt={`${user.name}のアイコン`}
-              className="max-w-full max-h-[90vh] rounded-lg shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        </div>
-      )}
     </>
   )
 }
