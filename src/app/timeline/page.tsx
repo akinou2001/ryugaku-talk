@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
-import { MessageCircle, MessageSquare, Clock, Search, MapPin, GraduationCap, Sparkles, Users, BookOpen, HelpCircle, Briefcase, Home, GraduationCap as LearnIcon, ChevronLeft, ChevronRight, Filter, X, Calendar, Award, TrendingUp, Heart, Eye, CheckCircle2 } from 'lucide-react'
+import { MessageCircle, MessageSquare, Clock, Search, MapPin, GraduationCap, Sparkles, Users, BookOpen, HelpCircle, Briefcase, Home, GraduationCap as LearnIcon, ChevronLeft, ChevronRight, Filter, X, Calendar, Award, TrendingUp, Heart, Eye, CheckCircle2, Loader2 } from 'lucide-react'
 import { AccountBadge } from '@/components/AccountBadge'
 import { StudentStatusBadge } from '@/components/StudentStatusBadge'
 import { useAuth } from '@/components/Providers'
@@ -65,7 +65,6 @@ export default function Timeline() {
   const { user } = useAuth()
   const router = useRouter()
   const [posts, setPosts] = useState<Post[]>([])
-  const [timelineItems, setTimelineItems] = useState<TimelineItem[]>([])
   const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<TimelineView>('latest')
@@ -75,15 +74,17 @@ export default function Timeline() {
   const [selectedLocations, setSelectedLocations] = useState<string[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
-  const [availableLocations, setAvailableLocations] = useState<string[]>([])
   const [userCommunityIds, setUserCommunityIds] = useState<string[]>([])
   const [locationSearch, setLocationSearch] = useState('')
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set())
   const [showFilters, setShowFilters] = useState(false) // 絞り込み表示/非表示
   const [isHeaderVisible, setIsHeaderVisible] = useState(true)
   const [lastScrollY, setLastScrollY] = useState(0)
+  const [isSearching, setIsSearching] = useState(false)
   const headerRef = useRef<HTMLDivElement>(null)
   const locationScrollRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
   
   // スクロール時のヘッダー表示制御
   useEffect(() => {
@@ -114,14 +115,26 @@ export default function Timeline() {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [lastScrollY])
   
-  // デバウンス処理（500ms待機）
+  // 検索語が空になった場合は即座にクリア（Enterキーを押すまで検索しない）
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm)
-    }, 500)
-    
-    return () => clearTimeout(timer)
+    // 検索語が空の場合は結果をクリア
+    if (!searchTerm.trim()) {
+      setDebouncedSearchTerm('')
+      setIsSearching(false)
+    }
   }, [searchTerm])
+
+  // コンポーネントのアンマウント時にクリーンアップ
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [])
   
   // 国を地域で分類
   const countriesByRegion = {
@@ -203,9 +216,6 @@ export default function Timeline() {
     }
   }
   
-  // 人気国（チップで表示）- 地域分類から取得
-  const popularCountries = Object.values(countriesByRegion).flatMap(region => region.countries)
-  
   // 検索結果をフィルタリング（チップで選択されている国も含める）
   const filteredLocations = (() => {
     const allCountries = Object.values(countriesByRegion).flatMap(region => region.countries.map(c => c.name))
@@ -224,6 +234,14 @@ export default function Timeline() {
     if (view === 'community' && user) {
       fetchUserCommunities()
     } else if (view !== 'community') {
+      // fetchPostsは後で定義されるため、ここでは直接呼び出さない
+      // 代わりに、fetchPostsの依存関係が変更されたときに再実行されるようにする
+    }
+  }, [view, user])
+
+  // fetchPostsとfetchLocationsを呼び出すuseEffect
+  useEffect(() => {
+    if (view !== 'community') {
       fetchPosts()
       fetchLocations()
     }
@@ -235,9 +253,11 @@ export default function Timeline() {
     } else if (view === 'community' && userCommunityIds.length === 0 && !loading) {
       setLoading(false)
     }
-  }, [view, userCommunityIds, debouncedSearchTerm])
+  }, [view, userCommunityIds, debouncedSearchTerm, loading])
+
 
   const fetchLocations = async () => {
+    // ロケーション情報の取得（将来的に使用する可能性があるため、関数は残す）
     try {
       const { data, error } = await supabase
         .from('posts')
@@ -248,12 +268,7 @@ export default function Timeline() {
         console.error('Error fetching locations:', error)
         return
       }
-
-      const locations = Array.from(
-        new Set((data || []).map(item => item.study_abroad_destination).filter(Boolean) as string[])
-      ).sort()
-
-      setAvailableLocations(locations)
+      // 現在は使用していないが、将来的に使用する可能性があるため、エラーハンドリングは残す
     } catch (error) {
       console.error('Error fetching locations:', error)
     }
@@ -299,6 +314,15 @@ export default function Timeline() {
   }
 
   const fetchCommunityPosts = async (communityIds?: string[]) => {
+    // 前回のリクエストをキャンセル
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
+    // 新しいAbortControllerを作成
+    abortControllerRef.current = new AbortController()
+    const currentController = abortControllerRef.current
+
     const ids = communityIds || userCommunityIds
     if (ids.length === 0) {
       setCommunityPosts([])
@@ -420,16 +444,35 @@ export default function Timeline() {
         return new Date(dateB).getTime() - new Date(dateA).getTime()
       })
 
+      // リクエストがキャンセルされた場合は何もしない
+      if (currentController.signal.aborted) {
+        return
+      }
+
       setCommunityPosts(allPosts)
-    } catch (error) {
-      console.error('Error fetching community posts:', error)
-      setCommunityPosts([])
+    } catch (error: any) {
+      // AbortErrorは無視
+      if (error?.name !== 'AbortError') {
+        console.error('Error fetching community posts:', error)
+        setCommunityPosts([])
+      }
     } finally {
-      setLoading(false)
+      if (!currentController.signal.aborted) {
+        setLoading(false)
+      }
     }
   }
 
   const fetchPosts = async () => {
+    // 前回のリクエストをキャンセル
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
+    // 新しいAbortControllerを作成
+    abortControllerRef.current = new AbortController()
+    const currentController = abortControllerRef.current
+
     try {
       setLoading(true)
       let query = supabase
@@ -521,6 +564,11 @@ export default function Timeline() {
       }
 
       const { data: postsData, error: postsError } = await query.limit(50)
+
+      // リクエストがキャンセルされた場合は何もしない
+      if (currentController.signal.aborted) {
+        return
+      }
 
       if (postsError) {
         console.error('Error fetching posts:', postsError)
@@ -627,22 +675,41 @@ export default function Timeline() {
       })
 
       setPosts(postsData || [])
-      setTimelineItems(filteredItems)
-    } catch (error) {
-      console.error('Error fetching posts:', error)
+    } catch (error: any) {
+      // AbortErrorは無視
+      if (error?.name !== 'AbortError') {
+        console.error('Error fetching posts:', error)
+      }
     } finally {
-      setLoading(false)
+      if (!currentController.signal.aborted) {
+        setLoading(false)
+      }
     }
   }
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    if (view === 'community') {
-      if (userCommunityIds.length > 0) {
-        fetchCommunityPosts()
+    // Enterキーを押したときだけ検索を実行
+    if (searchTerm.trim()) {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
       }
-    } else {
-      fetchPosts()
+      setIsSearching(true)
+      setDebouncedSearchTerm(searchTerm)
+      // 検索を実行
+      if (view === 'community') {
+        if (userCommunityIds.length > 0) {
+          fetchCommunityPosts().finally(() => {
+            setIsSearching(false)
+          })
+        } else {
+          setIsSearching(false)
+        }
+      } else {
+        fetchPosts().finally(() => {
+          setIsSearching(false)
+        })
+      }
     }
   }
 
@@ -832,7 +899,11 @@ export default function Timeline() {
           <div className="mb-6">
             <form onSubmit={handleSearch} className="relative">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <Search className="h-5 w-5 text-gray-400" />
+                {isSearching ? (
+                  <Loader2 className="h-5 w-5 text-primary-500 animate-spin" />
+                ) : (
+                  <Search className="h-5 w-5 text-gray-400" />
+                )}
               </div>
               <input
                 type="text"
@@ -840,8 +911,45 @@ export default function Timeline() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="投稿を検索..."
                 className="w-full pl-12 pr-4 py-3.5 bg-white border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all shadow-sm hover:shadow-md"
+                autoFocus={false}
               />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    // クリアボタンクリック時は即座にクリア
+                    if (searchTimeoutRef.current) {
+                      clearTimeout(searchTimeoutRef.current)
+                    }
+                    setSearchTerm('')
+                    setDebouncedSearchTerm('')
+                    setIsSearching(false)
+                  }}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center hover:bg-gray-50 rounded-r-xl transition-colors"
+                  aria-label="検索をクリア"
+                >
+                  <X className="h-5 w-5 text-gray-400 hover:text-gray-600 transition-colors" />
+                </button>
+              )}
             </form>
+            {debouncedSearchTerm && (
+              <div className="mt-2 text-sm text-gray-600 flex items-center space-x-2">
+                <Search className="h-4 w-4" />
+                <span>
+                  「{debouncedSearchTerm}」の検索結果
+                  {!loading && !isSearching && view !== 'community' && posts.length > 0 && (
+                    <span className="ml-1 text-primary-600 font-semibold">
+                      ({posts.length}件)
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
+            {searchTerm && !debouncedSearchTerm && (
+              <div className="mt-2 text-sm text-gray-500 flex items-center space-x-2">
+                <span>Enterキーで検索</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1221,23 +1329,57 @@ export default function Timeline() {
         {/* 投稿一覧 */}
         {view === 'community' && (
           <>
+            {debouncedSearchTerm && view === 'community' && (
+              <div className="mb-4 text-sm text-gray-600 flex items-center space-x-2">
+                <Search className="h-4 w-4" />
+                <span>
+                  「{debouncedSearchTerm}」の検索結果
+                  {!loading && communityPosts.length > 0 && (
+                    <span className="ml-1 text-primary-600 font-semibold">
+                      ({communityPosts.length}件)
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
             {!user ? (
               <div className="text-center py-16 bg-white rounded-2xl shadow-lg border border-gray-200">
                 <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-500 text-lg font-medium">ログインが必要です</p>
               </div>
+            ) : loading && isSearching ? (
+              <div className="text-center py-16 bg-white rounded-2xl shadow-lg border border-gray-200">
+                <div className="flex flex-col items-center space-y-3">
+                  <Loader2 className="h-8 w-8 text-primary-500 animate-spin" />
+                  <p className="text-gray-500 text-lg font-medium">検索中...</p>
+                </div>
+              </div>
             ) : communityPosts.length === 0 && !loading ? (
               <div className="text-center py-16 bg-white rounded-2xl shadow-lg border border-gray-200">
-                <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500 mb-2 text-lg font-medium">
-                  {userCommunityIds.length === 0 
-                    ? '所属しているコミュニティがありません' 
-                    : 'コミュニティの投稿が見つかりません'}
-                </p>
-                {userCommunityIds.length === 0 && (
-                  <Link href="/communities" className="inline-block mt-4 text-primary-600 hover:text-primary-800 text-sm font-semibold transition-colors">
-                    コミュニティを探す →
-                  </Link>
+                {debouncedSearchTerm ? (
+                  <>
+                    <Search className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500 mb-2 text-lg font-medium">
+                      「{debouncedSearchTerm}」に一致する投稿が見つかりませんでした
+                    </p>
+                    <p className="text-sm text-gray-400 mt-2">
+                      別のキーワードで検索してみてください
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500 mb-2 text-lg font-medium">
+                      {userCommunityIds.length === 0 
+                        ? '所属しているコミュニティがありません' 
+                        : 'コミュニティの投稿が見つかりません'}
+                    </p>
+                    {userCommunityIds.length === 0 && (
+                      <Link href="/communities" className="inline-block mt-4 text-primary-600 hover:text-primary-800 text-sm font-semibold transition-colors">
+                        コミュニティを探す →
+                      </Link>
+                    )}
+                  </>
                 )}
               </div>
             ) : (
@@ -1364,10 +1506,26 @@ export default function Timeline() {
         )}
         {view !== 'community' && (
           <>
-            {posts.length === 0 ? (
+            {loading && isSearching ? (
+              <div className="text-center py-16 bg-white rounded-2xl shadow-lg border border-gray-200">
+                <div className="flex flex-col items-center space-y-3">
+                  <Loader2 className="h-8 w-8 text-primary-500 animate-spin" />
+                  <p className="text-gray-500 text-lg font-medium">検索中...</p>
+                </div>
+              </div>
+            ) : posts.length === 0 ? (
             <div className="text-center py-16 bg-white rounded-2xl shadow-lg border border-gray-200">
-              <MessageCircle className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 text-lg font-medium">投稿が見つかりません</p>
+              <Search className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg font-medium mb-2">
+                {debouncedSearchTerm 
+                  ? `「${debouncedSearchTerm}」に一致する投稿が見つかりませんでした`
+                  : '投稿が見つかりません'}
+              </p>
+              {debouncedSearchTerm && (
+                <p className="text-sm text-gray-400 mt-2">
+                  別のキーワードで検索してみてください
+                </p>
+              )}
             </div>
           ) : (
             <div className="space-y-6">

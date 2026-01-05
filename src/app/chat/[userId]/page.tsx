@@ -415,14 +415,6 @@ export default function ChatDetail() {
       {/* メッセージ入力エリア */}
       <div className="bg-white border-t border-gray-200 shadow-lg">
         <div className="max-w-3xl mx-auto px-4 py-4">
-          {candleSent && (
-            <div className="mb-2 px-3 py-1.5 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <p className="text-xs text-yellow-800 flex items-center space-x-1">
-                <span>🕯️</span>
-                <span>今週は既にキャンドルを送信済みです（週1回まで）</span>
-              </p>
-            </div>
-          )}
           <form onSubmit={handleSend} className="flex items-end space-x-2">
             <div className="flex-1 relative">
               <input
