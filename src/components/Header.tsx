@@ -8,22 +8,65 @@ import { Menu, X, User, LogOut, Settings, MessageCircle, Shield, Users, Building
 import { isAdmin } from '@/lib/admin'
 import { UserAvatar } from './UserAvatar'
 import { usePathname } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 
 export function Header() {
   const { user, signOut } = useAuth()
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [isMainMenuOpen, setIsMainMenuOpen] = useState(false)
   const [isAdminUser, setIsAdminUser] = useState(false)
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
   const router = useRouter()
   const pathname = usePathname()
 
   useEffect(() => {
     if (user) {
       checkAdminStatus()
+      fetchUnreadNotificationCount()
+      
+      // リアルタイムで通知を監視
+      const channel = supabase
+        .channel('header-notifications')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id.eq.${user.id}`
+          },
+          () => {
+            fetchUnreadNotificationCount()
+          }
+        )
+        .subscribe()
+
+      return () => {
+        supabase.removeChannel(channel)
+      }
     } else {
       setIsAdminUser(false)
+      setUnreadNotificationCount(0)
     }
   }, [user])
+
+  const fetchUnreadNotificationCount = async () => {
+    if (!user) return
+
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_read', false)
+
+      if (error) throw error
+
+      setUnreadNotificationCount(data?.length || 0)
+    } catch (error) {
+      console.error('Error fetching unread notification count:', error)
+    }
+  }
 
   const checkAdminStatus = async () => {
     if (!user) return
@@ -219,8 +262,12 @@ export function Header() {
                   className="relative p-2 text-gray-700 hover:text-primary-600 transition-colors"
                 >
                   <Bell className="h-6 w-6" />
-                  {/* 未読通知バッジ（将来的に実装） */}
-                  {/* <span className="absolute top-0 right-0 h-4 w-4 bg-red-500 rounded-full text-white text-xs flex items-center justify-center">3</span> */}
+                  {/* 未読通知バッジ */}
+                  {unreadNotificationCount > 0 && (
+                    <span className="absolute top-0 right-0 h-5 w-5 bg-red-500 rounded-full text-white text-xs font-bold flex items-center justify-center min-w-[20px] px-1">
+                      {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                    </span>
+                  )}
                 </Link>
                 <div className="relative user-menu-container">
                   <button

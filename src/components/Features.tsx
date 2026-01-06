@@ -22,7 +22,7 @@ export function Features() {
     {
       icon: Users,
       title: 'コミュニティ',
-      description: '個人はギルド、組織は公式コミュニティを作成可能。メンバーと情報を共有し、イベントやクエストを開催できます。',
+      description: '個人はサークル、組織は公式コミュニティを作成可能。メンバーと情報を共有し、イベントやクエストを開催できます。',
       color: 'text-green-600',
       bgColor: 'bg-green-100',
       link: '/communities'

@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS user_scores (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL UNIQUE,
   flame_count INTEGER DEFAULT 0, -- 通常のいいねや質問への回答で獲得
-  candle_count INTEGER DEFAULT 0, -- ギルドのクエストクリアで獲得
+  candle_count INTEGER DEFAULT 0, -- サークルのクエストクリアで獲得
   torch_count INTEGER DEFAULT 0, -- 公式コミュニティのクエストクリアで獲得
   candles_received_count INTEGER DEFAULT 0, -- 週1回のキャンドル送信で受け取った数
   last_candle_sent_at TIMESTAMP WITH TIME ZONE, -- 最後にキャンドルを送った日時

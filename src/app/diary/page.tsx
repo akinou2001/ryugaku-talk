@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
-import { BookOpen, MessageSquare, Clock, Search, Filter, Plus, Calendar, MapPin, GraduationCap, Heart } from 'lucide-react'
+import { BookOpen, MessageSquare, Clock, Search, Filter, Plus, Calendar, MapPin, GraduationCap, Heart, X } from 'lucide-react'
 import { UserAvatar } from '@/components/UserAvatar'
 import { AccountBadge } from '@/components/AccountBadge'
 
@@ -17,13 +17,9 @@ export default function Diary() {
   const [sortBy, setSortBy] = useState('newest')
   const [availableCountries, setAvailableCountries] = useState<string[]>([])
   const [availableUniversities, setAvailableUniversities] = useState<string[]>([])
+  const [showFilters, setShowFilters] = useState(false)
 
-  useEffect(() => {
-    fetchDiaryPosts()
-    fetchFilterOptions()
-  }, [selectedCountry, selectedUniversity, sortBy])
-
-  const fetchFilterOptions = async () => {
+  const fetchFilterOptions = useCallback(async () => {
     try {
       // 留学日記の利用可能な国を取得
       const { data: countryData, error: countryError } = await supabase
@@ -62,10 +58,11 @@ export default function Diary() {
       setAvailableCountries([])
       setAvailableUniversities([])
     }
-  }
+  }, [])
 
-  const fetchDiaryPosts = async () => {
+  const fetchDiaryPosts = useCallback(async () => {
     try {
+      setLoading(true)
       let query = supabase
         .from('posts')
         .select(`
@@ -107,22 +104,39 @@ export default function Diary() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedCountry, selectedUniversity, sortBy, searchTerm])
+
+  // フィルターオプションは初回のみ取得
+  useEffect(() => {
+    fetchFilterOptions()
+  }, [fetchFilterOptions])
+
+  // 投稿データはフィルターや検索条件が変更されたときに取得
+  useEffect(() => {
+    fetchDiaryPosts()
+  }, [fetchDiaryPosts])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    fetchDiaryPosts()
+    // searchTermが変更されるとuseEffectで自動的にfetchDiaryPostsが実行される
   }
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
-    
-    if (diffInHours < 1) return 'たった今'
-    if (diffInHours < 24) return `${diffInHours}時間前`
-    if (diffInHours < 168) return `${Math.floor(diffInHours / 24)}日前`
-    return date.toLocaleDateString('ja-JP')
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return '日付不明'
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return '日付不明'
+      const now = new Date()
+      const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
+      
+      if (diffInHours < 1) return 'たった今'
+      if (diffInHours < 24) return `${diffInHours}時間前`
+      if (diffInHours < 168) return `${Math.floor(diffInHours / 24)}日前`
+      return date.toLocaleDateString('ja-JP')
+    } catch (error) {
+      console.error('Error formatting date:', error)
+      return '日付不明'
+    }
   }
 
   // スケルトンローディング
@@ -175,9 +189,9 @@ export default function Diary() {
           </Link>
         </div>
 
-        {/* 検索・フィルター */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-8">
-          <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4 mb-6">
+        {/* 検索バー */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-4">
+          <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                 <Search className="h-5 w-5 text-gray-400" />
@@ -194,69 +208,125 @@ export default function Diary() {
               検索
             </button>
           </form>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center space-x-2">
-              <MapPin className="h-5 w-5 text-gray-400" />
-              <select
-                value={selectedCountry}
-                onChange={(e) => setSelectedCountry(e.target.value)}
-                className="flex-1 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-              >
-                <option value="all">すべての国</option>
-                {availableCountries.map((country) => (
-                  <option key={country} value={country}>
-                    {country}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <GraduationCap className="h-5 w-5 text-gray-400" />
-              <select
-                value={selectedUniversity}
-                onChange={(e) => setSelectedUniversity(e.target.value)}
-                className="flex-1 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-              >
-                <option value="all">すべての大学</option>
-                {availableUniversities.map((university) => (
-                  <option key={university} value={university}>
-                    {university}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Filter className="h-5 w-5 text-gray-400" />
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="flex-1 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-              >
-                <option value="newest">新しい順</option>
-                <option value="oldest">古い順</option>
-                <option value="popular">人気順</option>
-              </select>
-            </div>
-          </div>
-
-          {/* フィルターリセット */}
-          {(selectedCountry !== 'all' || selectedUniversity !== 'all') && (
-            <div className="mt-4">
-              <button
-                onClick={() => {
-                  setSelectedCountry('all')
-                  setSelectedUniversity('all')
-                }}
-                className="text-sm text-primary-600 hover:text-primary-800 font-semibold transition-colors"
-              >
-                フィルターをリセット
-              </button>
-            </div>
-          )}
         </div>
+
+        {/* フィルター表示/非表示ボタン */}
+        <div className="mb-4">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="flex items-center space-x-2 px-4 py-2.5 bg-white rounded-xl text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-all shadow-sm border border-gray-200"
+          >
+            {showFilters ? (
+              <>
+                <X className="h-4 w-4" />
+                <span>フィルターを隠す</span>
+              </>
+            ) : (
+              <>
+                <Filter className="h-4 w-4" />
+                <span>フィルターを表示</span>
+                {(selectedCountry !== 'all' || selectedUniversity !== 'all' || sortBy !== 'newest') && (
+                  <span className="ml-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white text-xs px-2.5 py-1 rounded-full font-semibold">
+                    {[
+                      selectedCountry !== 'all' ? 1 : 0,
+                      selectedUniversity !== 'all' ? 1 : 0,
+                      sortBy !== 'newest' ? 1 : 0
+                    ].reduce((a, b) => a + b, 0)}
+                  </span>
+                )}
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* 絞り込みフィルター */}
+        {showFilters && (
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex items-center space-x-2">
+                <MapPin className="h-5 w-5 text-gray-400" />
+                <select
+                  value={selectedCountry}
+                  onChange={(e) => setSelectedCountry(e.target.value)}
+                  className="flex-1 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                >
+                  <option value="all">すべての国</option>
+                  {availableCountries.map((country) => (
+                    <option key={country} value={country}>
+                      {country}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <GraduationCap className="h-5 w-5 text-gray-400" />
+                <select
+                  value={selectedUniversity}
+                  onChange={(e) => setSelectedUniversity(e.target.value)}
+                  className="flex-1 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                >
+                  <option value="all">すべての大学</option>
+                  {availableUniversities.map((university) => (
+                    <option key={university} value={university}>
+                      {university}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Filter className="h-5 w-5 text-gray-400" />
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="flex-1 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                >
+                  <option value="newest">新しい順</option>
+                  <option value="oldest">古い順</option>
+                  <option value="popular">人気順</option>
+                </select>
+              </div>
+            </div>
+
+            {/* フィルターリセット */}
+            {(selectedCountry !== 'all' || selectedUniversity !== 'all' || sortBy !== 'newest') && (
+              <div className="mt-4">
+                <button
+                  onClick={() => {
+                    setSelectedCountry('all')
+                    setSelectedUniversity('all')
+                    setSortBy('newest')
+                  }}
+                  className="text-sm text-primary-600 hover:text-primary-800 font-semibold transition-colors"
+                >
+                  フィルターをリセット
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* フィルターが非表示でも、フィルターが適用されている場合は簡易表示 */}
+        {!showFilters && (selectedCountry !== 'all' || selectedUniversity !== 'all' || sortBy !== 'newest') && (
+          <div className="mb-6 flex flex-wrap gap-2">
+            {selectedCountry !== 'all' && (
+              <span className="px-4 py-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300">
+                国: {selectedCountry}
+              </span>
+            )}
+            {selectedUniversity !== 'all' && (
+              <span className="px-4 py-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300">
+                大学: {selectedUniversity}
+              </span>
+            )}
+            {sortBy !== 'newest' && (
+              <span className="px-4 py-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300">
+                並び順: {sortBy === 'oldest' ? '古い順' : '人気順'}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* 日記一覧 */}
         {posts.length === 0 ? (
@@ -284,7 +354,7 @@ export default function Diary() {
                   </div>
                   
                   <h2 className="text-2xl font-bold text-gray-900 mb-3 group-hover:text-primary-600 transition-colors">
-                    {post.title}
+                    {post.title || 'タイトルなし'}
                   </h2>
                   
                   {/* カバー写真表示 */}
@@ -294,6 +364,9 @@ export default function Diary() {
                         src={post.cover_image_url}
                         alt="カバー写真"
                         className="w-full h-48 object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none'
+                        }}
                       />
                     </div>
                   ) : post.image_url ? (
@@ -302,13 +375,18 @@ export default function Diary() {
                         src={post.image_url}
                         alt="投稿画像"
                         className="w-full h-48 object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none'
+                        }}
                       />
                     </div>
                   ) : null}
                   
-                  <p className="text-gray-600 mb-4 line-clamp-1 leading-relaxed">
-                    {post.content}
-                  </p>
+                  {post.content && (
+                    <p className="text-gray-600 mb-4 line-clamp-1 leading-relaxed">
+                      {post.content}
+                    </p>
+                  )}
                   
                   {/* タグ */}
                   {post.tags && post.tags.length > 0 && (
@@ -358,11 +436,11 @@ export default function Diary() {
                     <div className="flex items-center space-x-5 text-sm text-gray-600">
                       <span className="flex items-center font-semibold">
                         <Heart className="h-5 w-5 mr-1.5 text-red-500" />
-                        {post.likes_count}
+                        {post.likes_count || 0}
                       </span>
                       <span className="flex items-center font-semibold">
                         <MessageSquare className="h-5 w-5 mr-1.5 text-primary-500" />
-                        {post.comments_count}
+                        {post.comments_count || 0}
                       </span>
                     </div>
                   </div>

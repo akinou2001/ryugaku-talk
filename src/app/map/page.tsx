@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '@/lib/supabase'
 import type { Post, User } from '@/lib/supabase'
-import { MapPin, MessageSquare, BookOpen, HelpCircle, Clock, X, Users, MessageCircle } from 'lucide-react'
+import { MapPin, MessageSquare, BookOpen, HelpCircle, Clock, X, Users, MessageCircle, Filter, Search } from 'lucide-react'
 import { UserAvatar } from '@/components/UserAvatar'
 import Link from 'next/link'
 import { useAuth } from '@/components/Providers'
@@ -12,6 +12,16 @@ import { useRouter } from 'next/navigation'
 
 // 地図コンポーネントを動的インポート（SSRを無効化）
 const MapView = dynamic(() => import('@/components/MapView').then(mod => ({ default: mod.MapView })), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-[600px]">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+    </div>
+  )
+})
+
+// 3D地球コンポーネントを動的インポート（SSRを無効化）
+const Globe3D = dynamic(() => import('@/components/Globe3D').then(mod => ({ default: mod.Globe3D })), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center h-[600px]">
@@ -38,6 +48,9 @@ export default function MapPage() {
   const [selectedCountry, setSelectedCountry] = useState<string>('all')
   const [selectedCommunity, setSelectedCommunity] = useState<string>('all')
   const [selectedUser, setSelectedUser] = useState<UserPostData | null>(null)
+  const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D')
+  const [showFilters, setShowFilters] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
 
   useEffect(() => {
     fetchPosts()
@@ -274,8 +287,28 @@ export default function MapPage() {
       )
     }
 
+    // 検索フィルター
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase()
+      filtered = filtered.filter(data => {
+        const post = data.displayPost
+        const user = data.user
+        const title = post.title || ''
+        const content = post.content || ''
+        const userName = user.name || ''
+        const country = user.study_abroad_destination || ''
+        
+        return (
+          title.toLowerCase().includes(searchLower) ||
+          content.toLowerCase().includes(searchLower) ||
+          userName.toLowerCase().includes(searchLower) ||
+          country.toLowerCase().includes(searchLower)
+        )
+      })
+    }
+
     return filtered
-  }, [userPostData, selectedCategory, selectedUrgency, selectedCountry])
+  }, [userPostData, selectedCategory, selectedUrgency, selectedCountry, searchTerm])
 
   // 表示用の投稿リスト（MapViewに渡す）
   const displayPosts = useMemo(() => {
@@ -334,86 +367,207 @@ export default function MapPage() {
       <div className="container mx-auto px-4 py-6">
         {/* ヘッダー */}
         <div className="mb-6">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
-            眺める
-          </h1>
-          <p className="text-gray-600">世界で挑戦している留学生の「今」を眺めて、感じて、助け合うための地図</p>
-        </div>
-
-        {/* フィルター */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* カテゴリフィルター */}
+          <div className="flex items-center justify-between mb-2">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                投稿タイプ
-              </label>
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value as any)}
-                className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                <option value="all">すべて</option>
-                <option value="question">質問</option>
-                <option value="diary">日記</option>
-                <option value="chat">つぶやき</option>
-              </select>
+              <h1 className="text-4xl font-bold text-gray-900 mb-2 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
+                眺める
+              </h1>
+              <p className="text-gray-600">世界で挑戦している留学生の「今」をチェックしよう</p>
             </div>
-
-            {/* 緊急度フィルター（質問の場合のみ表示） */}
-            {(selectedCategory === 'question' || selectedCategory === 'all') && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  緊急度
-                </label>
-                <select
-                  value={selectedUrgency}
-                  onChange={(e) => setSelectedUrgency(e.target.value as any)}
-                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="all">すべて</option>
-                  <option value="urgent">緊急</option>
-                  <option value="high">高</option>
-                  <option value="normal">通常</option>
-                  <option value="low">低</option>
-                </select>
-              </div>
-            )}
-
-            {/* 国フィルター */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                国・地域
-              </label>
-              <select
-                value={selectedCountry}
-                onChange={(e) => setSelectedCountry(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            {/* 2D/3D切り替えボタン */}
+            <div className="flex items-center space-x-2 bg-white rounded-xl p-1 shadow-md border border-gray-200">
+              <button
+                onClick={() => setViewMode('2D')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  viewMode === '2D'
+                    ? 'bg-primary-600 text-white'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
               >
-                <option value="all">すべて</option>
-                {countries.map(country => (
-                  <option key={country} value={country}>{country}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* 所属コミュニティフィルター（将来実装） */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                所属コミュニティ
-              </label>
-              <select
-                value={selectedCommunity}
-                onChange={(e) => setSelectedCommunity(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                disabled
+                2D
+              </button>
+              <button
+                onClick={() => setViewMode('3D')}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                  viewMode === '3D'
+                    ? 'bg-primary-600 text-white'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
               >
-                <option value="all">すべて</option>
-                <option value="coming-soon">準備中</option>
-              </select>
+                3D
+              </button>
             </div>
           </div>
         </div>
+
+        {/* 検索バー */}
+        <div className="mb-3">
+          <form onSubmit={(e) => e.preventDefault()} className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="投稿、ユーザー名、国で検索..."
+              className="w-full pl-10 pr-4 py-2.5 bg-white border-2 border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all shadow-sm hover:shadow-md"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute inset-y-0 right-0 pr-4 flex items-center hover:bg-gray-50 rounded-r-xl transition-colors"
+                aria-label="検索をクリア"
+              >
+                <X className="h-4 w-4 text-gray-400 hover:text-gray-600 transition-colors" />
+              </button>
+            )}
+          </form>
+        </div>
+
+        {/* フィルター表示/非表示ボタン */}
+        <div className="mb-4">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="flex items-center space-x-2 px-4 py-2.5 bg-white rounded-xl text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-all shadow-sm border border-gray-200"
+          >
+            {showFilters ? (
+              <>
+                <X className="h-4 w-4" />
+                <span>フィルターを隠す</span>
+              </>
+            ) : (
+              <>
+                <Filter className="h-4 w-4" />
+                <span>フィルターを表示</span>
+                {(selectedCategory !== 'all' || selectedUrgency !== 'all' || selectedCountry !== 'all') && (
+                  <span className="ml-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white text-xs px-2.5 py-1 rounded-full font-semibold">
+                    {[
+                      selectedCategory !== 'all' ? 1 : 0,
+                      selectedUrgency !== 'all' ? 1 : 0,
+                      selectedCountry !== 'all' ? 1 : 0
+                    ].reduce((a, b) => a + b, 0)}
+                  </span>
+                )}
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* 絞り込みフィルター */}
+        {showFilters && (
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* カテゴリフィルター */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  投稿タイプ
+                </label>
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value as any)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                >
+                  <option value="all">すべて</option>
+                  <option value="question">質問</option>
+                  <option value="diary">日記</option>
+                  <option value="chat">つぶやき</option>
+                </select>
+              </div>
+
+              {/* 緊急度フィルター（質問の場合のみ表示） */}
+              {(selectedCategory === 'question' || selectedCategory === 'all') && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    緊急度
+                  </label>
+                  <select
+                    value={selectedUrgency}
+                    onChange={(e) => setSelectedUrgency(e.target.value as any)}
+                    className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  >
+                    <option value="all">すべて</option>
+                    <option value="urgent">緊急</option>
+                    <option value="high">高</option>
+                    <option value="normal">通常</option>
+                    <option value="low">低</option>
+                  </select>
+                </div>
+              )}
+
+              {/* 国フィルター */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  国・地域
+                </label>
+                <select
+                  value={selectedCountry}
+                  onChange={(e) => setSelectedCountry(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                >
+                  <option value="all">すべて</option>
+                  {countries.map(country => (
+                    <option key={country} value={country}>{country}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 所属コミュニティフィルター（将来実装） */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  所属コミュニティ
+                </label>
+                <select
+                  value={selectedCommunity}
+                  onChange={(e) => setSelectedCommunity(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  disabled
+                >
+                  <option value="all">すべて</option>
+                  <option value="coming-soon">準備中</option>
+                </select>
+              </div>
+            </div>
+
+            {/* フィルターリセット */}
+            {(selectedCategory !== 'all' || selectedUrgency !== 'all' || selectedCountry !== 'all') && (
+              <div className="mt-4">
+                <button
+                  onClick={() => {
+                    setSelectedCategory('all')
+                    setSelectedUrgency('all')
+                    setSelectedCountry('all')
+                  }}
+                  className="text-sm text-primary-600 hover:text-primary-800 font-semibold transition-colors"
+                >
+                  フィルターをリセット
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* フィルターが非表示でも、フィルターが適用されている場合は簡易表示 */}
+        {!showFilters && (selectedCategory !== 'all' || selectedUrgency !== 'all' || selectedCountry !== 'all') && (
+          <div className="mb-6 flex flex-wrap gap-2">
+            {selectedCategory !== 'all' && (
+              <span className="px-4 py-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300">
+                投稿タイプ: {selectedCategory === 'question' ? '質問' : selectedCategory === 'diary' ? '日記' : 'つぶやき'}
+              </span>
+            )}
+            {selectedUrgency !== 'all' && (
+              <span className="px-4 py-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300">
+                緊急度: {selectedUrgency === 'urgent' ? '緊急' : selectedUrgency === 'high' ? '高' : selectedUrgency === 'normal' ? '通常' : '低'}
+              </span>
+            )}
+            {selectedCountry !== 'all' && (
+              <span className="px-4 py-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300">
+                国: {selectedCountry}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* 地図表示 */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6">
@@ -426,12 +580,21 @@ export default function MapPage() {
                 </div>
               </div>
             )}
-            <MapView 
-              posts={displayPosts}
-              userPostData={filteredUserData}
-              onMarkerClick={handleMarkerClick}
-              selectedPostId={selectedUser?.displayPost.id}
-            />
+            {viewMode === '2D' ? (
+              <MapView 
+                posts={displayPosts}
+                userPostData={filteredUserData}
+                onMarkerClick={handleMarkerClick}
+                selectedPostId={selectedUser?.displayPost.id}
+              />
+            ) : (
+              <Globe3D 
+                posts={displayPosts}
+                userPostData={filteredUserData}
+                onMarkerClick={handleMarkerClick}
+                selectedPostId={selectedUser?.displayPost.id}
+              />
+            )}
             {!loading && displayPosts.length === 0 && (
               <div className="absolute inset-0 bg-white bg-opacity-90 z-10 flex items-center justify-center rounded-xl">
                 <div className="text-center">

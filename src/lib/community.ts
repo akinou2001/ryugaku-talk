@@ -3,9 +3,17 @@ import type { Community, CommunityMember, MemberStatus, MemberRole } from './sup
 
 /**
  * コミュニティを検索
+ * 通常の検索では公開コミュニティのみを返す
+ * コミュニティID（UUID）で検索した場合は非公開も含める
  */
-export async function searchCommunities(query?: string, visibility?: 'public' | 'private' | 'all') {
+export async function searchCommunities(
+  query?: string, 
+  communityType?: 'guild' | 'official' | 'all'
+) {
   const { data: { user } } = await supabase.auth.getUser()
+  
+  // UUID形式かどうかをチェック（コミュニティID検索）
+  const isUuidSearch = query && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(query.trim())
   
   let supabaseQuery = supabase
     .from('communities')
@@ -16,11 +24,23 @@ export async function searchCommunities(query?: string, visibility?: 'public' | 
     .order('created_at', { ascending: false })
 
   if (query) {
-    supabaseQuery = supabaseQuery.or(`name.ilike.%${query}%,description.ilike.%${query}%`)
+    if (isUuidSearch) {
+      // UUID検索の場合はIDで直接検索（非公開も含む）
+      supabaseQuery = supabaseQuery.eq('id', query.trim())
+    } else {
+      // 通常の検索は名前と説明で検索し、公開コミュニティのみ
+      supabaseQuery = supabaseQuery
+        .or(`name.ilike.%${query}%,description.ilike.%${query}%`)
+        .eq('visibility', 'public')
+    }
+  } else {
+    // クエリがない場合は公開コミュニティのみ
+    supabaseQuery = supabaseQuery.eq('visibility', 'public')
   }
 
-  if (visibility && visibility !== 'all') {
-    supabaseQuery = supabaseQuery.eq('visibility', visibility)
+  // コミュニティ種別でフィルタリング
+  if (communityType && communityType !== 'all') {
+    supabaseQuery = supabaseQuery.eq('community_type', communityType)
   }
 
   const { data, error } = await supabaseQuery
@@ -144,7 +164,7 @@ export async function getCommunityById(communityId: string, userId?: string) {
 }
 
 /**
- * コミュニティを作成（個人アカウントはギルド、組織アカウントは公式コミュニティ）
+ * コミュニティを作成（個人アカウントはサークル、組織アカウントは公式コミュニティ）
  */
 export async function createCommunity(
   name: string,
@@ -170,9 +190,9 @@ export async function createCommunity(
     throw new Error('プロフィールが見つかりません')
   }
 
-  // 個人アカウントはギルドのみ、組織アカウントは公式コミュニティのみ
+  // 個人アカウントはサークルのみ、組織アカウントは公式コミュニティのみ
   if (communityType === 'guild' && profile.account_type !== 'individual') {
-    throw new Error('ギルドは個人アカウントのみ作成できます')
+    throw new Error('サークルは個人アカウントのみ作成できます')
   }
   if (communityType === 'official' && (profile.account_type === 'individual' || profile.verification_status !== 'verified')) {
     throw new Error('公式コミュニティは認証済みの組織アカウントのみ作成できます')
@@ -187,7 +207,7 @@ export async function createCommunity(
       icon_url: iconUrl,
       owner_id: user.id,
       visibility,
-      community_type: communityType // ギルド or 公式コミュニティ
+      community_type: communityType // サークル or 公式コミュニティ
     })
     .select(`
       *,

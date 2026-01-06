@@ -154,7 +154,7 @@ export interface Community {
   owner?: User
   visibility: CommunityVisibility
   is_public?: boolean // 誰でも参加可能か、承認制か
-  community_type?: 'guild' | 'official' // ギルド or 公式コミュニティ
+  community_type?: 'guild' | 'official' // サークル or 公式コミュニティ
   created_at: string
   updated_at: string
   // 集計情報（クエリ時に追加）
@@ -323,5 +323,22 @@ export interface CandleSend {
   message?: Message
   sent_at: string
   week_start: string // 週の開始日（月曜日）
+}
+
+// 通報機能の型定義
+export type ReportStatus = 'pending' | 'reviewed' | 'resolved'
+
+export interface Report {
+  id: string
+  reporter_id: string
+  reporter?: User
+  post_id?: string
+  post?: Post
+  comment_id?: string
+  comment?: Comment
+  reason: string
+  description?: string
+  status: ReportStatus
+  created_at: string
 }
 

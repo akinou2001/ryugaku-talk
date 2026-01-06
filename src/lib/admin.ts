@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { User, OrganizationVerificationRequest } from './supabase'
+import type { User, OrganizationVerificationRequest, Report, ReportStatus } from './supabase'
 
 /**
  * 管理者権限をチェック
@@ -469,6 +469,116 @@ export async function getAdminStats() {
     } catch (fallbackError: any) {
       return { data: null, error: fallbackError }
     }
+  }
+}
+
+/**
+ * 通報一覧を取得
+ */
+export async function getReports(status?: ReportStatus) {
+  try {
+    let query = supabase
+      .from('reports')
+      .select(`
+        *,
+        reporter:profiles(id, name, email),
+        post:posts(id, title, content, author_id),
+        comment:comments(id, content, author_id)
+      `)
+      .order('created_at', { ascending: false })
+
+    if (status) {
+      query = query.eq('status', status)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      throw error
+    }
+
+    return { data: data || [], error: null }
+  } catch (error: any) {
+    return { data: null, error: error.message || '通報の取得に失敗しました' }
+  }
+}
+
+/**
+ * 通報のステータスを更新
+ */
+export async function updateReportStatus(
+  reportId: string,
+  status: ReportStatus,
+  adminId: string
+) {
+  try {
+    const { error } = await supabase
+      .from('reports')
+      .update({
+        status,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', reportId)
+
+    if (error) {
+      throw error
+    }
+
+    return { success: true, error: null }
+  } catch (error: any) {
+    return { success: false, error: error.message || '通報ステータスの更新に失敗しました' }
+  }
+}
+
+/**
+ * 通報された投稿を削除
+ */
+export async function deleteReportedPost(postId: string) {
+  try {
+    const { error } = await supabase
+      .from('posts')
+      .delete()
+      .eq('id', postId)
+
+    if (error) {
+      throw error
+    }
+
+    // 関連する通報を解決済みに更新
+    await supabase
+      .from('reports')
+      .update({ status: 'resolved' })
+      .eq('post_id', postId)
+
+    return { success: true, error: null }
+  } catch (error: any) {
+    return { success: false, error: error.message || '投稿の削除に失敗しました' }
+  }
+}
+
+/**
+ * 通報されたコメントを削除
+ */
+export async function deleteReportedComment(commentId: string) {
+  try {
+    const { error } = await supabase
+      .from('comments')
+      .delete()
+      .eq('id', commentId)
+
+    if (error) {
+      throw error
+    }
+
+    // 関連する通報を解決済みに更新
+    await supabase
+      .from('reports')
+      .update({ status: 'resolved' })
+      .eq('comment_id', commentId)
+
+    return { success: true, error: null }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'コメントの削除に失敗しました' }
   }
 }
 

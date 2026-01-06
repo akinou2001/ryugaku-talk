@@ -10,6 +10,7 @@ import { User as UserIcon, MapPin, GraduationCap, Calendar, MessageSquare, Edit,
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
+import { StudentStatusBadge } from '@/components/StudentStatusBadge'
 
 export default function Profile() {
   const { user: currentUser } = useAuth()
@@ -362,13 +363,26 @@ export default function Profile() {
             </div>
           )}
 
+          {/* 留学ステータス */}
+          {profile.languages && profile.languages.some((lang: string) => lang.startsWith('status:')) && (
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">留学ステータス</h3>
+              <div className="flex flex-wrap gap-2">
+                <StudentStatusBadge 
+                  languages={profile.languages}
+                  size="md"
+                />
+              </div>
+            </div>
+          )}
+
           {/* 使用言語 */}
-          {profile.languages && profile.languages.length > 0 && (
+          {profile.languages && profile.languages.some((language: string) => !language.startsWith('purpose:') && !language.startsWith('detail:') && !language.startsWith('status:')) && (
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">使用言語</h3>
               <div className="flex flex-wrap gap-2">
                 {profile.languages
-                  .filter((language: string) => !language.startsWith('purpose:') && !language.startsWith('detail:'))
+                  .filter((language: string) => !language.startsWith('purpose:') && !language.startsWith('detail:') && !language.startsWith('status:'))
                   .map((language, index) => (
                     <span
                       key={index}

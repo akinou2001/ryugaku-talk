@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { Post, User } from '@/lib/supabase'
 import { getCountryCoordinates, defaultMapCenter, defaultZoom } from '@/lib/countryCoordinates'
+import { HelpCircle, X, Move, ZoomIn, MousePointer2, Info } from 'lucide-react'
 
 // Leafletのデフォルトアイコンの問題を修正
 if (typeof window !== 'undefined') {
@@ -139,8 +140,16 @@ function createMarkerIcon(
   const defaultBgColor = style.bgColor
   const initials = authorName.charAt(0).toUpperCase()
 
-  // つぶやきの内容（先頭10文字）
-  const chatPreview = isChat ? post.content.substring(0, 10) + (post.content.length > 10 ? '...' : '') : ''
+  // 吹き出しに表示するテキストを決定
+  const getBubbleText = () => {
+    if (isChat) {
+      return post.content.substring(0, 10) + (post.content.length > 10 ? '...' : '')
+    } else if (postCategory === 'question' || postCategory === 'diary') {
+      return (post.title?.substring(0, 10) + (post.title && post.title.length > 10 ? '...' : '')) || ''
+    }
+    return ''
+  }
+  const bubbleText = getBubbleText()
 
   const iconHtml = `
     <div class="custom-marker-wrapper" style="
@@ -246,8 +255,8 @@ function createMarkerIcon(
         </div>
       </div>
       
-      <!-- つぶやきの吹き出し -->
-      ${isChat && chatPreview ? `
+      <!-- 吹き出し（つぶやき・質問・日記のタイトル） -->
+      ${bubbleText ? `
         <div style="
           position: absolute;
           top: ${size * 1.2}px;
@@ -266,7 +275,7 @@ function createMarkerIcon(
           overflow: hidden;
           text-overflow: ellipsis;
         ">
-          ${chatPreview}
+          ${bubbleText}
         </div>
       ` : ''}
     </div>
@@ -322,6 +331,8 @@ function createMarkerIcon(
 export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: MapViewProps) {
   const mapRef = useRef<L.Map | null>(null)
   const markersRef = useRef<L.Marker[]>([])
+  const [showHelp, setShowHelp] = useState(false)
+  const [helpDismissed, setHelpDismissed] = useState(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -525,20 +536,103 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
   }, [posts, userPostData, onMarkerClick, selectedPostId])
 
   return (
-    <>
+    <div className="relative w-full h-[600px] rounded-2xl overflow-hidden shadow-lg border-2 border-gray-200">
       <div
         id="map-container"
         style={{
           width: '100%',
-          height: '600px',
+          height: '100%',
           borderRadius: '12px',
           overflow: 'hidden',
-          border: '2px solid #e5e7eb',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
           position: 'relative',
           zIndex: 1,
         }}
       />
+      
+      {/* ヘルプボタン */}
+      <button
+        onClick={() => setShowHelp(!showHelp)}
+        className="absolute top-4 right-4 z-[1000] bg-white/95 backdrop-blur-md rounded-full p-3 shadow-lg hover:bg-white transition-all hover:scale-110 border border-gray-200"
+        title="操作方法を見る"
+      >
+        <HelpCircle className="h-5 w-5 text-gray-700" />
+      </button>
+
+      {/* 操作説明パネル */}
+      {showHelp && (
+        <div className="absolute top-16 right-4 z-[1000] bg-white/95 backdrop-blur-md rounded-xl shadow-xl p-5 max-w-xs border border-gray-200 animate-in slide-in-from-right">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-gray-900 flex items-center gap-2">
+              <Info className="h-4 w-4 text-blue-600" />
+              操作方法
+            </h3>
+            <button
+              onClick={() => setShowHelp(false)}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="space-y-3 text-sm text-gray-700">
+            <div className="flex items-start gap-2">
+              <div className="w-6 h-6 rounded bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <Move className="h-3 w-3 text-blue-600" />
+              </div>
+              <div>
+                <div className="font-semibold">ドラッグ</div>
+                <div className="text-xs text-gray-600">地図を移動</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-6 h-6 rounded bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <ZoomIn className="h-3 w-3 text-green-600" />
+              </div>
+              <div>
+                <div className="font-semibold">ホイール</div>
+                <div className="text-xs text-gray-600">ズームイン/アウト</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-6 h-6 rounded bg-purple-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <MousePointer2 className="h-3 w-3 text-purple-600" />
+              </div>
+              <div>
+                <div className="font-semibold">ピンクリック</div>
+                <div className="text-xs text-gray-600">投稿詳細へ</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-6 h-6 rounded bg-orange-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-orange-600 text-xs font-bold">H</span>
+              </div>
+              <div>
+                <div className="font-semibold">ホバー</div>
+                <div className="text-xs text-gray-600">ピンにマウスを合わせると詳細表示</div>
+              </div>
+            </div>
+          </div>
+          {!helpDismissed && (
+            <button
+              onClick={() => {
+                setHelpDismissed(true)
+                setShowHelp(false)
+              }}
+              className="mt-4 w-full text-xs text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              次回から非表示にする
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* フッター情報 */}
+      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-[1000] bg-white/90 backdrop-blur-md rounded-full px-4 py-2 shadow-lg border border-gray-200">
+        <div className="text-xs text-gray-600 flex items-center gap-2">
+          <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+          <span>全{posts.length}件の投稿を表示中</span>
+        </div>
+      </div>
+
       <style jsx global>{`
         .custom-div-icon {
           background: transparent !important;
@@ -555,6 +649,6 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
           box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
         }
       `}</style>
-    </>
+    </div>
   )
 }

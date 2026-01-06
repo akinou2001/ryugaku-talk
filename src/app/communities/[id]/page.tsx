@@ -747,7 +747,7 @@ export default function CommunityDetail() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{community.name}</h1>
               <p className="text-sm text-gray-500 mt-1">
-                {isGuild ? 'ギルド' : '公式コミュニティ'} • {formatDate(community.created_at)}
+                {isGuild ? 'サークル' : '公式コミュニティ'} • {formatDate(community.created_at)}
               </p>
             </div>
           </div>

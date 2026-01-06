@@ -120,7 +120,7 @@ switch (accountType) {
 ### コミュニティ作成
 **場所**: `src/app/communities/new/page.tsx`
 ```typescript
-// 個人アカウントはギルドのみ、組織アカウントは公式コミュニティのみ
+// 個人アカウントはサークルのみ、組織アカウントは公式コミュニティのみ
 const canCreateGuild = user && user.account_type === 'individual'
 const canCreateOfficial = user.account_type !== 'individual' && 
                           user.verification_status === 'verified'
