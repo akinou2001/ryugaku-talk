@@ -5,15 +5,28 @@ import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import type { Post, Comment } from '@/lib/supabase'
-import { updateUserScore } from '@/lib/quest'
 import { notifyComment } from '@/lib/notifications'
-import { Heart, MessageSquare, Share, Flag, Clock, User, MapPin, GraduationCap, Edit, Trash2, MoreVertical, HelpCircle, BookOpen, MessageCircle, CheckCircle2, X as XIcon, Link as LinkIcon, Copy, Check } from 'lucide-react'
+import { Heart, MessageSquare, Share, Flag, Clock, MapPin, GraduationCap, Edit, Trash2, HelpCircle, BookOpen, MessageCircle, CheckCircle2, X as XIcon, Link as LinkIcon, Copy, Check } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
+import { StudentStatusBadge } from '@/components/StudentStatusBadge'
 import ReactMarkdown from 'react-markdown'
 import { MarkdownEditor } from '@/components/MarkdownEditor'
 import { uploadFile, validateFileType, validateFileSize, FILE_TYPES } from '@/lib/storage'
+import { ReportModal } from '@/components/ReportModal'
+
+// スケルトンローディング
+const SkeletonCard = () => {
+  return (
+    <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 animate-pulse">
+      <div className="h-8 bg-gray-200 rounded mb-4"></div>
+      <div className="h-4 bg-gray-200 rounded mb-2"></div>
+      <div className="h-4 bg-gray-200 rounded mb-4"></div>
+      <div className="h-32 bg-gray-200 rounded"></div>
+    </div>
+  )
+}
 
 export default function PostDetail() {
   const { user } = useAuth()
@@ -38,12 +51,13 @@ export default function PostDetail() {
   const [isEditing, setIsEditing] = useState(false)
   const [isResolving, setIsResolving] = useState(false)
   const [showResolveCommentPrompt, setShowResolveCommentPrompt] = useState(false)
-  // 編集時の画像アップロード用
   const [editPostImages, setEditPostImages] = useState<File[]>([])
   const [editPostImagePreviews, setEditPostImagePreviews] = useState<string[]>([])
   const [editImageUploading, setEditImageUploading] = useState(false)
   const [showShareMenu, setShowShareMenu] = useState(false)
   const [urlCopied, setUrlCopied] = useState(false)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [showCommentReportModal, setShowCommentReportModal] = useState<string | null>(null)
 
   useEffect(() => {
     if (postId) {
@@ -58,7 +72,7 @@ export default function PostDetail() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, university, study_abroad_destination, major, account_type, verification_status, organization_name, icon_url)
+          author:profiles(name, university, study_abroad_destination, major, account_type, verification_status, organization_name, icon_url, languages)
         `)
         .eq('id', postId)
         .single()
@@ -69,7 +83,6 @@ export default function PostDetail() {
 
       setPost(data)
       
-      // 編集フォームに初期値を設定
       if (data) {
         setEditForm({
           title: data.title || '',
@@ -78,7 +91,6 @@ export default function PostDetail() {
         })
       }
       
-      // いいね状態を確認
       if (user) {
         try {
           const { data: likeData } = await supabase
@@ -90,7 +102,6 @@ export default function PostDetail() {
           
           setLiked(!!likeData)
         } catch (likeError) {
-          // いいねが存在しない場合はエラーになるが、これは正常
           setLiked(false)
         }
       }
@@ -130,7 +141,6 @@ export default function PostDetail() {
 
     try {
       if (liked) {
-        // いいねを削除
         const { error } = await supabase
           .from('likes')
           .delete()
@@ -139,9 +149,8 @@ export default function PostDetail() {
 
         if (error) throw error
         setLiked(false)
-        setPost(prev => prev ? { ...prev, likes_count: prev.likes_count - 1 } : null)
+        setPost(prev => prev ? { ...prev, likes_count: (prev.likes_count || 0) - 1 } : null)
       } else {
-        // いいねを追加
         const { error } = await supabase
           .from('likes')
           .insert({
@@ -151,14 +160,12 @@ export default function PostDetail() {
 
         if (error) throw error
         setLiked(true)
-        setPost(prev => prev ? { ...prev, likes_count: prev.likes_count + 1 } : null)
-        
+        setPost(prev => prev ? { ...prev, likes_count: (prev.likes_count || 0) + 1 } : null)
       }
     } catch (error: any) {
       console.error('Error toggling like:', error)
     }
   }
-
 
   const handleComment = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -181,8 +188,6 @@ export default function PostDetail() {
 
       if (error) throw error
 
-      // 貢献度を更新（コメント投稿で+5ポイント）
-      // 現在の貢献度を取得してから更新
       const { data: profileData } = await supabase
         .from('profiles')
         .select('contribution_score')
@@ -199,7 +204,6 @@ export default function PostDetail() {
           .eq('id', user.id)
       }
 
-      // 投稿者に通知を送信（自分の投稿へのコメントは除く）
       if (post && post.author_id !== user.id) {
         await notifyComment(
           post.author_id,
@@ -229,7 +233,6 @@ export default function PostDetail() {
       return
     }
 
-    // 解決済みの場合は未解決に戻す
     if (post.is_resolved) {
       setIsResolving(true)
       try {
@@ -253,7 +256,6 @@ export default function PostDetail() {
       return
     }
 
-    // 未解決の場合は解決にする
     setIsResolving(true)
     try {
       const { error } = await supabase
@@ -267,9 +269,7 @@ export default function PostDetail() {
       if (error) throw error
 
       setPost(prev => prev ? { ...prev, is_resolved: true } : null)
-      // コメント入力フォームを表示・促す
       setShowResolveCommentPrompt(true)
-      // コメント入力欄にフォーカス
       setTimeout(() => {
         const commentInput = document.getElementById('comment-input')
         if (commentInput) {
@@ -304,7 +304,6 @@ export default function PostDetail() {
 
       if (error) throw error
 
-      // コミュニティ限定投稿の場合はコミュニティページにリダイレクト
       if (post.community_id) {
         router.push(`/communities/${post.community_id}?tab=timeline`)
       } else {
@@ -328,7 +327,6 @@ export default function PostDetail() {
     setIsEditing(true)
     setEditImageUploading(true)
     try {
-      // 新しい画像をアップロード
       let uploadedImageUrls: string[] = []
       if (editPostImages.length > 0) {
         for (const image of editPostImages) {
@@ -343,17 +341,14 @@ export default function PostDetail() {
         }
       }
 
-      // Markdown内の画像プレースホルダーを実際のURLに置き換え
       let finalContent = editForm.content
       if (uploadedImageUrls.length > 0 && (post.category === 'diary' || post.category === 'official')) {
         uploadedImageUrls.forEach((url, index) => {
           const placeholder = `[画像${editPostImagePreviews.length - uploadedImageUrls.length + index + 1}]`
-          // ![alt]([画像1]) 形式のプレースホルダーを実際のURLに置き換え
           finalContent = finalContent.replace(new RegExp(`\\[画像${editPostImagePreviews.length - uploadedImageUrls.length + index + 1}\\]`, 'g'), url)
         })
       }
 
-      // 既存の画像URLを取得して結合
       const existingImages = post.images || []
       const allImages = [...existingImages, ...uploadedImageUrls]
 
@@ -393,12 +388,58 @@ export default function PostDetail() {
     })
   }
 
+  const handleReportPost = async (reason: string, description: string) => {
+    if (!user || !post) {
+      throw new Error('ログインが必要です')
+    }
+
+    const { error } = await supabase
+      .from('reports')
+      .insert({
+        reporter_id: user.id,
+        post_id: post.id,
+        reason,
+        description: description || null,
+        status: 'pending'
+      })
+
+    if (error) {
+      throw error
+    }
+
+    alert('通報を受け付けました。管理者が確認します。')
+    setShowReportModal(false)
+  }
+
+  const handleReportComment = async (commentId: string, reason: string, description: string) => {
+    if (!user) {
+      throw new Error('ログインが必要です')
+    }
+
+    const { error } = await supabase
+      .from('reports')
+      .insert({
+        reporter_id: user.id,
+        comment_id: commentId,
+        reason,
+        description: description || null,
+        status: 'pending'
+      })
+
+    if (error) {
+      throw error
+    }
+
+    alert('通報を受け付けました。管理者が確認します。')
+    setShowCommentReportModal(null)
+  }
+
   const getCategoryIcon = (category: string) => {
     switch (category) {
       case 'question': return HelpCircle
       case 'diary': return BookOpen
       case 'chat': return MessageCircle
-      case 'information': return MessageCircle // 後方互換性
+      case 'information': return MessageCircle
       default: return MessageCircle
     }
   }
@@ -408,7 +449,8 @@ export default function PostDetail() {
       case 'question': return '質問'
       case 'diary': return '日記'
       case 'chat': return 'つぶやき'
-      case 'information': return 'つぶやき' // 後方互換性
+      case 'information': return 'つぶやき'
+      case 'official': return 'official'
       default: return category
     }
   }
@@ -418,20 +460,11 @@ export default function PostDetail() {
       case 'question': return 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
       case 'diary': return 'bg-gradient-to-r from-green-500 to-green-600 text-white'
       case 'chat': return 'bg-gradient-to-r from-purple-500 to-purple-600 text-white'
-      case 'information': return 'bg-gradient-to-r from-purple-500 to-purple-600 text-white' // 後方互換性
+      case 'information': return 'bg-gradient-to-r from-purple-500 to-purple-600 text-white'
+      case 'official': return 'bg-gradient-to-r from-orange-500 to-orange-600 text-white'
       default: return 'bg-gradient-to-r from-gray-500 to-gray-600 text-white'
     }
   }
-
-  // スケルトンローディング
-  const SkeletonCard = () => (
-    <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 animate-pulse">
-      <div className="h-8 bg-gray-200 rounded mb-4"></div>
-      <div className="h-4 bg-gray-200 rounded mb-2"></div>
-      <div className="h-4 bg-gray-200 rounded mb-4"></div>
-      <div className="h-32 bg-gray-200 rounded"></div>
-    </div>
-  )
 
   if (loading) {
     return (
@@ -485,7 +518,6 @@ export default function PostDetail() {
             <div className="mb-6">
               <div className="flex items-center gap-3 flex-wrap mb-2">
                 <h1 className="text-4xl font-bold text-gray-900">{post.title}</h1>
-                {/* 解決済みバッジ（質問のみ） */}
                 {post.category === 'question' && post.is_resolved && (
                   <span className="px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white shadow-md">
                     <CheckCircle2 className="h-4 w-4" />
@@ -521,12 +553,23 @@ export default function PostDetail() {
                 <span className="font-medium">{post.author?.name || '匿名'}</span>
               )}
               {post.author && (
-                <AccountBadge 
-                  accountType={post.author.account_type} 
-                  verificationStatus={post.author.verification_status}
-                  organizationName={post.author.organization_name}
-                  size="sm"
-                />
+                <>
+                  {/* 投稿カテゴリがofficialの場合はAccountBadgeを非表示 */}
+                  {post.category !== 'official' && (
+                    <AccountBadge 
+                      accountType={post.author.account_type} 
+                      verificationStatus={post.author.verification_status}
+                      organizationName={post.author.organization_name}
+                      size="sm"
+                    />
+                  )}
+                  {post.author.languages && (
+                    <StudentStatusBadge 
+                      languages={post.author.languages}
+                      size="sm"
+                    />
+                  )}
+                </>
               )}
             </div>
             {post.author?.university && (
@@ -561,131 +604,104 @@ export default function PostDetail() {
           {!showEditForm ? (
             <>
               {post.category === 'chat' ? (
-                <div className="prose max-w-none">
+                <div className="prose max-w-none mb-6">
                   <div className="whitespace-pre-wrap text-gray-800 leading-relaxed text-xl">
                     {post.content}
                   </div>
                 </div>
               ) : (post.category === 'diary' || post.category === 'official') ? (
-                /* Markdownレンダリング（日記と公式投稿のみ） */
-                <div className="prose prose-lg max-w-none 
-                  prose-headings:text-gray-900 prose-headings:font-bold 
-                  prose-h1:text-4xl prose-h1:mt-8 prose-h1:mb-6 prose-h1:font-extrabold prose-h1:leading-tight
-                  prose-h2:text-3xl prose-h2:mt-6 prose-h2:mb-4 prose-h2:font-bold prose-h2:leading-tight
-                  prose-h3:text-2xl prose-h3:mt-5 prose-h3:mb-3 prose-h3:font-semibold
-                  prose-p:text-gray-800 prose-p:leading-relaxed prose-p:text-base prose-p:my-4
-                  prose-a:text-primary-600 prose-a:no-underline hover:prose-a:underline
-                  prose-strong:text-gray-900 prose-strong:font-bold
-                  prose-em:text-gray-800 prose-em:italic
-                  prose-ul:text-gray-800 prose-ul:my-4 prose-ul:pl-6
-                  prose-ol:text-gray-800 prose-ol:my-4 prose-ol:pl-6
-                  prose-li:my-2 prose-li:leading-relaxed
-                  prose-blockquote:border-l-4 prose-blockquote:border-gray-300 prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-gray-700 prose-blockquote:my-4
-                  prose-hr:my-8 prose-hr:border-gray-300
-                  prose-img:rounded-lg prose-img:my-6 prose-img:shadow-md
-                  prose-code:text-sm prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded
-                  prose-pre:bg-gray-900 prose-pre:text-gray-100">
-                  {/* @ts-ignore - react-markdown型定義の問題を回避 */}
-                  <ReactMarkdown
-                    // @ts-ignore
-                    components={{
-                      // @ts-ignore
-                      h1: ({node, ...props}: any) => <h1 className="text-4xl font-extrabold mt-8 mb-6 text-gray-900 leading-tight" {...props} />,
-                      // @ts-ignore
-                      h2: ({node, ...props}: any) => <h2 className="text-3xl font-bold mt-6 mb-4 text-gray-900 leading-tight" {...props} />,
-                      // @ts-ignore
-                      h3: ({node, ...props}: any) => <h3 className="text-2xl font-semibold mt-5 mb-3 text-gray-900" {...props} />,
-                      // @ts-ignore
-                      p: ({node, ...props}: any) => <p className="text-base text-gray-800 leading-relaxed my-4" {...props} />,
-                      // @ts-ignore
-                      strong: ({node, ...props}: any) => <strong className="font-bold text-gray-900" {...props} />,
-                      // @ts-ignore
-                      em: ({node, ...props}: any) => <em className="italic text-gray-800" {...props} />,
-                      // @ts-ignore
-                      ul: ({node, ...props}: any) => <ul className="list-disc pl-6 my-4 text-gray-800" {...props} />,
-                      // @ts-ignore
-                      ol: ({node, ...props}: any) => <ol className="list-decimal pl-6 my-4 text-gray-800" {...props} />,
-                      // @ts-ignore
-                      li: ({node, ...props}: any) => <li className="my-2 leading-relaxed" {...props} />,
-                      // @ts-ignore
-                      blockquote: ({node, ...props}: any) => <blockquote className="border-l-4 border-gray-300 pl-4 italic text-gray-700 my-4" {...props} />,
-                      // @ts-ignore
-                      hr: ({node, ...props}: any) => <hr className="my-8 border-gray-300" {...props} />,
-                      // @ts-ignore
-                      img: ({node, ...props}: any) => {
-                        let src = props.src || ''
-                        // URLが正しく設定されているか確認
-                        if (!src) {
-                          return null
-                        }
-                        // プレースホルダーが残っている場合は、post.images配列から取得
-                        if (src.includes('[画像')) {
-                          const imageMatch = src.match(/\[画像(\d+)\]/)
-                          if (imageMatch && post.images && post.images.length > 0) {
-                            const imageIndex = parseInt(imageMatch[1]) - 1
-                            if (post.images[imageIndex]) {
-                              src = post.images[imageIndex]
-                            } else {
-                              return null
-                            }
+              <div className="prose prose-lg max-w-none 
+                      prose-headings:text-gray-900 prose-headings:font-bold 
+                      prose-h1:text-4xl prose-h1:mt-8 prose-h1:mb-6 prose-h1:font-extrabold prose-h1:leading-tight
+                      prose-h2:text-3xl prose-h2:mt-6 prose-h2:mb-4 prose-h2:font-bold prose-h2:leading-tight
+                      prose-h3:text-2xl prose-h3:mt-5 prose-h3:mb-3 prose-h3:font-semibold
+                      prose-p:text-gray-800 prose-p:leading-relaxed prose-p:text-base prose-p:my-4
+                      prose-a:text-primary-600 prose-a:no-underline hover:prose-a:underline
+                      prose-strong:text-gray-900 prose-strong:font-bold
+                      prose-em:text-gray-800 prose-em:italic
+                      prose-ul:text-gray-800 prose-ul:my-4 prose-ul:pl-6
+                      prose-ol:text-gray-800 prose-ol:my-4 prose-ol:pl-6
+                      prose-li:my-2 prose-li:leading-relaxed
+                      prose-blockquote:border-l-4 prose-blockquote:border-gray-300 prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-gray-700 prose-blockquote:my-4
+                      prose-hr:my-8 prose-hr:border-gray-300
+                      prose-img:rounded-lg prose-img:my-6 prose-img:shadow-md
+                      prose-code:text-sm prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded
+                      prose-pre:bg-gray-900 prose-pre:text-gray-100">
+                {/* @ts-ignore */}
+                <ReactMarkdown
+                  components={{
+                    h1: ({node, ...props}: any) => <h1 className="text-4xl font-extrabold mt-8 mb-6 text-gray-900 leading-tight" {...props} />,
+                    h2: ({node, ...props}: any) => <h2 className="text-3xl font-bold mt-6 mb-4 text-gray-900 leading-tight" {...props} />,
+                    h3: ({node, ...props}: any) => <h3 className="text-2xl font-semibold mt-5 mb-3 text-gray-900" {...props} />,
+                    p: ({node, ...props}: any) => <p className="text-base text-gray-800 leading-relaxed my-4" {...props} />,
+                    strong: ({node, ...props}: any) => <strong className="font-bold text-gray-900" {...props} />,
+                    em: ({node, ...props}: any) => <em className="italic text-gray-800" {...props} />,
+                    ul: ({node, ...props}: any) => <ul className="list-disc pl-6 my-4 text-gray-800" {...props} />,
+                    ol: ({node, ...props}: any) => <ol className="list-decimal pl-6 my-4 text-gray-800" {...props} />,
+                    li: ({node, ...props}: any) => <li className="my-2 leading-relaxed" {...props} />,
+                    blockquote: ({node, ...props}: any) => <blockquote className="border-l-4 border-gray-300 pl-4 italic text-gray-700 my-4" {...props} />,
+                    hr: ({node, ...props}: any) => <hr className="my-8 border-gray-300" {...props} />,
+                    img: ({node, ...props}: any) => {
+                      let src = props.src || ''
+                      if (!src) {
+                        return null
+                      }
+                      if (src.includes('[画像')) {
+                        const imageMatch = src.match(/\[画像(\d+)\]/)
+                        if (imageMatch && post.images && post.images.length > 0) {
+                          const imageIndex = parseInt(imageMatch[1]) - 1
+                          if (post.images[imageIndex]) {
+                            src = post.images[imageIndex]
                           } else {
                             return null
                           }
-                        }
-                        // URLが有効か確認（httpまたはhttpsで始まる）
-                        if (!src.startsWith('http://') && !src.startsWith('https://')) {
+                        } else {
                           return null
                         }
-                        return (
-                          <img 
-                            src={src}
-                            alt={props.alt || '画像'}
-                            className="w-full rounded-lg border border-gray-200 shadow-md my-6 object-contain max-h-96"
-                            onError={(e) => {
-                              // 画像の読み込みエラー時は非表示
-                              e.currentTarget.style.display = 'none'
-                            }}
-                          />
-                        )
-                      },
-                    }}
-                  >
-                    {(() => {
-                      // 特殊な画像記法を標準的なMarkdown記法に変換
-                      // !https://... (https://...) 形式を ![画像](https://...) に変換
-                      let processedContent = post.content || ''
-                      
-                      // パターン1: !https://url (https://url) 形式
-                      // 括弧内のURLを優先的に使用
-                      processedContent = processedContent.replace(
-                        /!https:\/\/([^\s]+)\s*\(https:\/\/([^)]+)\)/g,
-                        '![画像](https://$2)'
+                      }
+                      if (!src.startsWith('http://') && !src.startsWith('https://')) {
+                        return null
+                      }
+                      return (
+                        <img 
+                          src={src}
+                          alt={props.alt || '画像'}
+                          className="w-full rounded-lg border border-gray-200 shadow-md my-6 object-contain max-h-96"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                          }}
+                        />
                       )
-                      
-                      // パターン2: !https://url 形式（括弧なし）
-                      processedContent = processedContent.replace(
-                        /!https:\/\/([^\s]+)/g,
-                        '![画像](https://$1)'
-                      )
-                      
-                      return processedContent
-                    })()}
-                  </ReactMarkdown>
+                    },
+                  }}
+                >
+                  {(() => {
+                    let processedContent = post.content || ''
+                    processedContent = processedContent.replace(
+                      /!https:\/\/([^\s]+)\s*\(https:\/\/([^)]+)\)/g,
+                      '![画像](https://$2)'
+                    )
+                    processedContent = processedContent.replace(
+                      /!https:\/\/([^\s]+)/g,
+                      '![画像](https://$1)'
+                    )
+                    return processedContent
+                  })()}
+                </ReactMarkdown>
+              </div>
+            ) : (
+              <div className="prose max-w-none">
+                <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
+                  {post.content}
                 </div>
-              ) : (
-                <div className="prose max-w-none">
-                  <div className="whitespace-pre-wrap text-gray-800 leading-relaxed">
-                    {post.content}
-                  </div>
-                </div>
-              )}
+              </div>
+            )}
 
-              {/* 写真表示（日記と公式投稿以外の場合のみ。日記・公式投稿はMarkdown内に画像が含まれる） */}
+              {/* 写真表示 */}
               {!(post.category === 'diary' || post.category === 'official') && (
                 <>
                   {post.images && post.images.length > 0 ? (
-                    /* 複数画像表示 */
-                    <div className="mt-6 space-y-4">
+                    <div className="mb-6 space-y-4">
                       {post.images.map((imageUrl, index) => (
                         <div key={index} className="relative">
                           <img
@@ -702,8 +718,7 @@ export default function PostDetail() {
                       ))}
                     </div>
                   ) : post.image_url ? (
-                    /* 通常投稿: 1枚の画像 */
-                    <div className="mt-6">
+                    <div className="mb-6">
                       <img
                         src={post.image_url}
                         alt="投稿画像"
@@ -716,88 +731,8 @@ export default function PostDetail() {
             </>
           ) : null}
 
-          {/* 編集フォーム */}
-          {showEditForm && user && post.author_id === user.id && post.category !== 'chat' && (
-            <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">投稿を編集</h3>
-              <form onSubmit={handleEdit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    タイトル *
-                  </label>
-                  <input
-                    type="text"
-                    value={editForm.title}
-                    onChange={(e) => setEditForm(prev => ({ ...prev, title: e.target.value }))}
-                    required
-                    className="input-field"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    内容 * {(post.category === 'diary' || post.category === 'official') && <span className="text-xs text-gray-500">(Markdown形式対応)</span>}
-                  </label>
-                  {(post.category === 'diary' || post.category === 'official') ? (
-                    <MarkdownEditor
-                      value={editForm.content}
-                      onChange={(newValue) => setEditForm(prev => ({ ...prev, content: newValue }))}
-                      placeholder="投稿の内容をMarkdown形式で記述できます。"
-                      rows={15}
-                      onImageSelect={(file) => {
-                        // 画像を追加（最大4枚）
-                        if (editPostImages.length < 4) {
-                          const newImages = [...editPostImages, file]
-                          setEditPostImages(newImages)
-                          const reader = new FileReader()
-                          reader.onloadend = () => {
-                            setEditPostImagePreviews(prev => [...prev, reader.result as string])
-                          }
-                          reader.readAsDataURL(file)
-                        } else {
-                          setError('写真は最大4枚までアップロードできます')
-                        }
-                      }}
-                      uploadedImages={editPostImagePreviews}
-                    />
-                  ) : (
-                    <textarea
-                      value={editForm.content}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, content: e.target.value }))}
-                      required
-                      rows={8}
-                      className="input-field"
-                    />
-                  )}
-                </div>
-                <div className="flex space-x-2">
-                  <button
-                    type="submit"
-                    disabled={isEditing}
-                    className="btn-primary"
-                  >
-                    {isEditing ? '保存中...' : '保存'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowEditForm(false)
-                      setEditForm({
-                        title: post.title || '',
-                        content: post.content || '',
-                        image_url: post.image_url || ''
-                      })
-                    }}
-                    className="btn-secondary"
-                  >
-                    キャンセル
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
           {/* アクションボタン */}
-          <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-200">
+          <div className="flex items-center justify-between pt-6 border-t border-gray-200">
             <div className="flex items-center space-x-6">
               <button
                 onClick={handleLike}
@@ -807,19 +742,17 @@ export default function PostDetail() {
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-2 border-transparent'
                 }`}
               >
-                <Heart className={`h-5 w-5 ${liked ? 'text-red-500 fill-current' : 'text-gray-500'}`} />
-                <span>{post.likes_count}</span>
+                <Heart className={`h-5 w-5 ${liked ? 'fill-current' : ''}`} />
+                <span>{post.likes_count || 0}</span>
               </button>
               <div className="flex items-center space-x-2 px-5 py-2.5 bg-gray-100 text-gray-600 rounded-xl font-semibold">
                 <MessageSquare className="h-5 w-5 text-primary-500" />
-                <span>{post.comments_count}</span>
+                <span>{post.comments_count || 0}</span>
               </div>
             </div>
             <div className="flex items-center space-x-2">
-              {/* 投稿者のみ編集・削除・解決ボタンを表示 */}
               {user && post.author_id === user.id && (
                 <>
-                  {/* 解決ボタン（質問のみ） */}
                   {post.category === 'question' && (
                     <button
                       onClick={handleResolve}
@@ -885,21 +818,6 @@ export default function PostDetail() {
                           <XIcon className="h-5 w-5 text-gray-700" />
                           <span className="font-medium text-gray-900">X（旧Twitter）で共有</span>
                         </button>
-                        <button
-                          onClick={() => {
-                            const url = `${window.location.origin}/posts/${postId}`
-                            const text = post.title || '投稿を共有'
-                            const shareUrl = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(url)}`
-                            window.open(shareUrl, '_blank', 'width=550,height=420')
-                            setShowShareMenu(false)
-                          }}
-                          className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center space-x-3"
-                        >
-                          <div className="h-5 w-5 bg-[#00C300] rounded flex items-center justify-center">
-                            <span className="text-white text-xs font-bold">L</span>
-                          </div>
-                          <span className="font-medium text-gray-900">LINEで共有</span>
-                        </button>
                         <div className="border-t border-gray-200 my-1"></div>
                         <button
                           onClick={async () => {
@@ -912,7 +830,6 @@ export default function PostDetail() {
                                 setShowShareMenu(false)
                               }, 2000)
                             } catch (err) {
-                              // フォールバック: テキストエリアを使用
                               const textArea = document.createElement('textarea')
                               textArea.value = url
                               document.body.appendChild(textArea)
@@ -945,19 +862,103 @@ export default function PostDetail() {
                   </>
                 )}
               </div>
-              <button className="flex items-center space-x-2 px-3 lg:px-4 py-2.5 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all duration-200" title="通報">
-                <Flag className="h-5 w-5 flex-shrink-0" />
-                <span className="hidden lg:inline">通報</span>
-              </button>
+              {user && post.author_id !== user.id && (
+                <button 
+                  onClick={() => setShowReportModal(true)}
+                  className="flex items-center space-x-2 px-3 lg:px-4 py-2.5 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all duration-200" 
+                  title="通報"
+                >
+                  <Flag className="h-5 w-5 flex-shrink-0" />
+                  <span className="hidden lg:inline">通報</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
+
+        {/* 編集フォーム */}
+        {showEditForm && user && post.author_id === user.id && post.category !== 'chat' && (
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">投稿を編集</h3>
+            <form onSubmit={handleEdit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  タイトル *
+                </label>
+                <input
+                  type="text"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, title: e.target.value }))}
+                  required
+                  className="input-field"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  内容 * {(post.category === 'diary' || post.category === 'official') && <span className="text-xs text-gray-500">(Markdown形式対応)</span>}
+                </label>
+                {(post.category === 'diary' || post.category === 'official') ? (
+                  <MarkdownEditor
+                    value={editForm.content}
+                    onChange={(newValue) => setEditForm(prev => ({ ...prev, content: newValue }))}
+                    placeholder="投稿の内容をMarkdown形式で記述できます。"
+                    rows={15}
+                    onImageSelect={(file) => {
+                      if (editPostImages.length < 4) {
+                        const newImages = [...editPostImages, file]
+                        setEditPostImages(newImages)
+                        const reader = new FileReader()
+                        reader.onloadend = () => {
+                          setEditPostImagePreviews(prev => [...prev, reader.result as string])
+                        }
+                        reader.readAsDataURL(file)
+                      } else {
+                        setError('写真は最大4枚までアップロードできます')
+                      }
+                    }}
+                    uploadedImages={editPostImagePreviews}
+                  />
+                ) : (
+                  <textarea
+                    value={editForm.content}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, content: e.target.value }))}
+                    required
+                    rows={8}
+                    className="input-field"
+                  />
+                )}
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  type="submit"
+                  disabled={isEditing}
+                  className="btn-primary"
+                >
+                  {isEditing ? '保存中...' : '保存'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditForm(false)
+                    setEditForm({
+                      title: post.title || '',
+                      content: post.content || '',
+                      image_url: post.image_url || ''
+                    })
+                  }}
+                  className="btn-secondary"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* コメントセクション */}
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">コメント ({comments.length})</h2>
 
-          {/* 解決時のコメント促しメッセージ */}
           {showResolveCommentPrompt && post.category === 'question' && post.is_resolved && (
             <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-200 rounded-xl">
               <p className="text-blue-800 font-semibold mb-2">✅ 質問を解決済みにしました</p>
@@ -965,7 +966,6 @@ export default function PostDetail() {
             </div>
           )}
 
-          {/* コメント投稿フォーム */}
           {user ? (
             <form onSubmit={handleComment} className="mb-8">
               <div className="flex space-x-4">
@@ -1006,7 +1006,6 @@ export default function PostDetail() {
             </div>
           )}
 
-          {/* コメント一覧 */}
           <div className="space-y-6">
             {comments.length === 0 ? (
               <p className="text-gray-500 text-center py-12 text-lg font-medium">まだコメントがありません</p>
@@ -1027,20 +1026,52 @@ export default function PostDetail() {
                   <div className="text-gray-800 whitespace-pre-wrap leading-relaxed mb-4">
                     {comment.content}
                   </div>
-                  <div className="flex items-center space-x-5 pt-3 border-t border-gray-200">
-                    <button className="flex items-center space-x-1.5 text-gray-600 hover:text-red-600 font-semibold transition-colors">
-                      <Heart className="h-4 w-4 text-red-500" />
-                      <span>{comment.likes_count}</span>
-                    </button>
-                    <button className="text-gray-600 hover:text-primary-600 font-semibold transition-colors">
-                      返信
-                    </button>
+                  <div className="flex items-center justify-between pt-3 border-t border-gray-200">
+                    <div className="flex items-center space-x-5">
+                      <button className="flex items-center space-x-1.5 text-gray-600 hover:text-red-600 font-semibold transition-colors">
+                        <Heart className="h-4 w-4 text-red-500" />
+                        <span>{comment.likes_count || 0}</span>
+                      </button>
+                      <button className="text-gray-600 hover:text-primary-600 font-semibold transition-colors">
+                        返信
+                      </button>
+                    </div>
+                    {user && comment.author_id !== user.id && (
+                      <button
+                        onClick={() => setShowCommentReportModal(comment.id)}
+                        className="flex items-center space-x-1 text-gray-500 hover:text-red-600 font-semibold transition-colors text-sm"
+                        title="コメントを通報"
+                      >
+                        <Flag className="h-4 w-4" />
+                        <span>通報</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               ))
             )}
           </div>
         </div>
+
+        {/* 投稿通報モーダル */}
+        <ReportModal
+          isOpen={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          onSubmit={handleReportPost}
+          type="post"
+          itemTitle={post.title}
+        />
+
+        {/* コメント通報モーダル */}
+        {showCommentReportModal && (
+          <ReportModal
+            isOpen={!!showCommentReportModal}
+            onClose={() => setShowCommentReportModal(null)}
+            onSubmit={(reason, description) => handleReportComment(showCommentReportModal, reason, description)}
+            type="comment"
+            itemTitle={comments.find(c => c.id === showCommentReportModal)?.content?.substring(0, 50) || ''}
+          />
+        )}
       </div>
     </div>
   )

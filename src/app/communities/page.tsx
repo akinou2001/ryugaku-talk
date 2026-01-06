@@ -15,18 +15,18 @@ export default function CommunitiesPage() {
   const [communities, setCommunities] = useState<Community[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'private'>('all')
+  const [communityTypeFilter, setCommunityTypeFilter] = useState<'all' | 'guild' | 'official'>('all')
 
   useEffect(() => {
     fetchCommunities()
-  }, [visibilityFilter])
+  }, [communityTypeFilter])
 
   const fetchCommunities = async () => {
     try {
       setLoading(true)
       const data = await searchCommunities(
         searchTerm || undefined,
-        visibilityFilter !== 'all' ? visibilityFilter : undefined
+        communityTypeFilter !== 'all' ? communityTypeFilter : undefined
       )
       
       // 運営中、参加中、その他の順にソート
@@ -135,20 +135,20 @@ export default function CommunitiesPage() {
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="コミュニティ名や説明で検索..."
+                  placeholder="コミュニティ名、説明、またはIDで検索..."
                   className="w-full pl-12 pr-4 py-3.5 bg-white border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all shadow-sm hover:shadow-md"
                 />
               </div>
               <select
-                value={visibilityFilter}
+                value={communityTypeFilter}
                 onChange={(e) => {
-                  setVisibilityFilter(e.target.value as 'all' | 'public' | 'private')
+                  setCommunityTypeFilter(e.target.value as 'all' | 'guild' | 'official')
                 }}
                 className="px-4 py-3.5 bg-white border-2 border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all md:w-48"
               >
-                <option value="all">すべての公開設定</option>
-                <option value="public">公開のみ</option>
-                <option value="private">非公開のみ</option>
+                <option value="all">すべての種別</option>
+                <option value="guild">サークル</option>
+                <option value="official">公式コミュニティ</option>
               </select>
               <button type="submit" className="px-6 py-3.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 whitespace-nowrap">
                 検索
@@ -158,7 +158,7 @@ export default function CommunitiesPage() {
               <div className="flex items-center justify-between pt-2 border-t border-gray-200">
                 <span className="text-sm text-gray-600">
                   {user.account_type === 'individual' 
-                    ? '個人アカウント: ギルドを作成できます' 
+                    ? '個人アカウント: サークルを作成できます' 
                     : user.verification_status === 'verified'
                     ? '組織アカウント: 公式コミュニティを作成できます'
                     : '組織アカウント: 認証後に公式コミュニティを作成できます'}
@@ -166,7 +166,7 @@ export default function CommunitiesPage() {
                 {user.account_type === 'individual' && (
                   <Link href="/communities/new" className="btn-secondary text-sm flex items-center">
                     <Plus className="h-4 w-4 mr-1" />
-                    ギルドを作成
+                    サークルを作成
                   </Link>
                 )}
               </div>

@@ -13,6 +13,6 @@ ADD COLUMN IF NOT EXISTS community_type TEXT DEFAULT 'official' CHECK (community
 -- コメントを追加（オプション）
 COMMENT ON COLUMN communities.cover_image_url IS 'コミュニティのカバー画像URL';
 COMMENT ON COLUMN communities.icon_url IS 'コミュニティのアイコン画像URL';
-COMMENT ON COLUMN communities.community_type IS 'コミュニティタイプ（guild: ギルド、official: 公式コミュニティ）';
+COMMENT ON COLUMN communities.community_type IS 'コミュニティタイプ（guild: サークル、official: 公式コミュニティ）';
 
 

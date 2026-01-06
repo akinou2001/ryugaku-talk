@@ -50,7 +50,7 @@ export function Hero() {
               </div>
               <h3 className="text-lg font-semibold text-gray-900 mb-2">コミュニティ</h3>
               <p className="text-sm text-gray-600">
-                ギルドや公式コミュニティでつながる
+                サークルや公式コミュニティでつながる
               </p>
             </div>
 

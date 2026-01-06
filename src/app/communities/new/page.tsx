@@ -129,7 +129,7 @@ export default function NewCommunity() {
     )
   }
 
-  // 個人アカウントはギルドを作成可能、組織アカウントは公式コミュニティを作成可能
+  // 個人アカウントはサークルを作成可能、組織アカウントは公式コミュニティを作成可能
   const canCreateGuild = user && user.account_type === 'individual'
   const canCreateOfficialCommunity = user && 
     user.account_type !== 'individual' && 
@@ -174,7 +174,7 @@ export default function NewCommunity() {
               戻る
             </button>
             <h1 className="text-3xl font-bold text-gray-900">
-              {formData.community_type === 'guild' ? '新規ギルド' : '新規公式コミュニティ'}
+              {formData.community_type === 'guild' ? '新規サークル' : '新規公式コミュニティ'}
             </h1>
           </div>
         </div>
@@ -270,10 +270,10 @@ export default function NewCommunity() {
                 className="input-field"
                 disabled
               >
-                <option value="guild">ギルド（個人アカウント）</option>
+                <option value="guild">サークル（個人アカウント）</option>
               </select>
               <p className="text-sm text-gray-500 mt-1">
-                ギルドでは、メンバーがクエストを投稿し、クリアするとポイントを獲得できます。
+                サークルでは、メンバーがクエストを投稿し、クリアするとポイントを獲得できます。
               </p>
             </div>
           )}

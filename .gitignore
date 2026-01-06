@@ -7,6 +7,8 @@
 
 # testing
 /coverage
+/playwright-report
+/test-results
 
 # next.js
 /.next/
@@ -26,7 +28,6 @@ yarn-error.log*
 
 # local env files
 .env*.local
-.env.local
 .env
 
 # vercel
@@ -37,12 +38,12 @@ yarn-error.log*
 next-env.d.ts
 
 # IDE
-.vscode/
+.vscode/*
+!.vscode/launch.json
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
-Thumbs.db
-.DS_Store
+# Playwright
+/playwright/.cache/

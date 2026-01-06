@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -38,6 +38,8 @@ type CommunityPost = {
   deadline?: string
   reward_amount?: number
   category?: string
+  likes_count?: number
+  comments_count?: number
 }
 
 type TimelineItem = Post | {
@@ -66,6 +68,7 @@ export default function Timeline() {
   const router = useRouter()
   const [posts, setPosts] = useState<Post[]>([])
   const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>([])
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<TimelineView>('latest')
   const [selectedCategory, setSelectedCategory] = useState<PostCategory>('all')
@@ -230,32 +233,6 @@ export default function Timeline() {
     return Array.from(new Set(combined))
   })()
 
-  useEffect(() => {
-    if (view === 'community' && user) {
-      fetchUserCommunities()
-    } else if (view !== 'community') {
-      // fetchPostsは後で定義されるため、ここでは直接呼び出さない
-      // 代わりに、fetchPostsの依存関係が変更されたときに再実行されるようにする
-    }
-  }, [view, user])
-
-  // fetchPostsとfetchLocationsを呼び出すuseEffect
-  useEffect(() => {
-    if (view !== 'community') {
-      fetchPosts()
-      fetchLocations()
-    }
-  }, [view, selectedCategory, selectedMainCategories, selectedDetailCategories, selectedLocations, debouncedSearchTerm, user])
-
-  useEffect(() => {
-    if (view === 'community' && userCommunityIds.length > 0) {
-      fetchCommunityPosts()
-    } else if (view === 'community' && userCommunityIds.length === 0 && !loading) {
-      setLoading(false)
-    }
-  }, [view, userCommunityIds, debouncedSearchTerm, loading])
-
-
   const fetchLocations = async () => {
     // ロケーション情報の取得（将来的に使用する可能性があるため、関数は残す）
     try {
@@ -274,46 +251,7 @@ export default function Timeline() {
     }
   }
 
-  const fetchUserCommunities = async () => {
-    if (!user) {
-      setUserCommunityIds([])
-      setCommunityPosts([])
-      setLoading(false)
-      return
-    }
-    
-    try {
-      setLoading(true)
-      setCommunityPosts([])
-      const communities = await getUserCommunities(user.id)
-      
-      const communityIds: string[] = []
-      communities.forEach(c => {
-        if (c.community) {
-          const community = c.community as any
-          if (community.id) {
-            communityIds.push(community.id)
-          }
-        }
-      })
-      
-      setUserCommunityIds(communityIds)
-      
-      if (communityIds.length > 0) {
-        await fetchCommunityPosts(communityIds)
-      } else {
-        setCommunityPosts([])
-        setLoading(false)
-      }
-    } catch (error) {
-      console.error('Error fetching user communities:', error)
-      setUserCommunityIds([])
-      setCommunityPosts([])
-      setLoading(false)
-    }
-  }
-
-  const fetchCommunityPosts = async (communityIds?: string[]) => {
+  const fetchCommunityPosts = useCallback(async (communityIds?: string[]) => {
     // 前回のリクエストをキャンセル
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
@@ -387,9 +325,12 @@ export default function Timeline() {
           name: p.author.name,
           account_type: p.author.account_type,
           verification_status: p.author.verification_status,
-          organization_name: p.author.organization_name
+          organization_name: p.author.organization_name,
+          languages: p.author.languages
         } : undefined,
-        category: p.category
+        category: p.category,
+        likes_count: p.likes_count || 0,
+        comments_count: p.comments_count || 0
       }))
 
       const events: CommunityPost[] = (eventsResult.data || []).map((e: any) => ({
@@ -450,6 +391,25 @@ export default function Timeline() {
       }
 
       setCommunityPosts(allPosts)
+      
+      // コミュニティ投稿のいいね状態を取得
+      if (user && posts.length > 0) {
+        const postIds = posts.map(p => p.id)
+        const { data: likesData } = await supabase
+          .from('likes')
+          .select('post_id')
+          .eq('user_id', user.id)
+          .in('post_id', postIds)
+        
+        if (likesData) {
+          const likedPostIds = new Set(likesData.map(l => l.post_id))
+          setLikedPosts(prev => {
+            const newSet = new Set(prev)
+            likedPostIds.forEach(id => newSet.add(id))
+            return newSet
+          })
+        }
+      }
     } catch (error: any) {
       // AbortErrorは無視
       if (error?.name !== 'AbortError') {
@@ -461,7 +421,74 @@ export default function Timeline() {
         setLoading(false)
       }
     }
+  }, [userCommunityIds, debouncedSearchTerm])
+
+  const fetchUserCommunities = async () => {
+    if (!user) {
+      setUserCommunityIds([])
+      setCommunityPosts([])
+      setLoading(false)
+      return
+    }
+    
+    try {
+      setLoading(true)
+      setCommunityPosts([])
+      const communities = await getUserCommunities(user.id)
+      
+      const communityIds: string[] = []
+      communities.forEach(c => {
+        if (c.community) {
+          const community = c.community as any
+          if (community.id) {
+            communityIds.push(community.id)
+          }
+        }
+      })
+      
+      setUserCommunityIds(communityIds)
+      
+      if (communityIds.length > 0) {
+        await fetchCommunityPosts(communityIds)
+      } else {
+        setCommunityPosts([])
+        setLoading(false)
+      }
+    } catch (error) {
+      console.error('Error fetching user communities:', error)
+      setUserCommunityIds([])
+      setCommunityPosts([])
+      setLoading(false)
+    }
   }
+
+  // useEffectを関数定義の後に配置
+  useEffect(() => {
+    if (view === 'community' && user) {
+      fetchUserCommunities()
+    } else if (view !== 'community') {
+      // fetchPostsは後で定義されるため、ここでは直接呼び出さない
+      // 代わりに、fetchPostsの依存関係が変更されたときに再実行されるようにする
+    }
+  }, [view, user])
+
+  // fetchPostsとfetchLocationsを呼び出すuseEffect
+  useEffect(() => {
+    if (view !== 'community') {
+      fetchPosts()
+      fetchLocations()
+    }
+  }, [view, selectedCategory, selectedMainCategories, selectedDetailCategories, selectedLocations, debouncedSearchTerm, user])
+
+  useEffect(() => {
+    if (view === 'community' && userCommunityIds.length > 0) {
+      fetchCommunityPosts()
+    } else if (view === 'community' && userCommunityIds.length === 0) {
+      // コミュニティがない場合はローディングを解除
+      // fetchUserCommunities内で既にsetLoading(false)が呼ばれているので、
+      // ここでは重複して呼ばないようにする
+    }
+  }, [view, userCommunityIds, debouncedSearchTerm, fetchCommunityPosts])
 
   const fetchPosts = async () => {
     // 前回のリクエストをキャンセル
@@ -675,6 +702,23 @@ export default function Timeline() {
       })
 
       setPosts(postsData || [])
+      
+      // いいね状態を取得
+      if (user && postsData && postsData.length > 0) {
+        const postIds = postsData.map(p => p.id)
+        const { data: likesData } = await supabase
+          .from('likes')
+          .select('post_id')
+          .eq('user_id', user.id)
+          .in('post_id', postIds)
+        
+        if (likesData) {
+          const likedPostIds = new Set(likesData.map(l => l.post_id))
+          setLikedPosts(likedPostIds)
+        }
+      } else if (!user) {
+        setLikedPosts(new Set())
+      }
     } catch (error: any) {
       // AbortErrorは無視
       if (error?.name !== 'AbortError') {
@@ -684,6 +728,59 @@ export default function Timeline() {
       if (!currentController.signal.aborted) {
         setLoading(false)
       }
+    }
+  }
+  
+  const handleLike = async (postId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    if (!user) {
+      router.push('/auth/signin')
+      return
+    }
+
+    const isLiked = likedPosts.has(postId)
+
+    try {
+      if (isLiked) {
+        // いいねを削除
+        const { error } = await supabase
+          .from('likes')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.id)
+
+        if (error) throw error
+        
+        setLikedPosts(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(postId)
+          return newSet
+        })
+        
+        setPosts(prev => prev.map(p => 
+          p.id === postId ? { ...p, likes_count: Math.max(0, p.likes_count - 1) } : p
+        ))
+      } else {
+        // いいねを追加
+        const { error } = await supabase
+          .from('likes')
+          .insert({
+            post_id: postId,
+            user_id: user.id
+          })
+
+        if (error) throw error
+        
+        setLikedPosts(prev => new Set(prev).add(postId))
+        
+        setPosts(prev => prev.map(p => 
+          p.id === postId ? { ...p, likes_count: p.likes_count + 1 } : p
+        ))
+      }
+    } catch (error: any) {
+      console.error('Error toggling like:', error)
     }
   }
 
@@ -758,17 +855,17 @@ export default function Timeline() {
   
   // スケルトンローディング
   const SkeletonCard = () => (
-    <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 animate-pulse">
-      <div className="flex items-center justify-between mb-4">
-        <div className="h-6 bg-gray-200 rounded-full w-20"></div>
-        <div className="h-4 bg-gray-200 rounded w-16"></div>
+    <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 animate-pulse">
+      <div className="flex items-center justify-between mb-2">
+        <div className="h-5 bg-gray-200 rounded-full w-20"></div>
+        <div className="h-3 bg-gray-200 rounded w-16"></div>
       </div>
-      <div className="h-6 bg-gray-200 rounded w-3/4 mb-3"></div>
-      <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
-      <div className="h-4 bg-gray-200 rounded w-5/6"></div>
-      <div className="flex items-center justify-between mt-6">
-        <div className="h-8 bg-gray-200 rounded-full w-32"></div>
-        <div className="h-6 bg-gray-200 rounded w-24"></div>
+      <div className="h-5 bg-gray-200 rounded w-3/4 mb-1.5"></div>
+      <div className="h-3 bg-gray-200 rounded w-full mb-1"></div>
+      <div className="h-3 bg-gray-200 rounded w-5/6 mb-2"></div>
+      <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+        <div className="h-6 bg-gray-200 rounded-full w-32"></div>
+        <div className="h-4 bg-gray-200 rounded w-24"></div>
       </div>
     </div>
   )
@@ -833,7 +930,7 @@ export default function Timeline() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
         <div className="container mx-auto px-4 py-8 max-w-4xl">
-          <div className="space-y-6">
+          <div className="space-y-3">
             {[...Array(5)].map((_, i) => (
               <SkeletonCard key={i} />
             ))}
@@ -852,42 +949,42 @@ export default function Timeline() {
           isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
         }`}
       >
-        <div className="container mx-auto px-4 py-6 max-w-4xl">
+        <div className="container mx-auto px-4 py-3 max-w-4xl">
           {/* ヘッダー */}
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
+          <div className="mb-3">
+            <h1 className="text-2xl font-bold text-gray-900 mb-1 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
               タイムライン
             </h1>
-            <p className="text-gray-600">最新の投稿やイベントをチェック</p>
+            <p className="text-sm text-gray-600">最新の投稿やイベントをチェック</p>
           </div>
 
           {/* セグメントコントロール */}
-          <div className="mb-6">
-            <div className="flex space-x-2 bg-white rounded-xl p-1.5 shadow-md border border-gray-200">
+          <div className="mb-3">
+            <div className="flex space-x-2 bg-white rounded-xl p-1 shadow-md border border-gray-200">
               <button
                 onClick={() => setView('latest')}
-                className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
                   view === 'latest'
                     ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg transform scale-105'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
               >
                 <div className="flex items-center justify-center space-x-1">
-                  <Clock className="h-4 w-4" />
+                  <Clock className="h-3.5 w-3.5" />
                   <span>最新</span>
                 </div>
               </button>
               {user && (
                 <button
                   onClick={() => setView('community')}
-                  className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                  className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
                     view === 'community'
                       ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg transform scale-105'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
                 >
-                  <div className="flex items-center justify-center space-x-2">
-                    <Users className="h-4 w-4" />
+                  <div className="flex items-center justify-center space-x-1">
+                    <Users className="h-3.5 w-3.5" />
                     <span>コミュニティ</span>
                   </div>
                 </button>
@@ -896,13 +993,13 @@ export default function Timeline() {
           </div>
 
           {/* 検索バー */}
-          <div className="mb-6">
+          <div className="mb-3">
             <form onSubmit={handleSearch} className="relative">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 {isSearching ? (
-                  <Loader2 className="h-5 w-5 text-primary-500 animate-spin" />
+                  <Loader2 className="h-4 w-4 text-primary-500 animate-spin" />
                 ) : (
-                  <Search className="h-5 w-5 text-gray-400" />
+                  <Search className="h-4 w-4 text-gray-400" />
                 )}
               </div>
               <input
@@ -910,7 +1007,7 @@ export default function Timeline() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="投稿を検索..."
-                className="w-full pl-12 pr-4 py-3.5 bg-white border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all shadow-sm hover:shadow-md"
+                className="w-full pl-10 pr-4 py-2.5 bg-white border-2 border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all shadow-sm hover:shadow-md"
                 autoFocus={false}
               />
               {searchTerm && (
@@ -925,16 +1022,16 @@ export default function Timeline() {
                     setDebouncedSearchTerm('')
                     setIsSearching(false)
                   }}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center hover:bg-gray-50 rounded-r-xl transition-colors"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center hover:bg-gray-50 rounded-r-xl transition-colors"
                   aria-label="検索をクリア"
                 >
-                  <X className="h-5 w-5 text-gray-400 hover:text-gray-600 transition-colors" />
+                  <X className="h-4 w-4 text-gray-400 hover:text-gray-600 transition-colors" />
                 </button>
               )}
             </form>
             {debouncedSearchTerm && (
-              <div className="mt-2 text-sm text-gray-600 flex items-center space-x-2">
-                <Search className="h-4 w-4" />
+              <div className="mt-1.5 text-xs text-gray-600 flex items-center space-x-1.5">
+                <Search className="h-3.5 w-3.5" />
                 <span>
                   「{debouncedSearchTerm}」の検索結果
                   {!loading && !isSearching && view !== 'community' && posts.length > 0 && (
@@ -946,7 +1043,7 @@ export default function Timeline() {
               </div>
             )}
             {searchTerm && !debouncedSearchTerm && (
-              <div className="mt-2 text-sm text-gray-500 flex items-center space-x-2">
+              <div className="mt-1.5 text-xs text-gray-500 flex items-center space-x-1.5">
                 <span>Enterキーで検索</span>
               </div>
             )}
@@ -954,7 +1051,7 @@ export default function Timeline() {
         </div>
       </div>
       
-      <div className="container mx-auto px-4 py-6 max-w-4xl">
+      <div className="container mx-auto px-4 py-4 max-w-4xl">
 
         {/* フィルター表示/非表示ボタン */}
         {view !== 'community' && (
@@ -1383,103 +1480,102 @@ export default function Timeline() {
                 )}
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-3">
                 {communityPosts.map((post) => (
                 <Link 
                   key={post.id} 
                   href={post.type === 'quest' ? `/communities/${post.community_id}?tab=quests#quest-${post.id}` : post.type === 'post' ? `/posts/${post.id}` : `/communities/${post.community_id}?tab=events#event-${post.id}`}
                   className="block group"
                 >
-                  <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-2xl hover:border-primary-200 transition-all duration-300 transform hover:-translate-y-1">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center space-x-2 flex-wrap gap-2">
-                        <span className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 ${
-                          post.type === 'post' 
-                            ? (post as any).category === 'chat' 
-                              ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white'
-                              : (post as any).category === 'question'
-                              ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white'
-                              : 'bg-gradient-to-r from-green-500 to-green-600 text-white'
-                            : post.type === 'event'
-                            ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white'
-                            : 'bg-gradient-to-r from-orange-500 to-orange-600 text-white'
-                        }`}>
-                          {post.type === 'post' 
-                            ? (() => {
-                                const category = (post as any).category
-                                const Icon = category === 'chat' ? MessageCircle : category === 'question' ? HelpCircle : BookOpen
-                                const label = category === 'chat' ? 'つぶやき' : category === 'question' ? '質問' : '日記'
-                                return (
-                                  <>
-                                    <Icon className="h-3 w-3 text-white" />
-                                    {label}
-                                  </>
-                                )
-                              })()
-                            : post.type === 'event' 
-                            ? '📅 イベント' 
-                            : '🎯 クエスト'}
-                        </span>
+                  <div className="bg-white rounded-xl shadow-md border border-gray-100 p-4 hover:shadow-lg hover:border-primary-200 transition-all duration-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-1.5 flex-wrap gap-1.5">
+                        {post.type === 'post' ? (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-0.5 ${getCategoryColor((post as any).category)}`}>
+                            {(() => {
+                              const category = (post as any).category
+                              const Icon = getCategoryIcon(category)
+                              return (
+                                <>
+                                  <Icon className="h-2.5 w-2.5 text-white" />
+                                  {getCategoryLabel(category)}
+                                </>
+                              )
+                            })()}
+                          </span>
+                        ) : post.type === 'event' ? (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-0.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white">
+                            📅 イベント
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-0.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white">
+                            🎯 クエスト
+                          </span>
+                        )}
                         {post.community_name && (
-                          <span className="px-3 py-1.5 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-full text-xs font-semibold flex items-center space-x-1 border border-gray-300">
-                            <Users className="h-3 w-3" />
+                          <span className="px-2 py-0.5 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-full text-xs font-medium flex items-center space-x-0.5 border border-gray-300">
+                            <Users className="h-2.5 w-2.5" />
                             <span>{post.community_name}</span>
                           </span>
                         )}
                       </div>
-                      <span className="text-sm text-gray-500 flex items-center font-medium">
-                        <Clock className="h-4 w-4 mr-1" />
+                      <span className="text-xs text-gray-500 flex items-center font-medium">
+                        <Clock className="h-3 w-3 mr-0.5" />
                         {formatDate(post.event_date || post.created_at)}
                       </span>
                     </div>
                     
                     {post.type === 'post' && (post as any).category === 'chat' ? (
-                      <h2 className="text-2xl font-bold text-gray-900 mb-4 group-hover:text-primary-600 transition-colors">
+                      <h2 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-primary-600 transition-colors leading-snug">
                         {post.content}
                       </h2>
                     ) : (
                       <>
-                        <h2 className="text-2xl font-bold text-gray-900 mb-3 group-hover:text-primary-600 transition-colors">
+                        <h2 className="text-lg font-bold text-gray-900 mb-1.5 group-hover:text-primary-600 transition-colors leading-snug">
                           {post.title}
                         </h2>
-                        <p className="text-gray-600 mb-4 line-clamp-2 leading-relaxed">
-                          {post.content}
-                        </p>
+                        {/* 日記の内容は非表示 */}
+                        {(post as any).category !== 'diary' && (
+                          <p className="text-sm text-gray-600 mb-2 line-clamp-2 leading-relaxed">
+                            {post.content}
+                          </p>
+                        )}
                       </>
                     )}
 
                     {post.type === 'event' && post.location && (
-                      <div className="mb-4">
-                        <span className="inline-flex items-center space-x-1 px-3 py-1.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-semibold border border-primary-200">
-                          <MapPin className="h-3 w-3" />
+                      <div className="mb-2">
+                        <span className="inline-flex items-center space-x-0.5 px-2 py-0.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-medium border border-primary-200">
+                          <MapPin className="h-2.5 w-2.5" />
                           <span>{post.location}</span>
                         </span>
                       </div>
                     )}
 
                     {post.type === 'quest' && (
-                      <div className="mb-4 flex items-center space-x-2 flex-wrap gap-2">
+                      <div className="mb-2 flex items-center space-x-1.5 flex-wrap gap-1.5">
                         {post.deadline && (
-                          <span className="inline-flex items-center space-x-1 px-3 py-1.5 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded-full text-xs font-semibold border border-red-200">
-                            <Clock className="h-3 w-3" />
+                          <span className="inline-flex items-center space-x-0.5 px-2 py-0.5 bg-gradient-to-r from-red-50 to-red-100 text-red-700 rounded-full text-xs font-medium border border-red-200">
+                            <Clock className="h-2.5 w-2.5" />
                             <span>期限: {formatDate(post.deadline)}</span>
                           </span>
                         )}
                         {post.reward_amount && (
-                          <span className="inline-flex items-center space-x-1 px-3 py-1.5 bg-gradient-to-r from-yellow-50 to-yellow-100 text-yellow-700 rounded-full text-xs font-semibold border border-yellow-200">
-                            <Award className="h-3 w-3" />
+                          <span className="inline-flex items-center space-x-0.5 px-2 py-0.5 bg-gradient-to-r from-yellow-50 to-yellow-100 text-yellow-700 rounded-full text-xs font-medium border border-yellow-200">
+                            <Award className="h-2.5 w-2.5" />
                             <span>報酬: {post.reward_amount}ポイント</span>
                           </span>
                         )}
                       </div>
                     )}
                     
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                      <div className="flex items-center space-x-2 flex-wrap gap-2">
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                      <div className="flex items-center space-x-1.5 flex-wrap gap-2">
                         {post.creator ? (
                           <>
-                            <span className="text-sm text-gray-600 font-medium">{post.creator.name}</span>
-                            {post.creator.account_type && post.creator.account_type !== 'individual' && (
+                            <span className="text-xs text-gray-600 font-medium">{post.creator.name}</span>
+                            {/* 投稿カテゴリがofficialの場合はAccountBadgeを非表示 */}
+                            {post.creator.account_type && post.creator.account_type !== 'individual' && (post as any).category !== 'official' && (
                               <AccountBadge 
                                 accountType={post.creator.account_type as 'educational' | 'company' | 'government'} 
                                 verificationStatus={(post.creator.verification_status || 'unverified') as 'unverified' | 'pending' | 'verified' | 'rejected'}
@@ -1493,9 +1589,32 @@ export default function Timeline() {
                             />
                           </>
                         ) : (
-                          <span className="text-sm text-gray-600 font-medium">コミュニティ</span>
+                          <span className="text-xs text-gray-600 font-medium">コミュニティ</span>
                         )}
                       </div>
+                      {post.type === 'post' && (post.likes_count !== undefined || post.comments_count !== undefined) && (
+                        <div className="flex items-center space-x-3 text-xs text-gray-600">
+                          {post.likes_count !== undefined && (
+                            <button
+                              onClick={(e) => handleLike(post.id, e)}
+                              className={`flex items-center font-semibold transition-all ${
+                                likedPosts.has(post.id)
+                                  ? 'text-red-600 hover:text-red-700'
+                                  : 'text-gray-600 hover:text-red-600'
+                              }`}
+                            >
+                              <Heart className={`h-3.5 w-3.5 mr-1 ${likedPosts.has(post.id) ? 'fill-current text-red-500' : 'text-red-500'}`} />
+                              {post.likes_count || 0}
+                            </button>
+                          )}
+                          {post.comments_count !== undefined && (
+                            <span className="flex items-center font-semibold">
+                              <MessageSquare className="h-3.5 w-3.5 mr-1 text-primary-500" />
+                              {post.comments_count || 0}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </Link>
@@ -1528,39 +1647,41 @@ export default function Timeline() {
               )}
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-3">
               {posts.map((post) => {
-                const isOrganizationPost = post.author && post.author.account_type !== 'individual'
-                const getOrganizationBorderColor = () => {
-                  if (!isOrganizationPost) return ''
-                  switch (post.author?.account_type) {
-                    case 'educational': return 'border-l-4 border-l-blue-500'
-                    case 'company': return 'border-l-4 border-l-green-500'
-                    case 'government': return 'border-l-4 border-l-purple-500'
-                    default: return ''
-                  }
-                }
                 return (
-              <Link key={post.id} href={`/posts/${post.id}`} className={`block group ${getOrganizationBorderColor()}`} onClick={(e) => e.stopPropagation()}>
-                <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-2xl hover:border-primary-200 transition-all duration-300 transform hover:-translate-y-1">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 ${getCategoryColor(post.category)}`}>
-                        {(() => {
-                          const Icon = getCategoryIcon(post.category)
-                          return <Icon className="h-3 w-3 text-white" />
-                        })()}
-                        {getCategoryLabel(post.category)}
-                      </span>
+              <Link key={post.id} href={`/posts/${post.id}`} className="block group" onClick={(e) => e.stopPropagation()}>
+                <div className={`bg-white rounded-xl shadow-md border border-gray-100 hover:shadow-lg hover:border-primary-200 transition-all duration-200 ${
+                  post.category === 'diary' && post.cover_image_url ? 'p-0 overflow-hidden' : 'p-4'
+                }`}>
+                  <div className={`flex items-center justify-between ${post.category === 'diary' && post.cover_image_url ? 'absolute top-3 left-3 right-3 z-10' : 'mb-2'}`}>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {post.category === 'diary' && post.cover_image_url ? (
+                        <span className={`px-3 py-1.5 backdrop-blur-md bg-white/20 border border-white/30 rounded-full text-xs font-semibold flex items-center gap-1 text-white shadow-lg ${getCategoryColor(post.category)}`}>
+                          {(() => {
+                            const Icon = getCategoryIcon(post.category)
+                            return <Icon className="h-3 w-3 text-white" />
+                          })()}
+                          {getCategoryLabel(post.category)}
+                        </span>
+                      ) : (
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-0.5 ${getCategoryColor(post.category)}`}>
+                          {(() => {
+                            const Icon = getCategoryIcon(post.category)
+                            return <Icon className="h-2.5 w-2.5 text-white" />
+                          })()}
+                          {getCategoryLabel(post.category)}
+                        </span>
+                      )}
                       {/* 解決済みバッジ（質問のみ） */}
                       {post.category === 'question' && post.is_resolved && (
-                        <span className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 bg-gradient-to-r from-green-500 to-green-600 text-white">
-                          <CheckCircle2 className="h-3 w-3 text-white" />
+                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-0.5 bg-gradient-to-r from-green-500 to-green-600 text-white">
+                          <CheckCircle2 className="h-2.5 w-2.5 text-white" />
                           解決済み
                         </span>
                       )}
-                      {/* ロケーションタグ（投稿種別タグの横に表示） */}
-                      {post.study_abroad_destination && (
+                      {/* ロケーションタグ（日記でカバー画像がある場合は非表示、それ以外は表示） */}
+                      {post.study_abroad_destination && !(post.category === 'diary' && post.cover_image_url) && (
                         <button
                           onClick={(e) => {
                             e.preventDefault()
@@ -1576,56 +1697,189 @@ export default function Timeline() {
                               })
                             }
                           }}
-                          className="inline-flex items-center space-x-1 px-3 py-1.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-semibold hover:from-primary-100 hover:to-primary-200 transition-all border border-primary-200"
+                          className="inline-flex items-center space-x-0.5 px-2 py-0.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-medium hover:from-primary-100 hover:to-primary-200 transition-all border border-primary-200"
                         >
-                          <MapPin className="h-3 w-3" />
+                          <MapPin className="h-2.5 w-2.5" />
                           <span>{post.study_abroad_destination}</span>
                         </button>
                       )}
                     </div>
-                    <span className="text-sm text-gray-500 flex items-center font-medium">
-                      <Clock className="h-4 w-4 mr-1" />
-                      {formatDate(post.created_at)}
-                    </span>
+                    {post.category === 'diary' && post.cover_image_url ? (
+                      <span className="px-3 py-1.5 backdrop-blur-md bg-white/20 border border-white/30 rounded-full text-xs font-semibold text-white shadow-lg flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        {formatDate(post.created_at)}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-500 flex items-center font-medium">
+                        <Clock className="h-3 w-3 mr-0.5" />
+                        {formatDate(post.created_at)}
+                      </span>
+                    )}
                   </div>
                   
-                  {post.category === 'chat' ? (
-                    <h2 className="text-2xl font-bold text-gray-900 mb-4 group-hover:text-primary-600 transition-colors">
+                  {/* 日記でカバー画像がある場合の特別なレイアウト */}
+                  {post.category === 'diary' && post.cover_image_url ? (
+                    <div className="relative">
+                      <div className="relative h-64 overflow-hidden">
+                        <img
+                          src={post.cover_image_url}
+                          alt="カバー写真"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        />
+                        {/* グラデーションオーバーレイ */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/50 to-black/20"></div>
+                        
+                        {/* 左上：ユーザー情報（グラスモーフィズム） */}
+                        <div className="absolute top-3 left-3 z-20">
+                          <div className="backdrop-blur-xl bg-white/20 border border-white/30 rounded-xl p-2.5 shadow-2xl">
+                            <div className="flex items-center space-x-2 flex-wrap gap-1.5">
+                              <UserAvatar 
+                                iconUrl={post.author?.icon_url} 
+                                name={post.author?.name} 
+                                size="sm"
+                              />
+                              {post.author_id ? (
+                                <span
+                                  onClick={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    router.push(`/profile/${post.author_id}`)
+                                  }}
+                                  className="text-white font-semibold text-xs drop-shadow-lg hover:text-primary-200 transition-colors cursor-pointer"
+                                >
+                                  {post.author?.name || '匿名'}
+                                </span>
+                              ) : (
+                                <span className="text-white font-semibold text-xs drop-shadow-lg">{post.author?.name || '匿名'}</span>
+                              )}
+                              {post.author && (
+                                <>
+                                  {/* 投稿カテゴリがofficialの場合はAccountBadgeを非表示 */}
+                                  {post.author.account_type && post.author.account_type !== 'individual' && post.category !== 'official' && (
+                                    <div className="drop-shadow-lg">
+                                      <AccountBadge 
+                                        accountType={post.author.account_type} 
+                                        verificationStatus={post.author.verification_status}
+                                        organizationName={post.author.organization_name}
+                                        size="sm"
+                                      />
+                                    </div>
+                                  )}
+                                  <div className="drop-shadow-lg">
+                                    <StudentStatusBadge 
+                                      languages={post.author.languages}
+                                      size="sm"
+                                    />
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* 右下：いいね数・コメント数（グラスモーフィズム） */}
+                        <div className="absolute bottom-3 right-3 z-20">
+                          <div className="backdrop-blur-xl bg-white/20 border border-white/30 rounded-xl px-3 py-2 shadow-2xl">
+                            <div className="flex items-center space-x-3 text-xs text-white">
+                              <button
+                                onClick={(e) => handleLike(post.id, e)}
+                                className={`flex items-center font-semibold drop-shadow-lg transition-all ${
+                                  likedPosts.has(post.id)
+                                    ? 'text-red-300 hover:text-red-200'
+                                    : 'text-white hover:text-red-200'
+                                }`}
+                              >
+                                <Heart className={`h-3.5 w-3.5 mr-1 ${likedPosts.has(post.id) ? 'fill-current' : ''}`} />
+                                {post.likes_count}
+                              </button>
+                              <span className="flex items-center font-semibold drop-shadow-lg">
+                                <MessageSquare className="h-3.5 w-3.5 mr-1 text-primary-200" />
+                                {post.comments_count}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* 下部オーバーレイ（タイトルとタグ用） */}
+                        <div className="absolute bottom-0 left-0 right-0 p-4 pb-5">
+                          {/* タイトル（画像の上に重ねて表示） */}
+                          <h2 className="text-xl font-bold text-white mb-3 leading-tight line-clamp-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] group-hover:text-primary-200 transition-colors">
+                            {post.title}
+                          </h2>
+                          
+                          {/* タグチップ */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {/* 日記タグ */}
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-0.5 ${getCategoryColor(post.category)} drop-shadow-lg`}>
+                              {(() => {
+                                const Icon = getCategoryIcon(post.category)
+                                return <Icon className="h-2.5 w-2.5 text-white" />
+                              })()}
+                              {getCategoryLabel(post.category)}
+                            </span>
+                            {post.study_abroad_destination && (
+                              <span className="px-2 py-0.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-medium hover:from-primary-100 hover:to-primary-200 transition-all border border-primary-200 drop-shadow-lg flex items-center gap-0.5">
+                                <MapPin className="h-2.5 w-2.5" />
+                                {post.study_abroad_destination}
+                              </span>
+                            )}
+                            {post.university && (
+                              <span className="px-2 py-0.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-medium hover:from-primary-100 hover:to-primary-200 transition-all border border-primary-200 drop-shadow-lg flex items-center gap-0.5">
+                                <GraduationCap className="h-2.5 w-2.5" />
+                                {post.university}
+                              </span>
+                            )}
+                            {post.tags && post.tags.length > 0 && post.tags.slice(0, 2).map((tag, idx) => (
+                              <span key={idx} className="px-2 py-0.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-medium hover:from-primary-100 hover:to-primary-200 transition-all border border-primary-200 drop-shadow-lg">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : post.category === 'chat' ? (
+                    <h2 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-primary-600 transition-colors leading-snug">
                       {post.content}
                     </h2>
                   ) : (
                     <>
-                      <h2 className="text-2xl font-bold text-gray-900 mb-3 group-hover:text-primary-600 transition-colors">
+                      <h2 className="text-lg font-bold text-gray-900 mb-1.5 group-hover:text-primary-600 transition-colors leading-snug">
                         {post.title}
                       </h2>
-                      <p className="text-gray-600 mb-4 line-clamp-1 leading-relaxed">
-                        {post.content}
-                      </p>
+                      {/* 日記の内容は非表示 */}
+                      {post.category !== 'diary' && (
+                        <p className="text-sm text-gray-600 mb-2 line-clamp-2 leading-relaxed">
+                          {post.content}
+                        </p>
+                      )}
+                      
+                      {/* 通常の写真表示（日記以外、またはカバー画像がない場合） */}
+                      {post.cover_image_url ? (
+                        <div className="mb-2 rounded-lg overflow-hidden border border-primary-200 shadow-sm relative">
+                          <img
+                            src={post.cover_image_url}
+                            alt="カバー写真"
+                            className="w-full h-48 object-cover"
+                          />
+                        </div>
+                      ) : post.image_url ? (
+                        <div className="mb-2 rounded-lg overflow-hidden border border-gray-200">
+                          <img
+                            src={post.image_url}
+                            alt="投稿画像"
+                            className="w-full max-w-md h-auto object-cover"
+                          />
+                        </div>
+                      ) : null}
                     </>
                   )}
-
-                  {/* 写真表示 */}
-                  {post.cover_image_url ? (
-                    <div className="mb-4 rounded-xl overflow-hidden border-2 border-primary-200 shadow-lg relative">
-                      <img
-                        src={post.cover_image_url}
-                        alt="カバー写真"
-                        className="w-full h-64 object-cover"
-                      />
-                    </div>
-                  ) : post.image_url ? (
-                    <div className="mb-4 rounded-xl overflow-hidden border border-gray-200">
-                      <img
-                        src={post.image_url}
-                        alt="投稿画像"
-                        className="w-full max-w-md h-auto object-cover"
-                      />
-                    </div>
-                  ) : null}
                   
-                  <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                    <div className="flex items-center space-x-4 text-sm text-gray-600 flex-wrap gap-3">
-                      <div className="flex items-center space-x-2">
+                  {/* フッター情報（日記でカバー画像がない場合、または日記以外の場合） */}
+                  {!(post.category === 'diary' && post.cover_image_url) && (
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <div className="flex items-center space-x-2 text-xs text-gray-600 flex-wrap gap-2">
+                      <div className="flex items-center space-x-1.5">
                         <UserAvatar 
                           iconUrl={post.author?.icon_url} 
                           name={post.author?.name} 
@@ -1648,7 +1902,8 @@ export default function Timeline() {
                       </div>
                       {post.author && (
                         <>
-                          {post.author.account_type && post.author.account_type !== 'individual' && (
+                          {/* 投稿カテゴリがofficialの場合はAccountBadgeを非表示 */}
+                          {post.author.account_type && post.author.account_type !== 'individual' && post.category !== 'official' && (
                             <AccountBadge 
                               accountType={post.author.account_type} 
                               verificationStatus={post.author.verification_status}
@@ -1664,23 +1919,31 @@ export default function Timeline() {
                       )}
                       {post.university && (
                         <span className="flex items-center text-gray-600">
-                          <GraduationCap className="h-4 w-4 mr-1" />
-                          <span className="font-medium">{post.university}</span>
+                          <GraduationCap className="h-3 w-3 mr-0.5" />
+                          <span className="font-medium text-xs">{post.university}</span>
                         </span>
                       )}
                     </div>
                     
-                    <div className="flex items-center space-x-5 text-sm text-gray-600">
-                      <span className="flex items-center font-semibold">
-                        <Heart className="h-5 w-5 mr-1.5 text-red-500" />
+                    <div className="flex items-center space-x-3 text-xs text-gray-600">
+                      <button
+                        onClick={(e) => handleLike(post.id, e)}
+                        className={`flex items-center font-semibold transition-all ${
+                          likedPosts.has(post.id)
+                            ? 'text-red-600 hover:text-red-700'
+                            : 'text-gray-600 hover:text-red-600'
+                        }`}
+                      >
+                        <Heart className={`h-3.5 w-3.5 mr-1 ${likedPosts.has(post.id) ? 'fill-current text-red-500' : 'text-red-500'}`} />
                         {post.likes_count}
-                      </span>
+                      </button>
                       <span className="flex items-center font-semibold">
-                        <MessageSquare className="h-5 w-5 mr-1.5 text-primary-500" />
+                        <MessageSquare className="h-3.5 w-3.5 mr-1 text-primary-500" />
                         {post.comments_count}
                       </span>
                     </div>
                   </div>
+                  )}
                 </div>
               </Link>
               )

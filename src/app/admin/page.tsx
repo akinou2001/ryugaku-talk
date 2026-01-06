@@ -4,16 +4,16 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
-import { isAdmin, getVerificationRequests, approveVerificationRequest, rejectVerificationRequest, getUsers, getAdminStats, updateVerificationStatus } from '@/lib/admin'
-import type { User, OrganizationVerificationRequest } from '@/lib/supabase'
-import { Shield, Users, FileCheck, AlertCircle, CheckCircle, XCircle, Search, Filter, BarChart3, UserCheck, UserX } from 'lucide-react'
+import { isAdmin, getVerificationRequests, approveVerificationRequest, rejectVerificationRequest, getUsers, getAdminStats, updateVerificationStatus, getReports, updateReportStatus, deleteReportedPost, deleteReportedComment } from '@/lib/admin'
+import type { User, OrganizationVerificationRequest, Report } from '@/lib/supabase'
+import { Shield, Users, FileCheck, AlertCircle, CheckCircle, XCircle, Search, Filter, BarChart3, UserCheck, UserX, Flag, Trash2 } from 'lucide-react'
 
 export default function AdminDashboard() {
   const { user } = useAuth()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [adminStatus, setAdminStatus] = useState(false)
-  const [activeTab, setActiveTab] = useState<'stats' | 'verifications' | 'users'>('stats')
+  const [activeTab, setActiveTab] = useState<'stats' | 'verifications' | 'users' | 'reports'>('stats')
   
   // 統計情報
   const [stats, setStats] = useState<any>(null)
@@ -32,6 +32,12 @@ export default function AdminDashboard() {
     isActive: 'all',
     search: ''
   })
+
+  // 通報管理
+  const [reports, setReports] = useState<Report[]>([])
+  const [reportStatusFilter, setReportStatusFilter] = useState<'all' | 'pending' | 'reviewed' | 'resolved'>('all')
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null)
+  const [processingReport, setProcessingReport] = useState(false)
 
   useEffect(() => {
     checkAdminAccess()
@@ -109,6 +115,18 @@ export default function AdminDashboard() {
           setUsers(data || [])
         } else {
           setUsers([])
+        }
+      } else if (activeTab === 'reports') {
+        const status = reportStatusFilter === 'all' ? undefined : reportStatusFilter
+        const { data, error } = await getReports(status)
+        if (error) {
+          console.error('Error loading reports:', error)
+          alert(`通報の取得に失敗しました: ${error.message || error}`)
+        }
+        if (data) {
+          setReports(data || [])
+        } else {
+          setReports([])
         }
       }
     } catch (error: any) {
@@ -217,6 +235,22 @@ export default function AdminDashboard() {
             >
               <Users className="h-5 w-5 inline mr-2" />
               ユーザー管理
+            </button>
+            <button
+              onClick={() => setActiveTab('reports')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'reports'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Flag className="h-5 w-5 inline mr-2" />
+              通報管理
+              {reports.filter(r => r.status === 'pending').length > 0 && (
+                <span className="ml-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full">
+                  {reports.filter(r => r.status === 'pending').length}
+                </span>
+              )}
             </button>
           </nav>
         </div>
@@ -488,6 +522,152 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* 通報管理 */}
+        {activeTab === 'reports' && (
+          <div className="space-y-6">
+            {/* フィルター */}
+            <div className="card">
+              <div className="flex items-center space-x-4">
+                <label className="block text-sm font-medium text-gray-700">ステータス</label>
+                <select
+                  value={reportStatusFilter}
+                  onChange={(e) => {
+                    setReportStatusFilter(e.target.value as 'all' | 'pending' | 'reviewed' | 'resolved')
+                    setTimeout(() => loadData(), 100)
+                  }}
+                  className="input-field"
+                >
+                  <option value="all">すべて</option>
+                  <option value="pending">未対応</option>
+                  <option value="reviewed">確認済み</option>
+                  <option value="resolved">解決済み</option>
+                </select>
+                <button
+                  onClick={loadData}
+                  className="btn-primary"
+                >
+                  更新
+                </button>
+              </div>
+            </div>
+
+            {/* 通報一覧 */}
+            <div className="space-y-4">
+              {reports.length === 0 ? (
+                <div className="card text-center py-12">
+                  <Flag className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">通報はありません</p>
+                </div>
+              ) : (
+                reports.map((report) => (
+                  <div key={report.id} className="card">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            report.status === 'pending' ? 'bg-red-100 text-red-800' :
+                            report.status === 'reviewed' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-green-100 text-green-800'
+                          }`}>
+                            {report.status === 'pending' ? '未対応' :
+                             report.status === 'reviewed' ? '確認済み' : '解決済み'}
+                          </span>
+                          <span className="text-sm text-gray-500">
+                            {new Date(report.created_at).toLocaleString('ja-JP')}
+                          </span>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          <p><strong>通報者:</strong> {report.reporter?.name || '不明'} ({report.reporter?.email || '不明'})</p>
+                          <p><strong>通報理由:</strong> {report.reason}</p>
+                          {report.description && (
+                            <p><strong>詳細:</strong> {report.description}</p>
+                          )}
+                          {report.post_id && (
+                            <div className="p-3 bg-gray-50 rounded-lg">
+                              <p><strong>通報対象（投稿）:</strong></p>
+                              <p className="text-gray-700 mt-1">{report.post?.title || '投稿が見つかりません'}</p>
+                              <a
+                                href={`/posts/${report.post_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-primary-600 hover:underline text-xs mt-1 inline-block"
+                              >
+                                投稿を確認 →
+                              </a>
+                            </div>
+                          )}
+                          {report.comment_id && (
+                            <div className="p-3 bg-gray-50 rounded-lg">
+                              <p><strong>通報対象（コメント）:</strong></p>
+                              <p className="text-gray-700 mt-1">{report.comment?.content?.substring(0, 100) || 'コメントが見つかりません'}...</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col space-y-2 ml-4">
+                        {report.status === 'pending' && (
+                          <>
+                            <button
+                              onClick={() => setSelectedReport(report)}
+                              className="btn-secondary text-sm"
+                            >
+                              詳細
+                            </button>
+                            {report.post_id && (
+                              <button
+                                onClick={async () => {
+                                  if (confirm('この投稿を削除しますか？この操作は取り消せません。')) {
+                                    setProcessingReport(true)
+                                    const result = await deleteReportedPost(report.post_id!)
+                                    setProcessingReport(false)
+                                    if (result.success) {
+                                      alert('投稿を削除しました')
+                                      loadData()
+                                    } else {
+                                      alert(`エラー: ${result.error}`)
+                                    }
+                                  }
+                                }}
+                                disabled={processingReport}
+                                className="btn-secondary text-sm text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4 inline mr-1" />
+                                投稿削除
+                              </button>
+                            )}
+                            {report.comment_id && (
+                              <button
+                                onClick={async () => {
+                                  if (confirm('このコメントを削除しますか？この操作は取り消せません。')) {
+                                    setProcessingReport(true)
+                                    const result = await deleteReportedComment(report.comment_id!)
+                                    setProcessingReport(false)
+                                    if (result.success) {
+                                      alert('コメントを削除しました')
+                                      loadData()
+                                    } else {
+                                      alert(`エラー: ${result.error}`)
+                                    }
+                                  }
+                                }}
+                                disabled={processingReport}
+                                className="btn-secondary text-sm text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4 inline mr-1" />
+                                コメント削除
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
         {/* 認証申請詳細モーダル */}
         {selectedRequest && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -552,6 +732,131 @@ export default function AdminDashboard() {
                     className="btn-secondary"
                   >
                     キャンセル
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 通報詳細モーダル */}
+        {selectedReport && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">通報の詳細</h2>
+                
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">ステータス</label>
+                    <p className="text-gray-900">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        selectedReport.status === 'pending' ? 'bg-red-100 text-red-800' :
+                        selectedReport.status === 'reviewed' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-green-100 text-green-800'
+                      }`}>
+                        {selectedReport.status === 'pending' ? '未対応' :
+                         selectedReport.status === 'reviewed' ? '確認済み' : '解決済み'}
+                      </span>
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">通報者</label>
+                    <p className="text-gray-900">{selectedReport.reporter?.name || '不明'} ({selectedReport.reporter?.email || '不明'})</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">通報理由</label>
+                    <p className="text-gray-900">{selectedReport.reason}</p>
+                  </div>
+                  {selectedReport.description && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">詳細説明</label>
+                      <p className="text-gray-900 whitespace-pre-wrap">{selectedReport.description}</p>
+                    </div>
+                  )}
+                  {selectedReport.post_id && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">通報対象（投稿）</label>
+                      <div className="p-3 bg-gray-50 rounded-lg">
+                        <p className="text-gray-900 font-semibold mb-1">{selectedReport.post?.title || '投稿が見つかりません'}</p>
+                        <p className="text-gray-700 text-sm">{selectedReport.post?.content?.substring(0, 200)}...</p>
+                        <a
+                          href={`/posts/${selectedReport.post_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary-600 hover:underline text-sm mt-2 inline-block"
+                        >
+                          投稿を確認 →
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                  {selectedReport.comment_id && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">通報対象（コメント）</label>
+                      <div className="p-3 bg-gray-50 rounded-lg">
+                        <p className="text-gray-900 whitespace-pre-wrap">{selectedReport.comment?.content || 'コメントが見つかりません'}</p>
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">通報日時</label>
+                    <p className="text-gray-900">{new Date(selectedReport.created_at).toLocaleString('ja-JP')}</p>
+                  </div>
+                </div>
+
+                <div className="flex space-x-4">
+                  {selectedReport.status === 'pending' && (
+                    <>
+                      <button
+                        onClick={async () => {
+                          if (!user) return
+                          setProcessingReport(true)
+                          const result = await updateReportStatus(selectedReport.id, 'reviewed', user.id)
+                          setProcessingReport(false)
+                          if (result.success) {
+                            alert('ステータスを「確認済み」に更新しました')
+                            setSelectedReport(null)
+                            loadData()
+                          } else {
+                            alert(`エラー: ${result.error}`)
+                          }
+                        }}
+                        disabled={processingReport}
+                        className="btn-secondary flex-1 flex items-center justify-center"
+                      >
+                        <CheckCircle className="h-5 w-5 mr-2" />
+                        確認済みにする
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!user) return
+                          setProcessingReport(true)
+                          const result = await updateReportStatus(selectedReport.id, 'resolved', user.id)
+                          setProcessingReport(false)
+                          if (result.success) {
+                            alert('ステータスを「解決済み」に更新しました')
+                            setSelectedReport(null)
+                            loadData()
+                          } else {
+                            alert(`エラー: ${result.error}`)
+                          }
+                        }}
+                        disabled={processingReport}
+                        className="btn-primary flex-1 flex items-center justify-center"
+                      >
+                        <CheckCircle className="h-5 w-5 mr-2" />
+                        解決済みにする
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => {
+                      setSelectedReport(null)
+                    }}
+                    className="btn-secondary"
+                  >
+                    閉じる
                   </button>
                 </div>
               </div>
