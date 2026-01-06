@@ -926,20 +926,6 @@ export default function Timeline() {
     ]
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
-        <div className="container mx-auto px-4 py-8 max-w-4xl">
-          <div className="space-y-3">
-            {[...Array(5)].map((_, i) => (
-              <SkeletonCard key={i} />
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
       {/* ヘッダーセクション（スクロール時に表示/非表示） */}
@@ -1048,45 +1034,41 @@ export default function Timeline() {
               </div>
             )}
           </div>
-        </div>
-      </div>
-      
-      <div className="container mx-auto px-4 py-4 max-w-4xl">
 
-        {/* フィルター表示/非表示ボタン */}
-        {view !== 'community' && (
-          <div className="mb-4">
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center space-x-2 px-4 py-2.5 bg-white rounded-xl text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-all shadow-sm border border-gray-200"
-            >
-              {showFilters ? (
-                <>
-                  <X className="h-4 w-4" />
-                  <span>フィルターを隠す</span>
-                </>
-              ) : (
-                <>
-                  <Filter className="h-4 w-4" />
-                  <span>フィルターを表示</span>
-                  {(selectedCategory !== 'all' || selectedMainCategories.length > 0 || selectedDetailCategories.length > 0 || selectedLocations.length > 0) && (
-                    <span className="ml-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white text-xs px-2.5 py-1 rounded-full font-semibold">
-                      {[
-                        selectedCategory !== 'all' ? 1 : 0,
-                        selectedMainCategories.length,
-                        selectedDetailCategories.length,
-                        selectedLocations.length
-                      ].reduce((a, b) => a + b, 0)}
-                    </span>
-                  )}
-                </>
-              )}
-            </button>
-          </div>
-        )}
+          {/* フィルター表示/非表示ボタン */}
+          {view !== 'community' && (
+            <div className="mb-3">
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center space-x-2 px-4 py-2.5 bg-white rounded-xl text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-all shadow-sm border border-gray-200"
+              >
+                {showFilters ? (
+                  <>
+                    <X className="h-4 w-4" />
+                    <span>フィルターを隠す</span>
+                  </>
+                ) : (
+                  <>
+                    <Filter className="h-4 w-4" />
+                    <span>フィルターを表示</span>
+                    {(selectedCategory !== 'all' || selectedMainCategories.length > 0 || selectedDetailCategories.length > 0 || selectedLocations.length > 0) && (
+                      <span className="ml-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white text-xs px-2.5 py-1 rounded-full font-semibold">
+                        {[
+                          selectedCategory !== 'all' ? 1 : 0,
+                          selectedMainCategories.length,
+                          selectedDetailCategories.length,
+                          selectedLocations.length
+                        ].reduce((a, b) => a + b, 0)}
+                      </span>
+                    )}
+                  </>
+                )}
+              </button>
+            </div>
+          )}
 
-        {/* 絞り込みオプション */}
-        {view !== 'community' && showFilters && (
+          {/* 絞り込みオプション */}
+          {view !== 'community' && showFilters && (
           <div className="mb-6 p-6 bg-white rounded-2xl shadow-lg border border-gray-200 space-y-6">
             {/* 投稿種別フィルター */}
             <div>
@@ -1421,8 +1403,11 @@ export default function Timeline() {
               </span>
             )}
           </div>
-        )}
-
+          )}
+        </div>
+      </div>
+      
+      <div className="container mx-auto px-4 py-4 max-w-4xl">
         {/* 投稿一覧 */}
         {view === 'community' && (
           <>
@@ -1443,6 +1428,12 @@ export default function Timeline() {
               <div className="text-center py-16 bg-white rounded-2xl shadow-lg border border-gray-200">
                 <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-500 text-lg font-medium">ログインが必要です</p>
+              </div>
+            ) : loading && !isSearching ? (
+              <div className="space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <SkeletonCard key={i} />
+                ))}
               </div>
             ) : loading && isSearching ? (
               <div className="text-center py-16 bg-white rounded-2xl shadow-lg border border-gray-200">
@@ -1625,7 +1616,13 @@ export default function Timeline() {
         )}
         {view !== 'community' && (
           <>
-            {loading && isSearching ? (
+            {loading && !isSearching ? (
+              <div className="space-y-3">
+                {[...Array(5)].map((_, i) => (
+                  <SkeletonCard key={i} />
+                ))}
+              </div>
+            ) : loading && isSearching ? (
               <div className="text-center py-16 bg-white rounded-2xl shadow-lg border border-gray-200">
                 <div className="flex flex-col items-center space-y-3">
                   <Loader2 className="h-8 w-8 text-primary-500 animate-spin" />
@@ -1755,7 +1752,7 @@ export default function Timeline() {
                               {post.author && (
                                 <>
                                   {/* 投稿カテゴリがofficialの場合はAccountBadgeを非表示 */}
-                                  {post.author.account_type && post.author.account_type !== 'individual' && post.category !== 'official' && (
+                                  {post.author.account_type && post.author.account_type !== 'individual' && (
                                     <div className="drop-shadow-lg">
                                       <AccountBadge 
                                         accountType={post.author.account_type} 

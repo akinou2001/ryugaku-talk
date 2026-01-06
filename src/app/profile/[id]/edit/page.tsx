@@ -237,7 +237,7 @@ export default function EditProfile() {
       
       // study_abroad_destinationはカンマ区切りの文字列または単一の文字列の可能性がある
       const destinations = data.study_abroad_destination 
-        ? (data.study_abroad_destination.includes(',') ? data.study_abroad_destination.split(',').map(d => d.trim()) : [data.study_abroad_destination])
+        ? (data.study_abroad_destination.includes(',') ? data.study_abroad_destination.split(',').map((d: string) => d.trim()) : [data.study_abroad_destination])
         : []
       
       // student_statusはlanguagesから復元（将来的には専用フィールドを追加）
@@ -795,13 +795,13 @@ export default function EditProfile() {
                       // 選択された目的に関連する詳細種別を取得
                       const availableDetails: { id: typeof formData.study_details[number], label: string }[] = []
                       if (formData.study_purposes.includes('learn')) {
-                        availableDetails.push(...studyDetails.learn.filter(d => d.id !== 'all'))
+                        availableDetails.push(...studyDetails.learn.filter((d): d is { id: typeof formData.study_details[number], label: string } => d.id !== 'all'))
                       }
                       if (formData.study_purposes.includes('work')) {
-                        availableDetails.push(...studyDetails.work.filter(d => d.id !== 'all'))
+                        availableDetails.push(...studyDetails.work.filter((d): d is { id: typeof formData.study_details[number], label: string } => d.id !== 'all'))
                       }
                       if (formData.study_purposes.includes('live')) {
-                        availableDetails.push(...studyDetails.live.filter(d => d.id !== 'all'))
+                        availableDetails.push(...studyDetails.live.filter((d): d is { id: typeof formData.study_details[number], label: string } => d.id !== 'all'))
                       }
                       // 重複を削除
                       const uniqueDetails = availableDetails.filter((detail, index, self) => 

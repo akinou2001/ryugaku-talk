@@ -656,7 +656,7 @@ export default function CommunityDetail() {
         name: communityEditForm.name,
         description: communityEditForm.description || undefined,
         visibility: communityEditForm.visibility,
-        cover_image_url: coverImageUrl || (communityCoverImagePreview === null && !communityCoverImage ? null : undefined)
+        cover_image_url: coverImageUrl || undefined
       })
       
       setIsEditingCommunity(false)
@@ -1601,7 +1601,7 @@ export default function CommunityDetail() {
                                         location: event.location || '',
                                         online_url: event.online_url || '',
                                         deadline: event.deadline ? new Date(event.deadline).toISOString().slice(0, 16) : '',
-                                        capacity: event.capacity || ''
+                                        capacity: event.capacity ? String(event.capacity) : ''
                                       })
                                     }}
                                     className="p-1 text-gray-600 hover:text-primary-600"
