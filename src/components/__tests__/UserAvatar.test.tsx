@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { UserAvatar } from '../UserAvatar'
 
 describe('UserAvatar', () => {
@@ -15,18 +15,20 @@ describe('UserAvatar', () => {
     expect(image).toHaveAttribute('src', 'https://example.com/avatar.jpg')
   })
 
-  it('should fallback to icon when image fails to load', () => {
-    const { rerender } = render(
-      <UserAvatar iconUrl="https://example.com/avatar.jpg" name="Test User" />
+  it('should fallback to icon when image fails to load', async () => {
+    const { container, rerender } = render(
+      <UserAvatar iconUrl="https://example.com/invalid.jpg" name="Test User" />
     )
     const image = screen.getByAltText('Test Userのアイコン')
     
     // 画像のエラーをシミュレート
-    image.dispatchEvent(new Event('error'))
-    rerender(<UserAvatar iconUrl="https://example.com/avatar.jpg" name="Test User" />)
+    fireEvent.error(image)
     
-    // フォールバックアイコンが表示される（実装によっては再レンダリングが必要）
-    expect(image).toBeInTheDocument()
+    // エラー後、フォールバックアイコンが表示される
+    await waitFor(() => {
+      const fallbackIcon = container.querySelector('.bg-primary-100')
+      expect(fallbackIcon).toBeInTheDocument()
+    })
   })
 
   it('should apply correct size classes', () => {

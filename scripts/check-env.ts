@@ -5,6 +5,13 @@
  * 必要な環境変数が設定されているか確認します
  */
 
+// .env.localファイルを読み込む
+import { config } from 'dotenv'
+import { resolve } from 'path'
+
+// .env.localファイルを読み込む
+config({ path: resolve(process.cwd(), '.env.local') })
+
 const requiredEnvVars = [
   'NEXT_PUBLIC_SUPABASE_URL',
   'NEXT_PUBLIC_SUPABASE_ANON_KEY',

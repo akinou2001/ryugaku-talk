@@ -30,7 +30,7 @@ const customJestConfig = {
     },
   },
   transformIgnorePatterns: [
-    '/node_modules/',
+    '/node_modules/(?!(react-markdown|remark-.*|unified|bail|extend|is-plain-obj|trough|vfile|unist-util-.*|mdast-.*|micromark-.*|decode-named-character-reference|character-entities|character-reference-invalid|escape-string-regexp)/)',
     '^.+\\.module\\.(css|sass|scss)$',
   ],
 }
