@@ -16,7 +16,7 @@ export default function TermsPage() {
             <FileText className="h-16 w-16 text-primary-600 mx-auto mb-4" />
             <h1 className="text-4xl font-bold text-gray-900 mb-4">利用規約</h1>
             <p className="text-lg text-gray-600">
-              最終更新日: 2024年1月1日
+              最終更新日: 2026年1月1日
             </p>
           </div>
 
@@ -88,11 +88,18 @@ export default function TermsPage() {
                     当サービスでは、以下の機能を利用できます：
                   </p>
                   <ul className="list-disc list-inside space-y-1 text-gray-700 ml-4">
-                    <li>掲示板への投稿・閲覧・コメント</li>
-                    <li>留学日記の作成・共有</li>
-                    <li>ユーザー間のチャット</li>
-                    <li>コミュニティの作成・参加</li>
-                    <li>相談機能の利用</li>
+                    <li>タイムラインでの投稿・閲覧（質問、日記、つぶやき、公式投稿）</li>
+                    <li>投稿へのコメント・いいね機能</li>
+                    <li>留学日記の作成・共有（Markdown形式対応、画像添付可能）</li>
+                    <li>ユーザー間のダイレクトメッセージ（チャット）</li>
+                    <li>コミュニティの作成・参加（サークル、公式コミュニティ）</li>
+                    <li>コミュニティ内でのイベント開催・参加</li>
+                    <li>コミュニティ内でのクエスト投稿・達成（ポイント獲得）</li>
+                    <li>マップ機能（2D/3D表示）での投稿閲覧</li>
+                    <li>通知機能（メッセージ、コメント、いいね、安全確認など）</li>
+                    <li>安全確認機能</li>
+                    <li>組織アカウントの認証・公式コミュニティ運営</li>
+                    <li>検索・フィルタリング機能</li>
                   </ul>
                 </div>
               </div>
