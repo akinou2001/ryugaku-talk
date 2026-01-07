@@ -99,28 +99,32 @@ export default function CommunitiesPage() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* ヘッダー */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
           <div>
             <div className="flex items-center space-x-3 mb-2">
               <Building2 className="h-10 w-10 text-primary-600" />
-              <h1 className="text-4xl font-bold text-gray-900 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
+              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
                 コミュニティ
               </h1>
             </div>
-            <p className="text-gray-600">コミュニティを見つけて参加しましょう</p>
+            <p className="text-gray-600 text-sm sm:text-base">コミュニティを見つけて参加しましょう</p>
           </div>
-          {user && user.account_type !== 'individual' && user.verification_status === 'verified' && (
-            <Link href="/communities/new" className="px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center">
-              <Plus className="h-5 w-5 mr-2" />
-              コミュニティを作成
-            </Link>
-          )}
-          {user && user.account_type !== 'individual' && user.verification_status === 'pending' && (
-            <div className="px-4 py-2 bg-gradient-to-r from-yellow-50 to-yellow-100 text-yellow-700 rounded-xl font-semibold flex items-center border border-yellow-200">
-              <Building2 className="h-4 w-4 mr-2" />
-              認証審査中
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {user && user.account_type !== 'individual' && user.verification_status === 'verified' && (
+              <Link href="/communities/new" className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center whitespace-nowrap text-sm sm:text-base">
+                <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5 sm:mr-2" />
+                <span className="hidden sm:inline">コミュニティを作成</span>
+                <span className="sm:hidden">作成</span>
+              </Link>
+            )}
+            {user && user.account_type !== 'individual' && user.verification_status === 'pending' && (
+              <div className="px-3 sm:px-4 py-2 bg-gradient-to-r from-yellow-50 to-yellow-100 text-yellow-700 rounded-xl font-semibold flex items-center border border-yellow-200 text-xs sm:text-sm whitespace-nowrap">
+                <Building2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                <span className="hidden sm:inline">認証審査中</span>
+                <span className="sm:hidden">審査中</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 検索・フィルター */}
@@ -155,18 +159,19 @@ export default function CommunitiesPage() {
               </button>
             </div>
             {user && (
-              <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-                <span className="text-sm text-gray-600">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 pt-2 border-t border-gray-200">
+                <span className="text-xs sm:text-sm text-gray-600">
                   {user.account_type === 'individual' 
-                    ? '個人アカウント: サークルを作成できます' 
+                    ? <span className="hidden sm:inline">個人アカウント: サークルを作成できます</span>
                     : user.verification_status === 'verified'
-                    ? '組織アカウント: 公式コミュニティを作成できます'
-                    : '組織アカウント: 認証後に公式コミュニティを作成できます'}
+                    ? <span className="hidden sm:inline">組織アカウント: 公式コミュニティを作成できます</span>
+                    : <span className="hidden sm:inline">組織アカウント: 認証後に公式コミュニティを作成できます</span>}
                 </span>
                 {user.account_type === 'individual' && (
-                  <Link href="/communities/new" className="btn-secondary text-sm flex items-center">
+                  <Link href="/communities/new" className="btn-secondary text-sm flex items-center justify-center sm:justify-start whitespace-nowrap">
                     <Plus className="h-4 w-4 mr-1" />
-                    サークルを作成
+                    <span className="hidden sm:inline">サークルを作成</span>
+                    <span className="sm:hidden">サークル作成</span>
                   </Link>
                 )}
               </div>

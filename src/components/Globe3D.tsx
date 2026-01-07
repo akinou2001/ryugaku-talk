@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useState } from 'react'
-import { HelpCircle, X, RotateCcw, ZoomIn, ZoomOut, Info, ChevronDown, ChevronUp } from 'lucide-react'
+import { HelpCircle, X, RotateCcw, ZoomIn, ZoomOut, Info, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react'
 import Link from 'next/link'
 
 // Globe3DCanvasを動的インポート（SSRを無効化）
@@ -83,6 +83,16 @@ export function Globe3D({ posts, userPostData, onMarkerClick, selectedPostId }: 
       {/* 背景グラデーションアニメーション */}
       <div className="absolute inset-0 bg-gradient-to-br from-blue-500/30 via-cyan-500/30 to-emerald-500/30 animate-pulse"></div>
       
+      {/* 左上の注意書き */}
+      <div className="absolute top-4 left-4 z-10 bg-amber-50/95 backdrop-blur-md rounded-lg px-3 py-2 shadow-lg border-2 border-amber-300/50 max-w-[220px] sm:max-w-[240px] right-[60px]">
+        <div className="flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-900 font-medium leading-relaxed">
+            3Dマップ機能は準備中です。現在モックを表示しています。
+          </p>
+        </div>
+      </div>
+      
       {/* ヘルプボタン */}
       <button
         onClick={() => setShowHelp(!showHelp)}
@@ -152,12 +162,14 @@ export function Globe3D({ posts, userPostData, onMarkerClick, selectedPostId }: 
 
       {/* 3Dキャンバス */}
       <div className="relative z-0 h-full">
-        <Globe3DCanvas
-          posts={posts}
-          userPostData={userPostData}
-          onMarkerClick={onMarkerClick}
-          selectedPostId={selectedPostId}
-        />
+        <div className="absolute top-0 left-0 w-full h-full">
+          <Globe3DCanvas
+            posts={posts}
+            userPostData={userPostData}
+            onMarkerClick={onMarkerClick}
+            selectedPostId={selectedPostId}
+          />
+        </div>
       </div>
 
       {/* ライブチャット風の投稿パネル */}

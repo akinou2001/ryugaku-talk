@@ -26,6 +26,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ja">
+      <head>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/twemoji@latest/dist/twemoji.css" />
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+      </head>
       <body className={inter.className}>
         <Providers>
           <div className="min-h-screen flex flex-col">

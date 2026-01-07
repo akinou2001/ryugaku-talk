@@ -11,6 +11,7 @@ import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
 import { StudentStatusBadge } from '@/components/StudentStatusBadge'
+import { getUniversityById, type University } from '@/lib/universities'
 
 export default function Profile() {
   const { user: currentUser } = useAuth()
@@ -21,6 +22,7 @@ export default function Profile() {
   const [posts, setPosts] = useState<Post[]>([])
   const [userScore, setUserScore] = useState<UserScore | null>(null)
   const [verificationRequest, setVerificationRequest] = useState<any>(null)
+  const [university, setUniversity] = useState<University | null>(null)
   const [loading, setLoading] = useState(true)
   const [postsLoading, setPostsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -47,6 +49,28 @@ export default function Profile() {
       }
 
       setProfile(data)
+      
+      // 大学情報を取得
+      if (data.university_id) {
+        const { data: uniData } = await getUniversityById(data.university_id)
+        if (uniData) {
+          setUniversity(uniData)
+        }
+      } else if (data.university) {
+        // 既存のテキストから大学を検索（後方互換性）
+        const { data: uniData } = await supabase
+          .from('universities')
+          .select(`
+            *,
+            continent:continents(*)
+          `)
+          .or(`name_en.ilike.%${data.university}%,name_ja.ilike.%${data.university}%`)
+          .limit(1)
+          .single()
+        if (uniData) {
+          setUniversity(uniData as University)
+        }
+      }
     } catch (error: any) {
       setError(error.message || 'プロフィールの取得に失敗しました')
     } finally {
@@ -95,10 +119,15 @@ export default function Profile() {
         .eq('profile_id', userId)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single()
+        .maybeSingle()
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching verification request:', error)
+      // 406エラー（Not Acceptable）の場合は、テーブルが存在しないかRLSポリシーの問題の可能性があるため、エラーを無視
+      if (error) {
+        // PGRST116は「レコードが見つからない」エラー（正常）
+        // 406エラーはRLSポリシーやテーブルの問題の可能性があるため、警告のみ
+        if (error.code !== 'PGRST116' && (error as any).status !== 406) {
+          console.error('Error fetching verification request:', error)
+        }
         return
       }
 
@@ -106,7 +135,10 @@ export default function Profile() {
         setVerificationRequest(data)
       }
     } catch (error: any) {
-      console.error('Error fetching verification request:', error)
+      // 406エラーの場合は無視（テーブルが存在しないかRLSポリシーの問題の可能性）
+      if (error?.status !== 406) {
+        console.error('Error fetching verification request:', error)
+      }
     }
   }
 
@@ -242,36 +274,48 @@ export default function Profile() {
 
           {/* 基本情報 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div className="space-y-4">
+            <div className="space-y-3">
               {/* 組織アカウント情報 */}
               {profile.account_type !== 'individual' && (
                 <>
                   {profile.organization_name && (
-                    <div className="flex items-center space-x-2">
-                      <Building2 className="h-5 w-5 text-gray-400" />
-                      <span className="text-gray-600">組織名: </span>
-                      <span className="font-medium">{profile.organization_name}</span>
+                    <div className="flex items-start space-x-2">
+                      <Building2 className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center flex-wrap gap-2">
+                          <span className="text-gray-600 whitespace-nowrap">組織名:</span>
+                          <span className="font-medium text-gray-900">{profile.organization_name}</span>
+                        </div>
+                      </div>
                     </div>
                   )}
                   {profile.organization_type && (
-                    <div className="flex items-center space-x-2">
-                      <Building2 className="h-5 w-5 text-gray-400" />
-                      <span className="text-gray-600">組織種別: </span>
-                      <span className="font-medium">{profile.organization_type}</span>
+                    <div className="flex items-start space-x-2">
+                      <Building2 className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center flex-wrap gap-2">
+                          <span className="text-gray-600 whitespace-nowrap">組織種別:</span>
+                          <span className="font-medium text-gray-900">{profile.organization_type}</span>
+                        </div>
+                      </div>
                     </div>
                   )}
                   {profile.organization_url && (
-                    <div className="flex items-center space-x-2">
-                      <Building2 className="h-5 w-5 text-gray-400" />
-                      <span className="text-gray-600">URL: </span>
-                      <a 
-                        href={profile.organization_url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="font-medium text-primary-600 hover:text-primary-800"
-                      >
-                        {profile.organization_url}
-                      </a>
+                    <div className="flex items-start space-x-2">
+                      <Building2 className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center flex-wrap gap-2">
+                          <span className="text-gray-600 whitespace-nowrap">URL:</span>
+                          <a 
+                            href={profile.organization_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-medium text-primary-600 hover:text-primary-800 break-all"
+                          >
+                            {profile.organization_url}
+                          </a>
+                        </div>
+                      </div>
                     </div>
                   )}
                   {profile.verification_status === 'unverified' && isOwnProfile && (
@@ -338,19 +382,57 @@ export default function Profile() {
                 </>
               )}
               {profile.study_abroad_destination && (
-                <div className="flex items-center space-x-2">
-                  <MapPin className="h-5 w-5 text-gray-400" />
-                  <span className="text-gray-600">留学先: </span>
-                  <span className="font-medium">{profile.study_abroad_destination}</span>
+                <div className="flex items-start space-x-2">
+                  <MapPin className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center flex-wrap gap-2">
+                      <span className="text-gray-600 whitespace-nowrap">留学先:</span>
+                      <span className="font-medium text-gray-900">{profile.study_abroad_destination}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {(university || profile.university) && (
+                <div className="flex items-start space-x-2">
+                  <GraduationCap className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center flex-wrap gap-2">
+                      <span className="text-gray-600 whitespace-nowrap">所属大学:</span>
+                      <span className="font-medium text-gray-900">
+                        {university ? (university.name_ja || university.name_en) : profile.university}
+                      </span>
+                      {university && university.name_ja && university.name_en && (
+                        <span className="text-sm text-gray-500 whitespace-nowrap">
+                          ({university.name_en})
+                        </span>
+                      )}
+                      {university && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs font-medium whitespace-nowrap">
+                            {university.country_code}
+                          </span>
+                          {university.continent && (
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded-full text-xs font-medium whitespace-nowrap">
+                              {university.continent.name_ja}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
             
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Calendar className="h-5 w-5 text-gray-400" />
-                <span className="text-gray-600">参加日: </span>
-                <span className="font-medium">{formatDate(profile.created_at)}</span>
+            <div className="space-y-3">
+              <div className="flex items-start space-x-2">
+                <Calendar className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center flex-wrap gap-2">
+                    <span className="text-gray-600 whitespace-nowrap">参加日:</span>
+                    <span className="font-medium text-gray-900">{formatDate(profile.created_at)}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

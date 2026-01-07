@@ -6,14 +6,15 @@ import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import { isAdmin, getVerificationRequests, approveVerificationRequest, rejectVerificationRequest, getUsers, getAdminStats, updateVerificationStatus, getReports, updateReportStatus, deleteReportedPost, deleteReportedComment } from '@/lib/admin'
 import type { User, OrganizationVerificationRequest, Report } from '@/lib/supabase'
-import { Shield, Users, FileCheck, AlertCircle, CheckCircle, XCircle, Search, Filter, BarChart3, UserCheck, UserX, Flag, Trash2 } from 'lucide-react'
+import { Shield, Users, FileCheck, AlertCircle, CheckCircle, XCircle, Search, Filter, BarChart3, UserCheck, UserX, Flag, Trash2, GraduationCap, Plus, Edit, Trash } from 'lucide-react'
+import { searchUniversities, getContinents, getCountryCodes, createUniversity, updateUniversity, deleteUniversity, getUniversityAliases, createAlias, deleteAlias, type University, type Continent, type UniversityAlias } from '@/lib/universities'
 
 export default function AdminDashboard() {
   const { user } = useAuth()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [adminStatus, setAdminStatus] = useState(false)
-  const [activeTab, setActiveTab] = useState<'stats' | 'verifications' | 'users' | 'reports'>('stats')
+  const [activeTab, setActiveTab] = useState<'stats' | 'verifications' | 'users' | 'reports' | 'universities'>('stats')
   
   // 統計情報
   const [stats, setStats] = useState<any>(null)
@@ -38,6 +39,33 @@ export default function AdminDashboard() {
   const [reportStatusFilter, setReportStatusFilter] = useState<'all' | 'pending' | 'reviewed' | 'resolved'>('all')
   const [selectedReport, setSelectedReport] = useState<Report | null>(null)
   const [processingReport, setProcessingReport] = useState(false)
+
+  // 大学管理
+  const [universities, setUniversities] = useState<University[]>([])
+  const [continents, setContinents] = useState<Continent[]>([])
+  const [countryCodes, setCountryCodes] = useState<string[]>([])
+  const [universityFilters, setUniversityFilters] = useState({
+    query: '',
+    countryCode: '',
+    continentId: '',
+    tags: [] as string[],
+  })
+  const [selectedUniversity, setSelectedUniversity] = useState<University | null>(null)
+  const [selectedUniversityAliases, setSelectedUniversityAliases] = useState<UniversityAlias[]>([])
+  const [isEditingUniversity, setIsEditingUniversity] = useState(false)
+  const [isAddingUniversity, setIsAddingUniversity] = useState(false)
+  const [newAlias, setNewAlias] = useState({ alias: '', alias_type: 'other' as 'abbreviation' | 'variant' | 'old_name' | 'other' })
+  const [universityForm, setUniversityForm] = useState({
+    name_en: '',
+    name_ja: '',
+    country_code: '',
+    continent_id: null as number | null,
+    city: '',
+    latitude: '',
+    longitude: '',
+    website: '',
+    tags: [] as string[],
+  })
 
   useEffect(() => {
     checkAdminAccess()
@@ -127,6 +155,36 @@ export default function AdminDashboard() {
           setReports(data || [])
         } else {
           setReports([])
+        }
+      } else if (activeTab === 'universities') {
+        // 大陸と国コードを取得
+        const { data: continentsData } = await getContinents()
+        if (continentsData) {
+          setContinents(continentsData)
+        }
+
+        const { data: countryCodesData } = await getCountryCodes()
+        if (countryCodesData) {
+          setCountryCodes(countryCodesData.map(c => c.country_code))
+        }
+
+        // 大学を検索
+        const { data: universitiesData, error } = await searchUniversities({
+          query: universityFilters.query || undefined,
+          countryCode: universityFilters.countryCode || undefined,
+          continentId: universityFilters.continentId ? parseInt(universityFilters.continentId) : undefined,
+          tags: universityFilters.tags.length > 0 ? universityFilters.tags : undefined,
+          limit: 100,
+        })
+
+        if (error) {
+          console.error('Error loading universities:', error)
+          alert(`大学データの取得に失敗しました: ${error.message || error}`)
+        }
+        if (universitiesData) {
+          setUniversities(universitiesData || [])
+        } else {
+          setUniversities([])
         }
       }
     } catch (error: any) {
@@ -251,6 +309,17 @@ export default function AdminDashboard() {
                   {reports.filter(r => r.status === 'pending').length}
                 </span>
               )}
+            </button>
+            <button
+              onClick={() => setActiveTab('universities')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'universities'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <GraduationCap className="h-5 w-5 inline mr-2" />
+              大学管理
             </button>
           </nav>
         </div>
@@ -857,6 +926,408 @@ export default function AdminDashboard() {
                     className="btn-secondary"
                   >
                     閉じる
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 大学管理 */}
+        {activeTab === 'universities' && (
+          <div className="space-y-6">
+            {/* フィルター */}
+            <div className="card">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">検索</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <input
+                      type="text"
+                      value={universityFilters.query}
+                      onChange={(e) => setUniversityFilters({ ...universityFilters, query: e.target.value })}
+                      placeholder="大学名（日本語・英語）"
+                      className="input-field pl-10"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">国</label>
+                  <select
+                    value={universityFilters.countryCode}
+                    onChange={(e) => setUniversityFilters({ ...universityFilters, countryCode: e.target.value })}
+                    className="input-field"
+                  >
+                    <option value="">すべて</option>
+                    {countryCodes.map(code => (
+                      <option key={code} value={code}>{code}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">大陸</label>
+                  <select
+                    value={universityFilters.continentId}
+                    onChange={(e) => setUniversityFilters({ ...universityFilters, continentId: e.target.value })}
+                    className="input-field"
+                  >
+                    <option value="">すべて</option>
+                    {continents.map(continent => (
+                      <option key={continent.id} value={continent.id.toString()}>{continent.name_ja}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={loadData}
+                    className="btn-primary w-full"
+                  >
+                    検索
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsAddingUniversity(true)
+                  setUniversityForm({
+                    name_en: '',
+                    name_ja: '',
+                    country_code: '',
+                    continent_id: null,
+                    city: '',
+                    latitude: '',
+                    longitude: '',
+                    website: '',
+                    tags: [],
+                  })
+                }}
+                className="btn-primary mt-4 flex items-center"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                大学を追加
+              </button>
+            </div>
+
+            {/* 大学一覧 */}
+            <div className="space-y-4">
+              {universities.length === 0 ? (
+                <div className="card text-center py-12">
+                  <GraduationCap className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">大学が見つかりません</p>
+                </div>
+              ) : (
+                universities.map((uni) => (
+                  <div key={uni.id} className="card">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {uni.name_ja || uni.name_en}
+                          </h3>
+                          {uni.name_ja && (
+                            <span className="text-sm text-gray-500">({uni.name_en})</span>
+                          )}
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                            {uni.country_code}
+                          </span>
+                          {uni.continent && (
+                            <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium">
+                              {uni.continent.name_ja}
+                            </span>
+                          )}
+                        </div>
+                        <div className="space-y-1 text-sm text-gray-600">
+                          {uni.city && <p><strong>都市:</strong> {uni.city}</p>}
+                          {uni.website && (
+                            <p><strong>URL:</strong> <a href={uni.website} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:underline">{uni.website}</a></p>
+                          )}
+                          {uni.tags && uni.tags.length > 0 && (
+                            <p><strong>タグ:</strong> {uni.tags.join(', ')}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={async () => {
+                            setSelectedUniversity(uni)
+                            setIsEditingUniversity(true)
+                            setUniversityForm({
+                              name_en: uni.name_en,
+                              name_ja: uni.name_ja || '',
+                              country_code: uni.country_code,
+                              continent_id: uni.continent_id || null,
+                              city: uni.city || '',
+                              latitude: uni.latitude?.toString() || '',
+                              longitude: uni.longitude?.toString() || '',
+                              website: uni.website || '',
+                              tags: uni.tags || [],
+                            })
+                            // エイリアスも取得
+                            const { data: aliases } = await getUniversityAliases(uni.id)
+                            setSelectedUniversityAliases(aliases || [])
+                          }}
+                          className="btn-secondary text-sm"
+                        >
+                          <Edit className="h-4 w-4 inline mr-1" />
+                          編集
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (confirm(`「${uni.name_ja || uni.name_en}」を削除しますか？この操作は取り消せません。`)) {
+                              const { error } = await deleteUniversity(uni.id)
+                              if (error) {
+                                alert(`エラー: ${error.message || error}`)
+                              } else {
+                                alert('大学を削除しました')
+                                loadData()
+                              }
+                            }
+                          }}
+                          className="btn-secondary text-sm text-red-600 hover:bg-red-50"
+                        >
+                          <Trash className="h-4 w-4 inline mr-1" />
+                          削除
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 大学編集・追加モーダル */}
+        {(isEditingUniversity || isAddingUniversity) && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                  {isAddingUniversity ? '大学を追加' : '大学を編集'}
+                </h2>
+                
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">英語名 *</label>
+                    <input
+                      type="text"
+                      value={universityForm.name_en}
+                      onChange={(e) => setUniversityForm({ ...universityForm, name_en: e.target.value })}
+                      className="input-field"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">日本語名</label>
+                    <input
+                      type="text"
+                      value={universityForm.name_ja}
+                      onChange={(e) => setUniversityForm({ ...universityForm, name_ja: e.target.value })}
+                      className="input-field"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">国コード *</label>
+                      <select
+                        value={universityForm.country_code}
+                        onChange={(e) => setUniversityForm({ ...universityForm, country_code: e.target.value })}
+                        className="input-field"
+                        required
+                      >
+                        <option value="">選択してください</option>
+                        {countryCodes.map(code => (
+                          <option key={code} value={code}>{code}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">大陸</label>
+                      <select
+                        value={universityForm.continent_id?.toString() || ''}
+                        onChange={(e) => setUniversityForm({ ...universityForm, continent_id: e.target.value ? parseInt(e.target.value) : null })}
+                        className="input-field"
+                      >
+                        <option value="">選択してください</option>
+                        {continents.map(continent => (
+                          <option key={continent.id} value={continent.id.toString()}>{continent.name_ja}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">都市</label>
+                    <input
+                      type="text"
+                      value={universityForm.city}
+                      onChange={(e) => setUniversityForm({ ...universityForm, city: e.target.value })}
+                      className="input-field"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">緯度</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={universityForm.latitude}
+                        onChange={(e) => setUniversityForm({ ...universityForm, latitude: e.target.value })}
+                        className="input-field"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">経度</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={universityForm.longitude}
+                        onChange={(e) => setUniversityForm({ ...universityForm, longitude: e.target.value })}
+                        className="input-field"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">公式サイトURL</label>
+                    <input
+                      type="url"
+                      value={universityForm.website}
+                      onChange={(e) => setUniversityForm({ ...universityForm, website: e.target.value })}
+                      className="input-field"
+                    />
+                  </div>
+                </div>
+
+                {/* エイリアス管理（編集時のみ） */}
+                {isEditingUniversity && selectedUniversity && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">表記ゆれ・略称</h3>
+                    <div className="space-y-2 mb-4">
+                      {selectedUniversityAliases.map((alias) => (
+                        <div key={alias.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                          <div>
+                            <span className="font-medium">{alias.alias}</span>
+                            <span className="ml-2 text-xs text-gray-500">({alias.alias_type})</span>
+                          </div>
+                          <button
+                            onClick={async () => {
+                              if (confirm(`「${alias.alias}」を削除しますか？`)) {
+                                const { error } = await deleteAlias(alias.id)
+                                if (error) {
+                                  alert(`エラー: ${error.message || error}`)
+                                } else {
+                                  const { data: aliases } = await getUniversityAliases(selectedUniversity.id)
+                                  setSelectedUniversityAliases(aliases || [])
+                                }
+                              }
+                            }}
+                            className="text-red-600 hover:text-red-800 text-sm"
+                          >
+                            <Trash className="h-4 w-4 inline" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex space-x-2">
+                      <input
+                        type="text"
+                        value={newAlias.alias}
+                        onChange={(e) => setNewAlias({ ...newAlias, alias: e.target.value })}
+                        placeholder="エイリアスを入力"
+                        className="input-field flex-1"
+                      />
+                      <select
+                        value={newAlias.alias_type}
+                        onChange={(e) => setNewAlias({ ...newAlias, alias_type: e.target.value as any })}
+                        className="input-field"
+                      >
+                        <option value="abbreviation">略称</option>
+                        <option value="variant">表記ゆれ</option>
+                        <option value="old_name">旧名称</option>
+                        <option value="other">その他</option>
+                      </select>
+                      <button
+                        onClick={async () => {
+                          if (!newAlias.alias.trim()) {
+                            alert('エイリアスを入力してください')
+                            return
+                          }
+                          const { error } = await createAlias({
+                            university_id: selectedUniversity.id,
+                            alias: newAlias.alias.trim(),
+                            alias_type: newAlias.alias_type,
+                          })
+                          if (error) {
+                            alert(`エラー: ${error.message || error}`)
+                          } else {
+                            setNewAlias({ alias: '', alias_type: 'other' })
+                            const { data: aliases } = await getUniversityAliases(selectedUniversity.id)
+                            setSelectedUniversityAliases(aliases || [])
+                          }
+                        }}
+                        className="btn-primary"
+                      >
+                        追加
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex space-x-4">
+                  <button
+                    onClick={async () => {
+                      if (!universityForm.name_en || !universityForm.country_code) {
+                        alert('英語名と国コードは必須です')
+                        return
+                      }
+                      const universityData: any = {
+                        name_en: universityForm.name_en,
+                        name_ja: universityForm.name_ja || null,
+                        country_code: universityForm.country_code,
+                        continent_id: universityForm.continent_id,
+                        city: universityForm.city || null,
+                        latitude: universityForm.latitude ? parseFloat(universityForm.latitude) : null,
+                        longitude: universityForm.longitude ? parseFloat(universityForm.longitude) : null,
+                        website: universityForm.website || null,
+                        tags: universityForm.tags,
+                      }
+                      
+                      if (isAddingUniversity) {
+                        const { data, error } = await createUniversity(universityData)
+                        if (error) {
+                          alert(`エラー: ${error.message || error}`)
+                        } else {
+                          alert('大学を追加しました')
+                          setIsAddingUniversity(false)
+                          loadData()
+                        }
+                      } else if (selectedUniversity) {
+                        const { data, error } = await updateUniversity(selectedUniversity.id, universityData)
+                        if (error) {
+                          alert(`エラー: ${error.message || error}`)
+                        } else {
+                          alert('大学を更新しました')
+                          setIsEditingUniversity(false)
+                          setSelectedUniversity(null)
+                          loadData()
+                        }
+                      }
+                    }}
+                    className="btn-primary flex-1"
+                  >
+                    {isAddingUniversity ? '追加' : '更新'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsEditingUniversity(false)
+                      setIsAddingUniversity(false)
+                      setSelectedUniversity(null)
+                      setSelectedUniversityAliases([])
+                      setNewAlias({ alias: '', alias_type: 'other' })
+                    }}
+                    className="btn-secondary"
+                  >
+                    キャンセル
                   </button>
                 </div>
               </div>

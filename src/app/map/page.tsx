@@ -66,7 +66,7 @@ export default function MapPage() {
         .from('posts')
         .select(`
           *,
-          author:profiles(id, name, icon_url, account_type, verification_status, organization_name, study_abroad_destination, languages)
+          author:profiles(id, name, icon_url, account_type, verification_status, organization_name, study_abroad_destination, languages, university_id, study_abroad_university_id)
         `)
         .is('community_id', null) // コミュニティ限定投稿は除外
         .in('category', ['question', 'diary', 'chat'])

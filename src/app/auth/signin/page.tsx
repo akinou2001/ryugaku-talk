@@ -23,7 +23,7 @@ export default function SignIn() {
 
     try {
       await signIn(email, password)
-      router.push('/')
+      router.push('/timeline')
     } catch (error: any) {
       setError(error.message || 'ログインに失敗しました')
     } finally {
@@ -37,7 +37,7 @@ export default function SignIn() {
 
     try {
       await signInWithGoogle()
-      router.push('/')
+      router.push('/timeline')
     } catch (error: any) {
       setError(error.message || 'Googleログインに失敗しました')
     } finally {

@@ -13,6 +13,17 @@
     width: 100%;
     max-width: 100vw;
   }
+  
+  /* 絵文字（国旗など）を正しく表示するためのフォント設定 */
+  .emoji, [class*="flag"], span[style*="Emoji"] {
+    font-family: 'Twemoji Mozilla', 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Segoe UI Symbol', 'Android Emoji', 'EmojiSymbols', 'EmojiOne Mozilla', 'Segoe UI', system-ui, sans-serif;
+    font-style: normal;
+    font-weight: normal;
+    line-height: 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 }
 
 @layer components {

@@ -965,53 +965,55 @@ export default function CommunityDetail() {
         {/* タブナビゲーション */}
         {canViewContent && (
           <div className="card mb-6">
-            <div className="flex space-x-1 border-b border-gray-200">
-              <button
-                onClick={() => setActiveTab('timeline')}
-                className={`px-4 py-2 font-medium text-sm transition-colors ${
-                  activeTab === 'timeline'
-                    ? 'text-primary-600 border-b-2 border-primary-600'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <MessageSquare className="h-4 w-4 inline mr-2" />
-                タイムライン
-              </button>
-              <button
-                onClick={() => setActiveTab('members')}
-                className={`px-4 py-2 font-medium text-sm transition-colors ${
-                  activeTab === 'members'
-                    ? 'text-primary-600 border-b-2 border-primary-600'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <Users className="h-4 w-4 inline mr-2" />
-                メンバー
-              </button>
-              {community.community_type === 'official' && (
+            <div className="overflow-x-auto -mx-6 px-6">
+              <div className="flex space-x-1 border-b border-gray-200 min-w-max">
                 <button
-                  onClick={() => setActiveTab('events')}
-                  className={`px-4 py-2 font-medium text-sm transition-colors ${
-                    activeTab === 'events'
+                  onClick={() => setActiveTab('timeline')}
+                  className={`px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
+                    activeTab === 'timeline'
                       ? 'text-primary-600 border-b-2 border-primary-600'
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
-                  <Calendar className="h-4 w-4 inline mr-2" />
-                  イベント
+                  <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 inline mr-1.5 sm:mr-2" />
+                  タイムライン
                 </button>
-              )}
-              <button
-                onClick={() => setActiveTab('quests')}
-                className={`px-4 py-2 font-medium text-sm transition-colors ${
-                  activeTab === 'quests'
-                    ? 'text-primary-600 border-b-2 border-primary-600'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <Award className="h-4 w-4 inline mr-2" />
-                クエスト
-              </button>
+                <button
+                  onClick={() => setActiveTab('members')}
+                  className={`px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
+                    activeTab === 'members'
+                      ? 'text-primary-600 border-b-2 border-primary-600'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Users className="h-3 w-3 sm:h-4 sm:w-4 inline mr-1.5 sm:mr-2" />
+                  メンバー
+                </button>
+                {community.community_type === 'official' && (
+                  <button
+                    onClick={() => setActiveTab('events')}
+                    className={`px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
+                      activeTab === 'events'
+                        ? 'text-primary-600 border-b-2 border-primary-600'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <Calendar className="h-3 w-3 sm:h-4 sm:w-4 inline mr-1.5 sm:mr-2" />
+                    イベント
+                  </button>
+                )}
+                <button
+                  onClick={() => setActiveTab('quests')}
+                  className={`px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
+                    activeTab === 'quests'
+                      ? 'text-primary-600 border-b-2 border-primary-600'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Award className="h-3 w-3 sm:h-4 sm:w-4 inline mr-1.5 sm:mr-2" />
+                  クエスト
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1051,38 +1053,38 @@ export default function CommunityDetail() {
                           <Link
                             key={item.id}
                             href={`/communities/${communityId}?tab=events#event-${item.id}`}
-                            className="block border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow border-l-4 border-l-purple-500 cursor-pointer"
+                            className="block border border-gray-200 rounded-lg p-3 sm:p-4 hover:shadow-md transition-shadow border-l-4 border-l-purple-500 cursor-pointer"
                           >
                             <div className="flex items-start justify-between mb-2">
-                              <div className="flex-1">
+                              <div className="flex-1 min-w-0">
                                 <div className="flex items-center space-x-2 mb-2">
-                                  <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium">
+                                  <span className="px-2 py-0.5 sm:py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium whitespace-nowrap">
                                     イベント
                                   </span>
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-900 mb-1">{item.title}</h3>
-                                <p className="text-sm text-gray-600 line-clamp-2">{item.description}</p>
-                                <div className="flex items-center space-x-4 text-xs text-gray-500 mt-2 flex-wrap gap-2">
+                                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 break-words">{item.title}</h3>
+                                <p className="text-xs sm:text-sm text-gray-600 line-clamp-2 break-words">{item.description}</p>
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-1 sm:space-y-0 text-xs text-gray-500 mt-2">
                                   {item.event_date && (
                                     <span className="flex items-center space-x-1">
-                                      <Calendar className="h-3 w-3" />
-                                      <span>{formatDateTime(item.event_date)}</span>
+                                      <Calendar className="h-3 w-3 flex-shrink-0" />
+                                      <span className="break-words">{formatDateTime(item.event_date)}</span>
                                     </span>
                                   )}
                                   {item.location && (
                                     <span className="flex items-center space-x-1">
-                                      <MapPin className="h-3 w-3" />
-                                      <span>{item.location}</span>
+                                      <MapPin className="h-3 w-3 flex-shrink-0" />
+                                      <span className="break-words truncate">{item.location}</span>
                                     </span>
                                   )}
                                   {item.deadline && (
                                     <span className="flex items-center space-x-1">
-                                      <Clock className="h-3 w-3" />
-                                      <span>締切: {formatDateTime(item.deadline)}</span>
+                                      <Clock className="h-3 w-3 flex-shrink-0" />
+                                      <span className="break-words">締切: {formatDateTime(item.deadline)}</span>
                                     </span>
                                   )}
                                   {item.creator && (
-                                    <span>{item.creator.name}</span>
+                                    <span className="truncate">{item.creator.name}</span>
                                   )}
                                 </div>
                                 {item.is_registered && (
@@ -1102,34 +1104,34 @@ export default function CommunityDetail() {
                           <Link
                             key={item.id}
                             href={`/communities/${communityId}?tab=quests#quest-${item.id}`}
-                            className="block border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow border-l-4 border-l-orange-500 cursor-pointer"
+                            className="block border border-gray-200 rounded-lg p-3 sm:p-4 hover:shadow-md transition-shadow border-l-4 border-l-orange-500 cursor-pointer"
                           >
                             <div className="flex items-start justify-between mb-2">
-                              <div className="flex-1">
+                              <div className="flex-1 min-w-0">
                                 <div className="flex items-center space-x-2 mb-2">
-                                  <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-medium">
+                                  <span className="px-2 py-0.5 sm:py-1 bg-orange-100 text-orange-800 rounded-full text-xs font-medium whitespace-nowrap">
                                     クエスト
                                   </span>
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-900 mb-1">{item.title}</h3>
+                                <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 break-words">{item.title}</h3>
                                 {item.description && (
-                                  <p className="text-sm text-gray-600 line-clamp-2 mb-2">{item.description}</p>
+                                  <p className="text-xs sm:text-sm text-gray-600 line-clamp-2 mb-2 break-words">{item.description}</p>
                                 )}
-                                <div className="flex items-center space-x-4 text-xs text-gray-500 mt-2 flex-wrap gap-2">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-1 sm:space-y-0 text-xs text-gray-500 mt-2">
                                   {item.deadline && (
                                     <span className="flex items-center space-x-1">
-                                      <Clock className="h-3 w-3" />
-                                      <span>期限: {formatDateTime(item.deadline)}</span>
+                                      <Clock className="h-3 w-3 flex-shrink-0" />
+                                      <span className="break-words">期限: {formatDateTime(item.deadline)}</span>
                                     </span>
                                   )}
                                   {item.reward_amount && (
                                     <span className="flex items-center space-x-1">
-                                      <Award className="h-3 w-3" />
+                                      <Award className="h-3 w-3 flex-shrink-0" />
                                       <span>報酬: {item.reward_amount}ポイント</span>
                                     </span>
                                   )}
                                   {item.creator && (
-                                    <span>{item.creator.name}</span>
+                                    <span className="truncate">{item.creator.name}</span>
                                   )}
                                 </div>
                                 {item.user_completion_status === 'approved' && (
@@ -1150,18 +1152,18 @@ export default function CommunityDetail() {
 
                       // 通常の投稿の場合
                       return (
-                        <div key={item.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div key={item.id} className="border border-gray-200 rounded-lg p-3 sm:p-4 hover:shadow-md transition-shadow">
                           <div className="flex items-start justify-between mb-2">
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-0">
                               <Link href={`/posts/${item.id}`} className="hover:underline">
                                 {item.category === 'chat' ? (
-                                  <p className="text-lg font-semibold text-gray-900 mb-1 line-clamp-1">{item.content}</p>
+                                  <p className="text-base sm:text-lg font-semibold text-gray-900 mb-1 line-clamp-2 break-words">{item.content}</p>
                                 ) : (
-                                  <h3 className="text-lg font-semibold text-gray-900 mb-1">{item.title}</h3>
+                                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 break-words">{item.title}</h3>
                                 )}
                               </Link>
                               {item.category !== 'chat' && (
-                                <p className="text-sm text-gray-600 line-clamp-1">{item.content}</p>
+                                <p className="text-xs sm:text-sm text-gray-600 line-clamp-2 break-words">{item.content}</p>
                               )}
                               {/* 写真表示 */}
                               {item.image_url && (
@@ -1173,22 +1175,22 @@ export default function CommunityDetail() {
                                   />
                                 </div>
                               )}
-                              <div className="flex items-center space-x-4 text-xs text-gray-500 mt-2">
-                                <div className="flex items-center space-x-2">
+                              <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs text-gray-500 mt-2">
+                                <div className="flex items-center space-x-2 min-w-0">
                                   <UserAvatar 
                                     iconUrl={item.author?.icon_url} 
                                     name={item.author?.name} 
                                     size="sm"
                                   />
-                                  <span>{item.author?.name || '不明'}</span>
+                                  <span className="truncate">{item.author?.name || '不明'}</span>
                                 </div>
-                                <span>{formatDate(item.created_at)}</span>
+                                <span className="whitespace-nowrap">{formatDate(item.created_at)}</span>
                                 <div className="flex items-center space-x-1">
-                                  <Heart className="h-3 w-3 text-red-500" />
+                                  <Heart className="h-3 w-3 text-red-500 flex-shrink-0" />
                                   <span>{item.likes_count}</span>
                                 </div>
                                 <div className="flex items-center space-x-1">
-                                  <MessageSquare className="h-3 w-3" />
+                                  <MessageSquare className="h-3 w-3 flex-shrink-0" />
                                   <span>{item.comments_count}</span>
                                 </div>
                               </div>
@@ -1587,10 +1589,10 @@ export default function CommunityDetail() {
                           </form>
                         ) : (
                           <>
-                            <div className="flex items-start justify-between mb-2">
-                              <h3 className="text-lg font-semibold text-gray-900">{event.title}</h3>
+                            <div className="flex items-start justify-between mb-2 gap-2">
+                              <h3 className="text-base sm:text-lg font-semibold text-gray-900 break-words flex-1 min-w-0">{event.title}</h3>
                               {isOwner && (
-                                <div className="flex items-center space-x-2">
+                                <div className="flex items-center space-x-2 flex-shrink-0">
                                   <button
                                     onClick={() => {
                                       setEditingEventId(event.id)
@@ -1617,16 +1619,16 @@ export default function CommunityDetail() {
                                 </div>
                               )}
                             </div>
-                            <p className="text-sm text-gray-600 mb-3">{event.description}</p>
-                        <div className="flex items-center space-x-4 text-xs text-gray-500 mb-3">
+                            <p className="text-xs sm:text-sm text-gray-600 mb-3 break-words">{event.description}</p>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-1 sm:space-y-0 text-xs text-gray-500 mb-3">
                           <div className="flex items-center space-x-1">
-                            <Calendar className="h-3 w-3" />
-                            <span>{formatDateTime(event.event_date)}</span>
+                            <Calendar className="h-3 w-3 flex-shrink-0" />
+                            <span className="break-words">{formatDateTime(event.event_date)}</span>
                           </div>
                           {event.location && (
                             <div className="flex items-center space-x-1">
-                              <Clock className="h-3 w-3" />
-                              <span>{event.location}</span>
+                              <MapPin className="h-3 w-3 flex-shrink-0" />
+                              <span className="truncate">{event.location}</span>
                             </div>
                           )}
                           {event.online_url && event.is_registered && (
@@ -1634,7 +1636,7 @@ export default function CommunityDetail() {
                               href={event.online_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="text-primary-600 hover:underline flex items-center space-x-1"
+                              className="text-primary-600 hover:underline flex items-center space-x-1 whitespace-nowrap"
                             >
                               <span>📹</span>
                               <span>会議室リンク</span>
@@ -1642,35 +1644,35 @@ export default function CommunityDetail() {
                           )}
                           {event.deadline && (
                             <div className="flex items-center space-x-1">
-                              <Clock className="h-3 w-3" />
-                              <span>締切: {formatDateTime(event.deadline)}</span>
+                              <Clock className="h-3 w-3 flex-shrink-0" />
+                              <span className="break-words">締切: {formatDateTime(event.deadline)}</span>
                             </div>
                           )}
                           {event.capacity && (
-                            <span>定員: {event.capacity}名</span>
+                            <span className="whitespace-nowrap">定員: {event.capacity}名</span>
                           )}
                         </div>
                         {/* 添付ファイル表示 */}
                         {event.attachments && event.attachments.length > 0 && (
                           <div className="mt-3 pt-3 border-t border-gray-200">
-                            <h4 className="text-sm font-medium text-gray-900 mb-2">添付ファイル</h4>
-                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            <h4 className="text-xs sm:text-sm font-medium text-gray-900 mb-2">添付ファイル</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                               {event.attachments.map((attachment, index) => (
                                 <a
                                   key={index}
                                   href={attachment.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="flex items-center space-x-2 p-2 bg-gray-50 rounded border border-gray-200 hover:bg-gray-100 transition-colors"
+                                  className="flex items-center space-x-2 p-2 bg-gray-50 rounded border border-gray-200 hover:bg-gray-100 transition-colors min-w-0"
                                 >
-                                  <span className="text-lg">{getFileIcon(attachment.type)}</span>
-                                  <span className="text-xs text-gray-700 truncate flex-1">{attachment.filename}</span>
+                                  <span className="text-lg flex-shrink-0">{getFileIcon(attachment.type)}</span>
+                                  <span className="text-xs text-gray-700 truncate flex-1 min-w-0">{attachment.filename}</span>
                                 </a>
                               ))}
                             </div>
                           </div>
                         )}
-                        <div className="flex items-center space-x-2 mt-3">
+                        <div className="flex flex-wrap items-center gap-2 mt-3">
                           {event.is_registered ? (
                             <>
                               <span className="px-3 py-1 bg-green-100 text-green-800 rounded text-sm font-medium">
@@ -1908,12 +1910,12 @@ export default function CommunityDetail() {
                           </form>
                         ) : (
                           <>
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex-1">
-                                <div className="flex items-center justify-between mb-1">
-                                  <h3 className="text-lg font-semibold text-gray-900">{quest.title}</h3>
+                            <div className="flex items-start justify-between mb-2 gap-2">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-start justify-between mb-1 gap-2">
+                                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 break-words flex-1 min-w-0">{quest.title}</h3>
                                   {quest.created_by === user?.id && (
-                                    <div className="flex items-center space-x-2">
+                                    <div className="flex items-center space-x-2 flex-shrink-0">
                                       <button
                                         onClick={() => {
                                           setEditingQuestId(quest.id)
@@ -1938,33 +1940,33 @@ export default function CommunityDetail() {
                                   )}
                                 </div>
                             {quest.description && (
-                              <p className="text-sm text-gray-600 mb-2">{quest.description}</p>
+                              <p className="text-xs sm:text-sm text-gray-600 mb-2 break-words">{quest.description}</p>
                             )}
-                            <div className="flex items-center space-x-4 text-xs text-gray-500">
-                              <span>作成者: {quest.creator?.name || '不明'}</span>
-                              <span>{formatDate(quest.created_at)}</span>
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-1 sm:space-y-0 text-xs text-gray-500">
+                              <span className="truncate">作成者: {quest.creator?.name || '不明'}</span>
+                              <span className="whitespace-nowrap">{formatDate(quest.created_at)}</span>
                               {quest.deadline && (
                                 <span className="flex items-center space-x-1">
-                                  <Clock className="h-3 w-3" />
-                                  <span>期限: {formatDateTime(quest.deadline)}</span>
+                                  <Clock className="h-3 w-3 flex-shrink-0" />
+                                  <span className="break-words">期限: {formatDateTime(quest.deadline)}</span>
                                 </span>
                               )}
                               {quest.reward_amount && (
-                                <span className="flex items-center space-x-1">
-                                  <Award className="h-3 w-3" />
+                                <span className="flex items-center space-x-1 whitespace-nowrap">
+                                  <Award className="h-3 w-3 flex-shrink-0" />
                                   <span>報酬: {quest.reward_amount}ポイント</span>
                                 </span>
                               )}
                             </div>
                           </div>
-                          <div className="ml-4">
+                          <div className="flex-shrink-0">
                             {quest.user_completion_status === 'approved' && (
-                              <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">
+                              <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium whitespace-nowrap">
                                 完了済み
                               </span>
                             )}
                             {quest.user_completion_status === 'pending' && (
-                              <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs font-medium">
+                              <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded text-xs font-medium whitespace-nowrap">
                                 申請中
                               </span>
                             )}
