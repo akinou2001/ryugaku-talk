@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { MessageCircle, Mail, Github, Twitter } from 'lucide-react'
+import { MessageCircle, Mail, Twitter } from 'lucide-react'
 
 export function Footer() {
   return (
@@ -13,14 +13,11 @@ export function Footer() {
               <span className="text-xl font-bold text-gray-900">RyugakuTalk</span>
             </div>
             <p className="text-gray-600 mb-4">
-              留学中・留学希望者・関係者が質問・共有・交流できる安全なオンラインコミュニティ
+              みんなの留学体験が紡ぐ、次世代の留学コミュニティプラットフォーム
             </p>
             <div className="flex space-x-4">
               <a href="mailto:contact@ryugakutalk.com" className="text-gray-400 hover:text-primary-600 transition-colors">
                 <Mail className="h-5 w-5" />
-              </a>
-              <a href="https://github.com" className="text-gray-400 hover:text-primary-600 transition-colors">
-                <Github className="h-5 w-5" />
               </a>
               <a href="https://twitter.com" className="text-gray-400 hover:text-primary-600 transition-colors">
                 <Twitter className="h-5 w-5" />
@@ -74,7 +71,7 @@ export function Footer() {
         </div>
 
         <div className="border-t border-gray-200 mt-8 pt-8 text-center text-gray-600">
-          <p>&copy; 2024 RyugakuTalk. All rights reserved.</p>
+          <p>&copy; 2026 RyugakuTalk. All rights reserved.</p>
         </div>
       </div>
     </footer>
