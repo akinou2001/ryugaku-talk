@@ -82,6 +82,7 @@ export function Globe3DCanvas({ posts, userPostData, onMarkerClick, selectedPost
       onCreated={(state: any) => {
         console.log('Canvas created:', state)
       }}
+      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
     >
       <OrbitControls
         enableZoom={true}

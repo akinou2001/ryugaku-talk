@@ -41,7 +41,8 @@
     "**/__tests__/**",
     "**/*.test.ts",
     "**/*.test.tsx",
-    "**/*.spec.ts"
+    "**/*.spec.ts",
+    "scripts/**/*"
   ],
   "types": ["jest", "@testing-library/jest-dom"]
 }

@@ -5,6 +5,7 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import type { Post, User } from '@/lib/supabase'
 import { getCountryCoordinates, defaultMapCenter, defaultZoom } from '@/lib/countryCoordinates'
+import { getUniversityById, type University } from '@/lib/universities'
 import { HelpCircle, X, Move, ZoomIn, MousePointer2, Info } from 'lucide-react'
 
 // Leafletのデフォルトアイコンの問題を修正
@@ -333,6 +334,7 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
   const markersRef = useRef<L.Marker[]>([])
   const [showHelp, setShowHelp] = useState(false)
   const [helpDismissed, setHelpDismissed] = useState(false)
+  const universitiesCacheRef = useRef<Map<string, University>>(new Map())
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -358,31 +360,19 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
     markersRef.current.forEach(marker => marker.remove())
     markersRef.current = []
 
-    // 投稿を国ごとにグループ化
-    const postsByCountry = posts.reduce((acc, post) => {
-      const country = post.author?.study_abroad_destination || '不明'
-      if (!acc[country]) {
-        acc[country] = []
-      }
-      acc[country].push(post)
-      return acc
-    }, {} as Record<string, Post[]>)
-
-    // 各投稿にマーカーを配置
-    Object.entries(postsByCountry).forEach(([country, countryPosts]) => {
-      const baseCoords = getCountryCoordinates(country)
-      if (!baseCoords) return
-
-      countryPosts.forEach((post, index) => {
-        const coords = getOffsetCoordinates(baseCoords, index, countryPosts.length)
-        const isSelected = selectedPostId === post.id
-        
-        // ユーザーデータを取得
-        const userData = userPostData?.find(data => data.displayPost.id === post.id)
-        
-        // userPostDataがある場合はdisplayPostを使用（正しいカテゴリを反映）
-        const displayPost = userData ? userData.displayPost : post
-        
+    // 投稿を処理（大学の緯度経度を取得）
+    const processPosts = async () => {
+      const handleMarkerClick = onMarkerClick || (() => {})
+      
+      // マーカーを作成する関数
+      const createMarkerForPost = (
+        map: L.Map,
+        displayPost: Post,
+        coords: { lat: number; lng: number },
+        isSelected: boolean,
+        userData?: UserPostData,
+        locationLabel?: string
+      ) => {
         // デバッグログ
         if (displayPost.category === 'chat') {
           console.log('つぶやきマーカー作成:', {
@@ -465,7 +455,7 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
               ${displayPost.content.substring(0, 100)}${displayPost.content.length > 100 ? '...' : ''}
             </p>
             <div style="font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 8px; margin-top: 8px;">
-              <div>📍 ${country}</div>
+              <div>📍 ${locationLabel || '不明'}</div>
               <a 
                 href="/posts/${displayPost.id}" 
                 style="
@@ -501,9 +491,9 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
         marker.on('click', (e) => {
           console.log('マーカークリックイベント:', displayPost.id)
           // クリックイベントで直接遷移
-          if (onMarkerClick) {
+          if (handleMarkerClick) {
             console.log('onMarkerClick呼び出し:', displayPost.id)
-            onMarkerClick(displayPost)
+            handleMarkerClick(displayPost)
           }
         })
         
@@ -521,8 +511,96 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
         })
 
         markersRef.current.push(marker)
+      }
+      
+      // 留学先大学情報を取得（キャッシュを使用）
+      const universityPromises = posts
+        .filter(post => post.author?.study_abroad_university_id)
+        .map(async (post) => {
+          const universityId = post.author?.study_abroad_university_id
+          if (!universityId) return null
+          
+          // キャッシュを確認
+          if (universitiesCacheRef.current.has(universityId)) {
+            return { post, university: universitiesCacheRef.current.get(universityId)! }
+          }
+          
+          // 大学情報を取得
+          const { data: university } = await getUniversityById(universityId)
+          if (university) {
+            universitiesCacheRef.current.set(universityId, university)
+            return { post, university }
+          }
+          
+          return null
+        })
+      
+      const universityData = await Promise.all(universityPromises)
+      const universityMap = new Map(universityData.filter(Boolean).map(item => [item!.post.id, item!.university]))
+
+      // 投稿を国ごとにグループ化（大学の緯度経度がない場合のみ）
+      const postsByCountry = posts.reduce((acc, post) => {
+        const hasUniversityCoords = universityMap.has(post.id) && 
+          universityMap.get(post.id)?.latitude != null && 
+          universityMap.get(post.id)?.longitude != null
+        
+        // 大学の緯度経度がある場合は個別に処理するため、グループ化しない
+        if (hasUniversityCoords) {
+          return acc
+        }
+        
+        const country = post.author?.study_abroad_destination || '不明'
+        if (!acc[country]) {
+          acc[country] = []
+        }
+        acc[country].push(post)
+        return acc
+      }, {} as Record<string, Post[]>)
+
+      // 大学の緯度経度がある投稿を個別に処理
+      posts.forEach((post) => {
+        const university = universityMap.get(post.id)
+        const hasUniversityCoords = university?.latitude != null && university?.longitude != null
+        
+        if (hasUniversityCoords) {
+          // 大学の緯度経度を使用
+          const coords = {
+            lat: university!.latitude!,
+            lng: university!.longitude!
+          }
+          const isSelected = selectedPostId === post.id
+          
+          // ユーザーデータを取得
+          const userData = userPostData?.find(data => data.displayPost.id === post.id)
+          
+          // userPostDataがある場合はdisplayPostを使用（正しいカテゴリを反映）
+          const displayPost = userData ? userData.displayPost : post
+          
+          createMarkerForPost(map, displayPost, coords, isSelected, userData, university!.name_ja || university!.name_en)
+        }
       })
-    })
+
+      // 国ごとにグループ化された投稿を処理
+      Object.entries(postsByCountry).forEach(([country, countryPosts]) => {
+        const baseCoords = getCountryCoordinates(country)
+        if (!baseCoords) return
+
+        countryPosts.forEach((post, index) => {
+          const coords = getOffsetCoordinates(baseCoords, index, countryPosts.length)
+          const isSelected = selectedPostId === post.id
+          
+          // ユーザーデータを取得
+          const userData = userPostData?.find(data => data.displayPost.id === post.id)
+          
+          // userPostDataがある場合はdisplayPostを使用（正しいカテゴリを反映）
+          const displayPost = userData ? userData.displayPost : post
+          
+          createMarkerForPost(map, displayPost, coords, isSelected, userData, country)
+        })
+      })
+    }
+
+    processPosts()
 
     // 地図のビューは常に世界全体を表示（マーカーに合わせてズームしない）
     // ユーザーが手動でズーム・パンできるようにする

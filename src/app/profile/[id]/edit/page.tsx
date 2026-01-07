@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import type { User } from '@/lib/supabase'
-import { ArrowLeft, Save, X, User as UserIcon, Search, MapPin, Briefcase, Home, GraduationCap as LearnIcon, ChevronLeft, ChevronRight, Image as ImageIcon } from 'lucide-react'
+import { ArrowLeft, Save, X, User as UserIcon, Search, Briefcase, Home, GraduationCap as LearnIcon, GraduationCap, Image as ImageIcon } from 'lucide-react'
 import { uploadFile, validateFileType, validateFileSize, FILE_TYPES } from '@/lib/storage'
+import { searchUniversities, findUniversityByAlias, type University } from '@/lib/universities'
 
 export default function EditProfile() {
   const { user } = useAuth()
@@ -24,6 +25,9 @@ export default function EditProfile() {
   
   const [formData, setFormData] = useState({
     name: '',
+    university_id: null as string | null,
+    university: '' as string, // 後方互換性のため残す
+    study_abroad_university_id: null as string | null, // 留学先大学（正規留学の場合は1つだけ）
     study_abroad_destinations: [] as string[],
     study_purposes: [] as ('learn' | 'work' | 'live')[],
     study_details: [] as ('regular-study' | 'language-study' | 'exchange' | 'research' | 'working-holiday' | 'residence' | 'local-hire' | 'volunteer' | 'internship' | 'nomad' | 'high-school' | 'summer-school')[],
@@ -31,11 +35,21 @@ export default function EditProfile() {
     bio: '',
     languages: [] as string[]
   })
+  
+  // 所属大学検索用
+  const [universitySearchQuery, setUniversitySearchQuery] = useState('')
+  const [universitySearchResults, setUniversitySearchResults] = useState<University[]>([])
+  const [selectedUniversity, setSelectedUniversity] = useState<University | null>(null)
+  const [showUniversityDropdown, setShowUniversityDropdown] = useState(false)
+  
+  // 留学先大学検索用
+  const [studyAbroadUniversitySearchQuery, setStudyAbroadUniversitySearchQuery] = useState('')
+  const [studyAbroadUniversitySearchResults, setStudyAbroadUniversitySearchResults] = useState<University[]>([])
+  const [selectedStudyAbroadUniversity, setSelectedStudyAbroadUniversity] = useState<University | null>(null)
+  const [showStudyAbroadUniversityDropdown, setShowStudyAbroadUniversityDropdown] = useState(false)
 
   const [newLanguage, setNewLanguage] = useState('')
   const [countrySearch, setCountrySearch] = useState('')
-  const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set())
-  const countryScrollRefs = useRef<Record<string, HTMLDivElement | null>>({})
   
   // 国を地域で分類
   const countriesByRegion = {
@@ -244,8 +258,33 @@ export default function EditProfile() {
       const statusTag = languages.find((lang: string) => lang.startsWith('status:'))
       const studentStatus = statusTag ? (statusTag.replace('status:', '') as 'current' | 'experienced' | 'applicant') : ''
       
+      // 大学情報を取得
+      let university: University | null = null
+      if (data.university_id) {
+        const { data: uniData } = await supabase
+          .from('universities')
+          .select(`
+            *,
+            continent:continents(*)
+          `)
+          .eq('id', data.university_id)
+          .single()
+        if (uniData) {
+          university = uniData as University
+        }
+      } else if (data.university) {
+        // 既存のテキストから大学を検索
+        const { data: foundUni } = await findUniversityByAlias(data.university)
+        if (foundUni) {
+          university = foundUni
+        }
+      }
+
       setFormData({
         name: data.name || '',
+        university_id: data.university_id || null,
+        university: data.university || '',
+        study_abroad_university_id: data.study_abroad_university_id || null,
         study_abroad_destinations: destinations,
         study_purposes: purposeTags,
         study_details: detailTags,
@@ -253,6 +292,25 @@ export default function EditProfile() {
         bio: data.bio || '',
         languages: regularLanguages
       })
+      
+      if (university) {
+        setSelectedUniversity(university)
+      }
+      
+      // 留学先大学情報を取得
+      if (data.study_abroad_university_id) {
+        const { data: studyAbroadUniData } = await supabase
+          .from('universities')
+          .select(`
+            *,
+            continent:continents(*)
+          `)
+          .eq('id', data.study_abroad_university_id)
+          .single()
+        if (studyAbroadUniData) {
+          setSelectedStudyAbroadUniversity(studyAbroadUniData as University)
+        }
+      }
       
       // 現在のアイコンURLを設定
       if (data.icon_url) {
@@ -341,8 +399,16 @@ export default function EditProfile() {
         ? formData.study_abroad_destinations.join(', ')
         : null
       
+      // 大学情報を設定
+      const universityName = selectedUniversity 
+        ? (selectedUniversity.name_ja || selectedUniversity.name_en)
+        : (formData.university || null)
+      
       const updateData: any = {
         name: formData.name,
+        university_id: selectedUniversity?.id || formData.university_id || null,
+        university: universityName, // 後方互換性のため残す
+        study_abroad_university_id: selectedStudyAbroadUniversity?.id || formData.study_abroad_university_id || null,
         study_abroad_destination: studyAbroadDestination,
         bio: formData.bio || null,
         languages: languagesWithAttributes,
@@ -532,126 +598,340 @@ export default function EditProfile() {
                 />
               </div>
 
-              {/* 留学先（国） */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    留学先
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const allExpanded = Object.keys(countriesByRegion).every(key => expandedRegions.has(key))
-                      if (allExpanded) {
-                        setExpandedRegions(new Set())
-                      } else {
-                        setExpandedRegions(new Set(Object.keys(countriesByRegion)))
-                      }
-                    }}
-                    className="text-xs text-primary-600 hover:text-primary-800"
-                  >
-                    {Object.keys(countriesByRegion).every(key => expandedRegions.has(key)) ? 'すべて折りたたむ' : 'すべて展開'}
-                  </button>
-                </div>
+              {/* 所属大学 */}
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  所属大学
+                </label>
                 
-                {/* 地域別の国の国旗チップ（横スクロール・折りたたみ可能） */}
-                {Object.entries(countriesByRegion).map(([regionKey, region]) => {
-                  const isExpanded = expandedRegions.has(regionKey)
-                  return (
-                    <div key={regionKey} className="mb-2 border border-gray-200 rounded-lg overflow-hidden">
+                {/* 選択された大学の表示 */}
+                {selectedUniversity && (
+                  <div className="mb-3">
+                    <div className="inline-flex items-center space-x-2 px-4 py-2 bg-primary-50 border border-primary-200 rounded-lg">
+                      <GraduationCap className="h-5 w-5 text-primary-600" />
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">
+                          {selectedUniversity.name_ja || selectedUniversity.name_en}
+                        </div>
+                        {selectedUniversity.name_ja && selectedUniversity.name_en && (
+                          <div className="text-sm text-gray-500">{selectedUniversity.name_en}</div>
+                        )}
+                        {selectedUniversity.continent && (
+                          <div className="text-xs text-gray-400 mt-1">
+                            {selectedUniversity.country_code} ・ {selectedUniversity.continent.name_ja}
+                          </div>
+                        )}
+                      </div>
                       <button
                         type="button"
                         onClick={() => {
-                          setExpandedRegions(prev => {
-                            const newSet = new Set(prev)
-                            if (newSet.has(regionKey)) {
-                              newSet.delete(regionKey)
-                            } else {
-                              newSet.add(regionKey)
-                            }
-                            return newSet
-                          })
+                          setSelectedUniversity(null)
+                          setUniversitySearchQuery('')
+                          setFormData({ ...formData, university_id: null, university: '' })
                         }}
-                        className="w-full px-4 py-2 bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
+                        className="text-gray-400 hover:text-red-600 transition-colors"
                       >
-                        <h4 className="text-sm font-medium text-gray-700">{region.label}</h4>
-                        <span className="text-xs text-gray-500">
-                          {isExpanded ? '▼' : '▶'} {formData.study_abroad_destinations.filter(d => region.countries.some(c => c.name === d)).length > 0 && `(${formData.study_abroad_destinations.filter(d => region.countries.some(c => c.name === d)).length}件選択中)`}
-                        </span>
+                        <X className="h-5 w-5" />
                       </button>
-                      {isExpanded && (
-                        <div className="relative p-2">
+                    </div>
+                  </div>
+                )}
+
+                {/* 大学検索入力 */}
+                {!selectedUniversity && (
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Search className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      value={universitySearchQuery}
+                      onChange={async (e) => {
+                        const query = e.target.value
+                        setUniversitySearchQuery(query)
+                        setShowUniversityDropdown(true)
+                        
+                        if (query.length >= 2) {
+                          const { data } = await searchUniversities({ query, limit: 10 })
+                          setUniversitySearchResults(data || [])
+                        } else {
+                          setUniversitySearchResults([])
+                        }
+                      }}
+                      onFocus={() => {
+                        if (universitySearchQuery.length >= 2) {
+                          setShowUniversityDropdown(true)
+                        }
+                      }}
+                      onBlur={() => {
+                        // 少し遅延させてクリックイベントを処理
+                        setTimeout(() => setShowUniversityDropdown(false), 200)
+                      }}
+                      placeholder="大学名を検索（日本語・英語対応）..."
+                      className="input-field pl-10"
+                    />
+                    
+                    {/* 検索結果ドロップダウン */}
+                    {showUniversityDropdown && universitySearchResults.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {universitySearchResults.map((uni) => (
                           <button
+                            key={uni.id}
                             type="button"
                             onClick={() => {
-                              const ref = countryScrollRefs.current[regionKey]
-                              if (ref) {
-                                ref.scrollBy({ left: -200, behavior: 'smooth' })
-                              }
+                              setSelectedUniversity(uni)
+                              setUniversitySearchQuery('')
+                              setFormData({ ...formData, university_id: uni.id, university: uni.name_ja || uni.name_en })
+                              setShowUniversityDropdown(false)
                             }}
-                            className="absolute left-2 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 shadow-md hover:bg-gray-50 transition-colors"
+                            className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
                           >
-                            <ChevronLeft className="h-5 w-5 text-gray-600" />
-                          </button>
-                          <div 
-                            ref={(el) => { countryScrollRefs.current[regionKey] = el }}
-                            className="overflow-x-auto pb-2 scrollbar-hide px-8" 
-                            style={{ WebkitOverflowScrolling: 'touch' }}
-                          >
-                            <div className="flex space-x-2 min-w-max">
-                              {region.countries.map((country) => {
-                                const isSelected = formData.study_abroad_destinations.includes(country.name)
-                                return (
-                                  <button
-                                    key={country.code}
-                                    type="button"
-                                    onClick={() => {
-                                      if (country.code === 'OTHER') {
-                                        setFormData(prev => ({ ...prev, study_abroad_destinations: [] }))
-                                        setCountrySearch('')
-                                      } else {
-                                        setFormData(prev => {
-                                          if (prev.study_abroad_destinations.includes(country.name)) {
-                                            return { ...prev, study_abroad_destinations: prev.study_abroad_destinations.filter(c => c !== country.name) }
-                                          } else {
-                                            return { ...prev, study_abroad_destinations: [...prev.study_abroad_destinations, country.name] }
-                                          }
-                                        })
-                                        setCountrySearch('')
-                                      }
-                                    }}
-                                    className={`px-3 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap flex items-center space-x-1 flex-shrink-0 ${
-                                      isSelected
-                                        ? 'bg-primary-600 text-white'
-                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                    }`}
-                                  >
-                                    <span>{country.flag}</span>
-                                    <span>{country.name}</span>
-                                  </button>
-                                )
-                              })}
+                            <div className="flex items-start space-x-3">
+                              <GraduationCap className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-gray-900 truncate">
+                                  {uni.name_ja || uni.name_en}
+                                </div>
+                                {uni.name_ja && uni.name_en && (
+                                  <div className="text-sm text-gray-500 truncate mt-0.5">
+                                    {uni.name_en}
+                                  </div>
+                                )}
+                                <div className="flex items-center space-x-2 mt-1">
+                                  <span className="text-xs text-gray-400">
+                                    {uni.country_code}
+                                  </span>
+                                  {uni.continent?.name_ja && (
+                                    <>
+                                      <span className="text-xs text-gray-300">・</span>
+                                      <span className="text-xs text-gray-400">
+                                        {uni.continent.name_ja}
+                                      </span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const ref = countryScrollRefs.current[regionKey]
-                              if (ref) {
-                                ref.scrollBy({ left: 200, behavior: 'smooth' })
-                              }
-                            }}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 shadow-md hover:bg-gray-50 transition-colors"
-                          >
-                            <ChevronRight className="h-5 w-5 text-gray-600" />
                           </button>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {/* 検索結果が空の場合 */}
+                    {showUniversityDropdown && universitySearchQuery.length >= 2 && universitySearchResults.length === 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4">
+                        <div className="text-sm text-gray-500 text-center">
+                          該当する大学が見つかりませんでした
+                        </div>
+                        <div className="text-xs text-gray-400 text-center mt-1">
+                          別のキーワードで検索するか、管理者にお問い合わせください
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                <p className="text-xs text-gray-500 mt-1">
+                  {selectedUniversity 
+                    ? '選択した大学を変更する場合は、上記の×ボタンをクリックしてください。'
+                    : '大学名を入力して検索してください。日本語名・英語名の両方で検索できます。'}
+                </p>
+              </div>
+
+              {/* 留学先大学（正規留学以外の場合のみ） */}
+              {!formData.study_details.includes('regular-study') && (
+                <div className="relative">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    留学先大学
+                  </label>
+                  
+                  {/* 選択された留学先大学の表示 */}
+                  {selectedStudyAbroadUniversity && (
+                    <div className="mb-3">
+                      <div className="inline-flex items-center space-x-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                        <GraduationCap className="h-5 w-5 text-green-600" />
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">
+                            {selectedStudyAbroadUniversity.name_ja || selectedStudyAbroadUniversity.name_en}
+                          </div>
+                          {selectedStudyAbroadUniversity.name_ja && selectedStudyAbroadUniversity.name_en && (
+                            <div className="text-sm text-gray-500">{selectedStudyAbroadUniversity.name_en}</div>
+                          )}
+                          {selectedStudyAbroadUniversity.continent && (
+                            <div className="text-xs text-gray-400 mt-1">
+                              {selectedStudyAbroadUniversity.country_code} ・ {selectedStudyAbroadUniversity.continent.name_ja}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedStudyAbroadUniversity(null)
+                            setStudyAbroadUniversitySearchQuery('')
+                            setFormData({ ...formData, study_abroad_university_id: null })
+                          }}
+                          className="text-gray-400 hover:text-red-600 transition-colors"
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 留学先大学検索入力 */}
+                  {!selectedStudyAbroadUniversity && (
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <Search className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <input
+                        type="text"
+                        value={studyAbroadUniversitySearchQuery}
+                        onChange={async (e) => {
+                          const query = e.target.value
+                          setStudyAbroadUniversitySearchQuery(query)
+                          
+                          if (query.length >= 2) {
+                            setShowStudyAbroadUniversityDropdown(true)
+                            try {
+                              const { data, error } = await searchUniversities({ query, limit: 10 })
+                              if (error) {
+                                console.error('大学検索エラー:', error)
+                                setStudyAbroadUniversitySearchResults([])
+                              } else {
+                                console.log('検索結果:', data)
+                                setStudyAbroadUniversitySearchResults(data || [])
+                              }
+                            } catch (error) {
+                              console.error('大学検索例外:', error)
+                              setStudyAbroadUniversitySearchResults([])
+                            }
+                          } else {
+                            setStudyAbroadUniversitySearchResults([])
+                            setShowStudyAbroadUniversityDropdown(false)
+                          }
+                        }}
+                        onFocus={() => {
+                          if (studyAbroadUniversitySearchQuery.length >= 2) {
+                            setShowStudyAbroadUniversityDropdown(true)
+                          }
+                        }}
+                        onBlur={() => {
+                          // 少し遅延させてクリックイベントを処理
+                          setTimeout(() => setShowStudyAbroadUniversityDropdown(false), 200)
+                        }}
+                        placeholder="留学先大学名を検索（日本語・英語対応）..."
+                        className="input-field pl-10"
+                      />
+                      
+                      {/* 検索結果ドロップダウン */}
+                      {showStudyAbroadUniversityDropdown && studyAbroadUniversitySearchResults.length > 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                          {studyAbroadUniversitySearchResults.map((uni) => (
+                            <button
+                              key={uni.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedStudyAbroadUniversity(uni)
+                                setStudyAbroadUniversitySearchQuery('')
+                                setFormData({ ...formData, study_abroad_university_id: uni.id })
+                                setShowStudyAbroadUniversityDropdown(false)
+                              }}
+                              className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
+                            >
+                              <div className="flex items-start space-x-3">
+                                <GraduationCap className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium text-gray-900 truncate">
+                                    {uni.name_ja || uni.name_en}
+                                  </div>
+                                  {uni.name_ja && uni.name_en && (
+                                    <div className="text-sm text-gray-500 truncate mt-0.5">
+                                      {uni.name_en}
+                                    </div>
+                                  )}
+                                  <div className="flex items-center space-x-2 mt-1">
+                                    <span className="text-xs text-gray-400">
+                                      {uni.country_code}
+                                    </span>
+                                    {uni.continent?.name_ja && (
+                                      <>
+                                        <span className="text-xs text-gray-300">・</span>
+                                        <span className="text-xs text-gray-400">
+                                          {uni.continent.name_ja}
+                                        </span>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* 検索結果が空の場合 */}
+                      {showStudyAbroadUniversityDropdown && studyAbroadUniversitySearchQuery.length >= 2 && studyAbroadUniversitySearchResults.length === 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4">
+                          <div className="text-sm text-gray-500 text-center">
+                            該当する大学が見つかりませんでした
+                          </div>
+                          <div className="text-xs text-gray-400 text-center mt-1">
+                            別のキーワードで検索するか、管理者にお問い合わせください
+                          </div>
                         </div>
                       )}
                     </div>
-                  )
-                })}
+                  )}
+                  
+                  <p className="text-xs text-gray-500 mt-1">
+                    {selectedStudyAbroadUniversity 
+                      ? '選択した留学先大学を変更する場合は、上記の×ボタンをクリックしてください。'
+                      : '留学先大学を1つ選択できます。大学名を入力して検索してください。'}
+                  </p>
+                </div>
+              )}
+
+              {/* 留学先（国） */}
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  留学先
+                </label>
                 
-                {/* 検索窓（全ての国を検索可能） */}
+                {/* 選択された国の表示 */}
+                {formData.study_abroad_destinations.length > 0 && (
+                  <div className="mb-3">
+                    <div className="flex flex-wrap gap-2">
+                      {formData.study_abroad_destinations.map((destination) => {
+                        const country = allCountries.find(c => c.name === destination)
+                        if (!country) return null
+                        return (
+                          <div
+                            key={country.code}
+                            className="inline-flex items-center space-x-2 px-3 py-1.5 bg-primary-50 border border-primary-200 rounded-lg"
+                          >
+                            <span className="text-lg">{country.flag}</span>
+                            <span className="font-medium text-gray-900 text-sm">{country.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  study_abroad_destinations: prev.study_abroad_destinations.filter(d => d !== destination)
+                                }))
+                              }}
+                              className="text-gray-400 hover:text-red-600 transition-colors"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 国検索入力 */}
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <Search className="h-5 w-5 text-gray-400" />
@@ -660,42 +940,85 @@ export default function EditProfile() {
                     type="text"
                     value={countrySearch}
                     onChange={(e) => setCountrySearch(e.target.value)}
-                    placeholder="国を検索..."
+                    onFocus={() => {
+                      // フォーカス時に検索結果を表示（検索クエリがある場合）
+                      if (countrySearch.length >= 1) {
+                        // 検索結果は既にfilteredCountriesに反映されている
+                      }
+                    }}
+                    onBlur={() => {
+                      // 少し遅延させてクリックイベントを処理
+                      setTimeout(() => {
+                        // 検索結果のドロップダウンは条件付きで表示されるため、ここでは何もしない
+                      }, 200)
+                    }}
+                    placeholder="国を検索（国旗・国名で検索可能）..."
                     className="input-field pl-10 w-full"
                   />
+                  
+                  {/* 検索結果ドロップダウン */}
                   {countrySearch && filteredCountries.length > 0 && (
                     <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {filteredCountries.map((country) => (
-                        <button
-                          key={country.code}
-                          type="button"
-                          onClick={() => {
-                            setFormData(prev => {
-                              if (prev.study_abroad_destinations.includes(country.name)) {
-                                return { ...prev, study_abroad_destinations: prev.study_abroad_destinations.filter(c => c !== country.name) }
-                              } else {
-                                return { ...prev, study_abroad_destinations: [...prev.study_abroad_destinations, country.name] }
-                              }
-                            })
-                            setCountrySearch('')
-                          }}
-                          className={`w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center space-x-2 ${
-                            formData.study_abroad_destinations.includes(country.name) ? 'bg-primary-50' : ''
-                          }`}
-                        >
-                          <span className="text-xl">{country.flag}</span>
-                          <span className="text-sm">{country.name}</span>
-                        </button>
-                      ))}
+                      {filteredCountries.map((country) => {
+                        const isSelected = formData.study_abroad_destinations.includes(country.name)
+                        return (
+                          <button
+                            key={country.code}
+                            type="button"
+                            onClick={() => {
+                              setFormData(prev => {
+                                if (prev.study_abroad_destinations.includes(country.name)) {
+                                  return { ...prev, study_abroad_destinations: prev.study_abroad_destinations.filter(c => c !== country.name) }
+                                } else {
+                                  return { ...prev, study_abroad_destinations: [...prev.study_abroad_destinations, country.name] }
+                                }
+                              })
+                              // 検索クエリはクリアしない（複数選択のため）
+                            }}
+                            className={`w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors flex items-center space-x-3 ${
+                              isSelected ? 'bg-primary-50' : ''
+                            }`}
+                          >
+                            <span className="text-2xl flex-shrink-0">{country.flag}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className={`font-medium ${isSelected ? 'text-primary-700' : 'text-gray-900'}`}>
+                                {country.name}
+                              </div>
+                              <div className="text-xs text-gray-400 mt-0.5">
+                                国コード: {country.code}
+                              </div>
+                            </div>
+                            {isSelected && (
+                              <div className="flex-shrink-0">
+                                <div className="w-5 h-5 rounded-full bg-primary-600 flex items-center justify-center">
+                                  <X className="h-3 w-3 text-white" />
+                                </div>
+                              </div>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                  
+                  {/* 検索結果が空の場合 */}
+                  {countrySearch && filteredCountries.length === 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4">
+                      <div className="text-sm text-gray-500 text-center">
+                        該当する国が見つかりませんでした
+                      </div>
+                      <div className="text-xs text-gray-400 text-center mt-1">
+                        別のキーワードで検索してください
+                      </div>
                     </div>
                   )}
                 </div>
                 
-                {formData.study_abroad_destinations.length > 0 && (
-                  <p className="text-sm text-gray-500 mt-2">
-                    選択中: {formData.study_abroad_destinations.join(', ')}
-                  </p>
-                )}
+                <p className="text-xs text-gray-500 mt-1">
+                  {formData.study_abroad_destinations.length > 0
+                    ? `${formData.study_abroad_destinations.length}つの国を選択中です。変更する場合は、上記の×ボタンをクリックしてください。`
+                    : '国名を入力して検索してください。複数選択可能です。'}
+                </p>
               </div>
 
               {/* 留学ステータス */}

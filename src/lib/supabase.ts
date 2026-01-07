@@ -31,7 +31,9 @@ export interface User {
   email: string
   name: string
   account_type: AccountType
-  university?: string
+  university_id?: string | null
+  university?: string // 後方互換性のため残す
+  study_abroad_university_id?: string | null
   study_abroad_destination?: string
   major?: string
   bio?: string
@@ -85,7 +87,8 @@ export interface Post {
   content: string
   category: 'question' | 'diary' | 'chat' | 'information' | 'official' // 'information'は後方互換性のため残す
   tags: string[]
-  university?: string
+  university_id?: string | null
+  university?: string // 後方互換性のため残す
   study_abroad_destination?: string
   major?: string
   author_id: string

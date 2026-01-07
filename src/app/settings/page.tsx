@@ -10,20 +10,18 @@ import Link from 'next/link'
 export default function SettingsPage() {
   const { user, signOut } = useAuth()
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'verification' | 'notifications' | 'privacy' | 'account'>('profile')
+  const [activeTab, setActiveTab] = useState<'account' | 'password' | 'verification' | 'notifications' | 'privacy' | 'delete'>('account')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
-  // プロフィール設定
-  const [profileData, setProfileData] = useState({
+  // アカウント設定（登録時の情報を表示）
+  const [accountData, setAccountData] = useState({
     name: '',
     email: '',
-    bio: '',
-    university: '',
-    study_abroad_destination: '',
-    major: '',
-    languages: [] as string[],
+    account_type: '' as 'individual' | 'educational' | 'company' | 'government' | '',
+    organization_name: '',
+    organization_type: '',
     contact_person_name: '',
     contact_person_email: '',
     contact_person_phone: ''
@@ -41,7 +39,7 @@ export default function SettingsPage() {
     confirm: false
   })
 
-  // アカウント削除
+  // 退会
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [showDeleteModal, setShowDeleteModal] = useState(false)
 
@@ -60,8 +58,8 @@ export default function SettingsPage() {
       return
     }
 
-    // プロフィールデータを読み込む
-    loadProfileData()
+    // アカウントデータを読み込む
+    loadAccountData()
     
     // 組織アカウントの場合は認証申請情報を読み込む
     if (user && user.account_type !== 'individual') {
@@ -69,17 +67,15 @@ export default function SettingsPage() {
     }
   }, [user, router])
 
-  const loadProfileData = async () => {
+  const loadAccountData = async () => {
     if (!user) return
 
-    setProfileData({
+    setAccountData({
       name: user.name || '',
       email: user.email || '',
-      bio: user.bio || '',
-      university: user.university || '',
-      study_abroad_destination: user.study_abroad_destination || '',
-      major: user.major || '',
-      languages: user.languages || [],
+      account_type: user.account_type || 'individual',
+      organization_name: user.organization_name || '',
+      organization_type: user.organization_type || '',
       contact_person_name: user.contact_person_name || '',
       contact_person_email: user.contact_person_email || '',
       contact_person_phone: user.contact_person_phone || ''
@@ -196,49 +192,6 @@ export default function SettingsPage() {
     }
   }
 
-  const handleProfileUpdate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!user) return
-
-    setLoading(true)
-    setError('')
-    setSuccess('')
-
-    try {
-      const updateData: any = {
-        name: profileData.name,
-        bio: profileData.bio || null,
-        university: profileData.university || null,
-        study_abroad_destination: profileData.study_abroad_destination || null,
-        major: profileData.major || null,
-        languages: profileData.languages,
-        updated_at: new Date().toISOString()
-      }
-
-      // 組織アカウントの場合
-      if (user.account_type !== 'individual') {
-        updateData.contact_person_name = profileData.contact_person_name || null
-        updateData.contact_person_email = profileData.contact_person_email || null
-        updateData.contact_person_phone = profileData.contact_person_phone || null
-      }
-
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update(updateData)
-        .eq('id', user.id)
-
-      if (updateError) throw updateError
-
-      setSuccess('プロフィールを更新しました')
-      
-      // プロフィールを再読み込み
-      window.location.reload()
-    } catch (error: any) {
-      setError(error.message || 'プロフィールの更新に失敗しました')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -300,8 +253,8 @@ export default function SettingsPage() {
 
   const handleDeleteAccount = async () => {
     if (!user) return
-    if (deleteConfirm !== '削除') {
-      setError('「削除」と入力してください')
+    if (deleteConfirm !== '退会') {
+      setError('「退会」と入力してください')
       return
     }
 
@@ -330,7 +283,7 @@ export default function SettingsPage() {
       await signOut()
       router.push('/')
     } catch (error: any) {
-      setError(error.message || 'アカウントの削除に失敗しました')
+      setError(error.message || '退会処理に失敗しました')
       setLoading(false)
     }
   }
@@ -357,15 +310,15 @@ export default function SettingsPage() {
             <div className="lg:col-span-1">
               <nav className="card p-2 space-y-1">
                 <button
-                  onClick={() => setActiveTab('profile')}
+                  onClick={() => setActiveTab('account')}
                   className={`w-full flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                    activeTab === 'profile'
+                    activeTab === 'account'
                       ? 'bg-primary-50 text-primary-600'
                       : 'text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   <User className="h-4 w-4" />
-                  <span>プロフィール</span>
+                  <span>アカウント設定</span>
                 </button>
                 <button
                   onClick={() => setActiveTab('password')}
@@ -419,15 +372,15 @@ export default function SettingsPage() {
                   <span>プライバシー</span>
                 </button>
                 <button
-                  onClick={() => setActiveTab('account')}
+                  onClick={() => setActiveTab('delete')}
                   className={`w-full flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                    activeTab === 'account'
+                    activeTab === 'delete'
                       ? 'bg-red-50 text-red-600'
                       : 'text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   <Trash2 className="h-4 w-4" />
-                  <span>アカウント</span>
+                  <span>退会</span>
                 </button>
               </nav>
             </div>
@@ -446,172 +399,152 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* プロフィール設定 */}
-              {activeTab === 'profile' && (
-                <form onSubmit={handleProfileUpdate} className="card space-y-6">
-                  <h2 className="text-xl font-semibold text-gray-900">プロフィール設定</h2>
-
+              {/* アカウント設定（登録時の情報を表示） */}
+              {activeTab === 'account' && (
+                <div className="card space-y-6">
                   <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                      名前 <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      id="name"
-                      value={profileData.name}
-                      onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
-                      required
-                      className="input-field"
-                    />
+                    <h2 className="text-xl font-semibold text-gray-900 mb-2">アカウント設定</h2>
+                    <p className="text-sm text-gray-600">登録時にご入力いただいた情報を表示しています。プロフィール情報の編集は<a href={`/profile/${user.id}/edit`} className="text-primary-600 hover:text-primary-700 underline">プロフィール編集</a>から行えます。</p>
                   </div>
 
-                  <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                      メールアドレス
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Mail className="h-5 w-5 text-gray-400" />
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        アカウントタイプ
+                      </label>
+                      <div className="input-field bg-gray-50">
+                        {accountData.account_type === 'individual' ? '個人アカウント' :
+                         accountData.account_type === 'educational' ? '教育機関アカウント' :
+                         accountData.account_type === 'company' ? '企業アカウント' :
+                         accountData.account_type === 'government' ? '政府機関アカウント' :
+                         '不明'}
                       </div>
-                      <input
-                        type="email"
-                        id="email"
-                        value={profileData.email}
-                        disabled
-                        className="input-field pl-10 bg-gray-50"
-                      />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">メールアドレスは変更できません</p>
-                  </div>
 
-                  <div>
-                    <label htmlFor="bio" className="block text-sm font-medium text-gray-700 mb-2">
-                      自己紹介
-                    </label>
-                    <textarea
-                      id="bio"
-                      value={profileData.bio}
-                      onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
-                      rows={4}
-                      className="input-field"
-                      placeholder="自己紹介を入力してください"
-                    />
-                  </div>
-
-                  {user.account_type === 'individual' && (
-                    <>
-                      <div>
-                        <label htmlFor="university" className="block text-sm font-medium text-gray-700 mb-2">
-                          大学
-                        </label>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {accountData.account_type === 'individual' ? '名前' : '担当者名'}
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <User className="h-5 w-5 text-gray-400" />
+                        </div>
                         <input
                           type="text"
-                          id="university"
-                          value={profileData.university}
-                          onChange={(e) => setProfileData({ ...profileData, university: e.target.value })}
-                          className="input-field"
-                          placeholder="例: 東京大学"
+                          value={accountData.name}
+                          disabled
+                          className="input-field pl-10 bg-gray-50"
                         />
                       </div>
+                    </div>
 
-                      <div>
-                        <label htmlFor="study_abroad_destination" className="block text-sm font-medium text-gray-700 mb-2">
-                          留学先
-                        </label>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        メールアドレス
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <Mail className="h-5 w-5 text-gray-400" />
+                        </div>
                         <input
-                          type="text"
-                          id="study_abroad_destination"
-                          value={profileData.study_abroad_destination}
-                          onChange={(e) => setProfileData({ ...profileData, study_abroad_destination: e.target.value })}
-                          className="input-field"
-                          placeholder="例: アメリカ"
+                          type="email"
+                          value={accountData.email}
+                          disabled
+                          className="input-field pl-10 bg-gray-50"
                         />
                       </div>
+                    </div>
 
-                      <div>
-                        <label htmlFor="major" className="block text-sm font-medium text-gray-700 mb-2">
-                          専攻
-                        </label>
-                        <input
-                          type="text"
-                          id="major"
-                          value={profileData.major}
-                          onChange={(e) => setProfileData({ ...profileData, major: e.target.value })}
-                          className="input-field"
-                          placeholder="例: コンピュータサイエンス"
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {user.account_type !== 'individual' && (
-                    <>
-                      <div>
-                        <label htmlFor="contact_person_name" className="block text-sm font-medium text-gray-700 mb-2">
-                          担当者名
-                        </label>
-                        <div className="relative">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <User className="h-5 w-5 text-gray-400" />
+                    {accountData.account_type !== 'individual' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            組織名
+                          </label>
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                              <Building2 className="h-5 w-5 text-gray-400" />
+                            </div>
+                            <input
+                              type="text"
+                              value={accountData.organization_name}
+                              disabled
+                              className="input-field pl-10 bg-gray-50"
+                            />
                           </div>
-                          <input
-                            type="text"
-                            id="contact_person_name"
-                            value={profileData.contact_person_name}
-                            onChange={(e) => setProfileData({ ...profileData, contact_person_name: e.target.value })}
-                            className="input-field pl-10"
-                            placeholder="例: 山田太郎"
-                          />
                         </div>
-                      </div>
 
-                      <div>
-                        <label htmlFor="contact_person_email" className="block text-sm font-medium text-gray-700 mb-2">
-                          担当者メールアドレス
-                        </label>
-                        <div className="relative">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Mail className="h-5 w-5 text-gray-400" />
+                        {accountData.organization_type && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              組織タイプ
+                            </label>
+                            <div className="input-field bg-gray-50">
+                              {accountData.organization_type}
+                            </div>
                           </div>
-                          <input
-                            type="email"
-                            id="contact_person_email"
-                            value={profileData.contact_person_email}
-                            onChange={(e) => setProfileData({ ...profileData, contact_person_email: e.target.value })}
-                            className="input-field pl-10"
-                            placeholder="例: contact@example.com"
-                          />
-                        </div>
-                      </div>
+                        )}
 
-                      <div>
-                        <label htmlFor="contact_person_phone" className="block text-sm font-medium text-gray-700 mb-2">
-                          担当者電話番号
-                        </label>
-                        <div className="relative">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <Phone className="h-5 w-5 text-gray-400" />
+                        {accountData.contact_person_name && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              担当者名
+                            </label>
+                            <div className="relative">
+                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <User className="h-5 w-5 text-gray-400" />
+                              </div>
+                              <input
+                                type="text"
+                                value={accountData.contact_person_name}
+                                disabled
+                                className="input-field pl-10 bg-gray-50"
+                              />
+                            </div>
                           </div>
-                          <input
-                            type="tel"
-                            id="contact_person_phone"
-                            value={profileData.contact_person_phone}
-                            onChange={(e) => setProfileData({ ...profileData, contact_person_phone: e.target.value })}
-                            className="input-field pl-10"
-                            placeholder="例: 03-1234-5678"
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
+                        )}
 
-                  <div className="flex justify-end">
-                    <button type="submit" disabled={loading} className="btn-primary flex items-center">
-                      <Save className="h-4 w-4 mr-2" />
-                      {loading ? '保存中...' : '保存'}
-                    </button>
+                        {accountData.contact_person_email && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              担当者メールアドレス
+                            </label>
+                            <div className="relative">
+                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <Mail className="h-5 w-5 text-gray-400" />
+                              </div>
+                              <input
+                                type="email"
+                                value={accountData.contact_person_email}
+                                disabled
+                                className="input-field pl-10 bg-gray-50"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {accountData.contact_person_phone && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              担当者電話番号
+                            </label>
+                            <div className="relative">
+                              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <Phone className="h-5 w-5 text-gray-400" />
+                              </div>
+                              <input
+                                type="tel"
+                                value={accountData.contact_person_phone}
+                                disabled
+                                className="input-field pl-10 bg-gray-50"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
-                </form>
+                </div>
               )}
 
               {/* パスワード変更 */}
@@ -897,16 +830,16 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* アカウント設定 */}
-              {activeTab === 'account' && (
+              {/* 退会 */}
+              {activeTab === 'delete' && (
                 <div className="card space-y-6">
-                  <h2 className="text-xl font-semibold text-gray-900">アカウント管理</h2>
+                  <h2 className="text-xl font-semibold text-gray-900">退会</h2>
 
                   <div className="border-t border-gray-200 pt-6">
                     <h3 className="text-lg font-semibold text-red-600 mb-4">危険な操作</h3>
                     <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                       <p className="text-sm text-red-800 mb-4">
-                        アカウントを削除すると、すべてのデータが永久に削除され、復元できません。
+                        退会すると、すべてのデータが永久に削除され、復元できません。
                         この操作は取り消せません。
                       </p>
                       <button
@@ -914,7 +847,7 @@ export default function SettingsPage() {
                         className="btn-secondary bg-red-600 hover:bg-red-700 text-white"
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
-                        アカウントを削除
+                        退会する
                       </button>
                     </div>
                   </div>
@@ -925,22 +858,22 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* アカウント削除モーダル */}
+      {/* 退会モーダル */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 mb-4">アカウントを削除</h3>
+            <h3 className="text-xl font-bold text-gray-900 mb-4">退会</h3>
             <p className="text-gray-600 mb-4">
               この操作は取り消せません。アカウントとすべてのデータが永久に削除されます。
             </p>
             <p className="text-sm text-gray-600 mb-4">
-              削除を確認するには、「<strong>削除</strong>」と入力してください。
+              退会を確認するには、「<strong>退会</strong>」と入力してください。
             </p>
             <input
               type="text"
               value={deleteConfirm}
               onChange={(e) => setDeleteConfirm(e.target.value)}
-              placeholder="削除"
+              placeholder="退会"
               className="input-field mb-4"
             />
             <div className="flex space-x-4">
@@ -956,10 +889,10 @@ export default function SettingsPage() {
               </button>
               <button
                 onClick={handleDeleteAccount}
-                disabled={loading || deleteConfirm !== '削除'}
+                disabled={loading || deleteConfirm !== '退会'}
                 className="btn-primary bg-red-600 hover:bg-red-700 text-white flex-1 disabled:opacity-50"
               >
-                {loading ? '削除中...' : 'アカウントを削除'}
+                {loading ? '退会処理中...' : '退会する'}
               </button>
             </div>
           </div>

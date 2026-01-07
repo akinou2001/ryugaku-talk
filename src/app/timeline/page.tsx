@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
+import Script from 'next/script'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -11,6 +12,7 @@ import { StudentStatusBadge } from '@/components/StudentStatusBadge'
 import { useAuth } from '@/components/Providers'
 import { getUserCommunities } from '@/lib/community'
 import { UserAvatar } from '@/components/UserAvatar'
+import { searchUniversities, type University } from '@/lib/universities'
 
 type TimelineView = 'latest' | 'community'
 type PostCategory = 'all' | 'question' | 'diary' | 'chat'
@@ -75,20 +77,39 @@ export default function Timeline() {
   const [selectedMainCategories, setSelectedMainCategories] = useState<MainCategory[]>([])
   const [selectedDetailCategories, setSelectedDetailCategories] = useState<DetailCategory[]>([])
   const [selectedLocations, setSelectedLocations] = useState<string[]>([])
+  const [selectedUniversities, setSelectedUniversities] = useState<string[]>([]) // 大学IDの配列
+  const [selectedUniversitiesData, setSelectedUniversitiesData] = useState<University[]>([]) // 選択された大学のデータ
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   const [userCommunityIds, setUserCommunityIds] = useState<string[]>([])
   const [locationSearch, setLocationSearch] = useState('')
+  const [universitySearch, setUniversitySearch] = useState('')
+  const [universitySearchResults, setUniversitySearchResults] = useState<University[]>([])
+  const [showUniversityDropdown, setShowUniversityDropdown] = useState(false)
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set())
   const [showFilters, setShowFilters] = useState(false) // 絞り込み表示/非表示
   const [isHeaderVisible, setIsHeaderVisible] = useState(true)
   const [lastScrollY, setLastScrollY] = useState(0)
   const [isSearching, setIsSearching] = useState(false)
+  const [headerHeight, setHeaderHeight] = useState(0)
   const headerRef = useRef<HTMLDivElement>(null)
   const locationScrollRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
   
+  // ヘッダーの高さを取得
+  useEffect(() => {
+    const updateHeaderHeight = () => {
+      if (headerRef.current) {
+        setHeaderHeight(headerRef.current.offsetHeight)
+      }
+    }
+    
+    updateHeaderHeight()
+    window.addEventListener('resize', updateHeaderHeight)
+    return () => window.removeEventListener('resize', updateHeaderHeight)
+  }, [showFilters, view, searchTerm])
+
   // スクロール時のヘッダー表示制御
   useEffect(() => {
     const handleScroll = () => {
@@ -97,6 +118,13 @@ export default function Timeline() {
       
       // ページトップ付近では常に表示
       if (currentScrollY < threshold) {
+        setIsHeaderVisible(true)
+        setLastScrollY(currentScrollY)
+        return
+      }
+      
+      // フィルターが広げられているときは常に表示
+      if (showFilters) {
         setIsHeaderVisible(true)
         setLastScrollY(currentScrollY)
         return
@@ -116,7 +144,7 @@ export default function Timeline() {
 
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
-  }, [lastScrollY])
+  }, [lastScrollY, showFilters])
   
   // 検索語が空になった場合は即座にクリア（Enterキーを押すまで検索しない）
   useEffect(() => {
@@ -141,12 +169,50 @@ export default function Timeline() {
   
   // 国を地域で分類
   const countriesByRegion = {
+    'africa': {
+      label: 'アフリカ',
+      countries: [
+        { code: 'ZA', name: '南アフリカ', flag: '🇿🇦' },
+        { code: 'EG', name: 'エジプト', flag: '🇪🇬' },
+        { code: 'KE', name: 'ケニア', flag: '🇰🇪' },
+        { code: 'NG', name: 'ナイジェリア', flag: '🇳🇬' },
+        { code: 'MA', name: 'モロッコ', flag: '🇲🇦' },
+        { code: 'GH', name: 'ガーナ', flag: '🇬🇭' },
+        { code: 'TZ', name: 'タンザニア', flag: '🇹🇿' },
+        { code: 'ET', name: 'エチオピア', flag: '🇪🇹' },
+        { code: 'TN', name: 'チュニジア', flag: '🇹🇳' },
+        { code: 'DZ', name: 'アルジェリア', flag: '🇩🇿' },
+        { code: 'UG', name: 'ウガンダ', flag: '🇺🇬' },
+        { code: 'RW', name: 'ルワンダ', flag: '🇷🇼' }
+      ]
+    },
     'north-america': {
       label: '北アメリカ',
       countries: [
         { code: 'US', name: 'アメリカ', flag: '🇺🇸' },
         { code: 'CA', name: 'カナダ', flag: '🇨🇦' },
-        { code: 'MX', name: 'メキシコ', flag: '🇲🇽' }
+        { code: 'MX', name: 'メキシコ', flag: '🇲🇽' },
+        { code: 'CR', name: 'コスタリカ', flag: '🇨🇷' },
+        { code: 'PA', name: 'パナマ', flag: '🇵🇦' },
+        { code: 'GT', name: 'グアテマラ', flag: '🇬🇹' },
+        { code: 'CU', name: 'キューバ', flag: '🇨🇺' },
+        { code: 'JM', name: 'ジャマイカ', flag: '🇯🇲' },
+        { code: 'DO', name: 'ドミニカ共和国', flag: '🇩🇴' }
+      ]
+    },
+    'south-america': {
+      label: '南アメリカ',
+      countries: [
+        { code: 'BR', name: 'ブラジル', flag: '🇧🇷' },
+        { code: 'AR', name: 'アルゼンチン', flag: '🇦🇷' },
+        { code: 'CL', name: 'チリ', flag: '🇨🇱' },
+        { code: 'CO', name: 'コロンビア', flag: '🇨🇴' },
+        { code: 'PE', name: 'ペルー', flag: '🇵🇪' },
+        { code: 'VE', name: 'ベネズエラ', flag: '🇻🇪' },
+        { code: 'EC', name: 'エクアドル', flag: '🇪🇨' },
+        { code: 'UY', name: 'ウルグアイ', flag: '🇺🇾' },
+        { code: 'PY', name: 'パラグアイ', flag: '🇵🇾' },
+        { code: 'BO', name: 'ボリビア', flag: '🇧🇴' }
       ]
     },
     'asia': {
@@ -163,7 +229,18 @@ export default function Timeline() {
         { code: 'ID', name: 'インドネシア', flag: '🇮🇩' },
         { code: 'PH', name: 'フィリピン', flag: '🇵🇭' },
         { code: 'VN', name: 'ベトナム', flag: '🇻🇳' },
-        { code: 'IN', name: 'インド', flag: '🇮🇳' }
+        { code: 'IN', name: 'インド', flag: '🇮🇳' },
+        { code: 'IL', name: 'イスラエル', flag: '🇮🇱' },
+        { code: 'SA', name: 'サウジアラビア', flag: '🇸🇦' },
+        { code: 'AE', name: 'UAE', flag: '🇦🇪' },
+        { code: 'QA', name: 'カタール', flag: '🇶🇦' },
+        { code: 'KW', name: 'クウェート', flag: '🇰🇼' },
+        { code: 'OM', name: 'オマーン', flag: '🇴🇲' },
+        { code: 'BD', name: 'バングラデシュ', flag: '🇧🇩' },
+        { code: 'PK', name: 'パキスタン', flag: '🇵🇰' },
+        { code: 'MM', name: 'ミャンマー', flag: '🇲🇲' },
+        { code: 'KH', name: 'カンボジア', flag: '🇰🇭' },
+        { code: 'LA', name: 'ラオス', flag: '🇱🇦' }
       ]
     },
     'europe': {
@@ -199,26 +276,25 @@ export default function Timeline() {
       label: 'オセアニア',
       countries: [
         { code: 'AU', name: 'オーストラリア', flag: '🇦🇺' },
-        { code: 'NZ', name: 'ニュージーランド', flag: '🇳🇿' }
-      ]
-    },
-    'other': {
-      label: 'その他',
-      countries: [
-        { code: 'BR', name: 'ブラジル', flag: '🇧🇷' },
-        { code: 'AR', name: 'アルゼンチン', flag: '🇦🇷' },
-        { code: 'CL', name: 'チリ', flag: '🇨🇱' },
-        { code: 'CO', name: 'コロンビア', flag: '🇨🇴' },
-        { code: 'EG', name: 'エジプト', flag: '🇪🇬' },
-        { code: 'IL', name: 'イスラエル', flag: '🇮🇱' },
-        { code: 'SA', name: 'サウジアラビア', flag: '🇸🇦' },
-        { code: 'AE', name: 'UAE', flag: '🇦🇪' },
-        { code: 'ZA', name: '南アフリカ', flag: '🇿🇦' },
-        { code: 'OTHER', name: 'その他', flag: '🌍' }
+        { code: 'NZ', name: 'ニュージーランド', flag: '🇳🇿' },
+        { code: 'FJ', name: 'フィジー', flag: '🇫🇯' },
+        { code: 'PG', name: 'パプアニューギニア', flag: '🇵🇬' },
+        { code: 'NC', name: 'ニューカレドニア', flag: '🇳🇨' }
       ]
     }
   }
   
+  // 国名から国旗を取得する関数
+  const getCountryFlag = (countryName: string): string => {
+    for (const region of Object.values(countriesByRegion)) {
+      const country = region.countries.find(c => c.name === countryName)
+      if (country) {
+        return country.flag
+      }
+    }
+    return '🏳️' // デフォルトの国旗
+  }
+
   // 検索結果をフィルタリング（チップで選択されている国も含める）
   const filteredLocations = (() => {
     const allCountries = Object.values(countriesByRegion).flatMap(region => region.countries.map(c => c.name))
@@ -232,6 +308,18 @@ export default function Timeline() {
     const combined = [...searchResults, ...selectedButNotInResults]
     return Array.from(new Set(combined))
   })()
+
+  // 大学検索
+  const handleUniversitySearch = async (query: string) => {
+    if (query.length >= 2) {
+      const { data } = await searchUniversities({ query, limit: 10 })
+      setUniversitySearchResults(data || [])
+      setShowUniversityDropdown(true)
+    } else {
+      setUniversitySearchResults([])
+      setShowUniversityDropdown(false)
+    }
+  }
 
   const fetchLocations = async () => {
     // ロケーション情報の取得（将来的に使用する可能性があるため、関数は残す）
@@ -478,7 +566,7 @@ export default function Timeline() {
       fetchPosts()
       fetchLocations()
     }
-  }, [view, selectedCategory, selectedMainCategories, selectedDetailCategories, selectedLocations, debouncedSearchTerm, user])
+  }, [view, selectedCategory, selectedMainCategories, selectedDetailCategories, selectedLocations, selectedUniversities, debouncedSearchTerm, user])
 
   useEffect(() => {
     if (view === 'community' && userCommunityIds.length > 0) {
@@ -583,6 +671,11 @@ export default function Timeline() {
       // ロケーションフィルター（複数選択対応）
       if (selectedLocations.length > 0) {
         query = query.in('study_abroad_destination', selectedLocations)
+      }
+
+      // 大学フィルター（複数選択対応）
+      if (selectedUniversities.length > 0) {
+        query = query.in('university_id', selectedUniversities)
       }
 
       // 検索
@@ -928,11 +1021,11 @@ export default function Timeline() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      {/* ヘッダーセクション（スクロール時に表示/非表示） */}
+      {/* ヘッダーセクション（スクロール時に表示/非表示、フィルター展開時は常に表示） */}
       <div 
         ref={headerRef}
-        className={`sticky top-0 z-50 bg-gradient-to-br from-white via-gray-50 to-white backdrop-blur-md border-b border-gray-200 shadow-sm transition-transform duration-300 ${
-          isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
+        className={`${showFilters ? 'sticky' : 'sticky'} top-0 z-50 bg-gradient-to-br from-white via-gray-50 to-white backdrop-blur-md border-b border-gray-200 shadow-sm transition-transform duration-300 ${
+          showFilters || isHeaderVisible ? 'translate-y-0' : '-translate-y-full'
         }`}
       >
         <div className="container mx-auto px-4 py-3 max-w-4xl">
@@ -1051,13 +1144,14 @@ export default function Timeline() {
                   <>
                     <Filter className="h-4 w-4" />
                     <span>フィルターを表示</span>
-                    {(selectedCategory !== 'all' || selectedMainCategories.length > 0 || selectedDetailCategories.length > 0 || selectedLocations.length > 0) && (
+                    {(selectedCategory !== 'all' || selectedMainCategories.length > 0 || selectedDetailCategories.length > 0 || selectedLocations.length > 0 || selectedUniversities.length > 0) && (
                       <span className="ml-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white text-xs px-2.5 py-1 rounded-full font-semibold">
                         {[
                           selectedCategory !== 'all' ? 1 : 0,
                           selectedMainCategories.length,
                           selectedDetailCategories.length,
-                          selectedLocations.length
+                          selectedLocations.length,
+                          selectedUniversities.length
                         ].reduce((a, b) => a + b, 0)}
                       </span>
                     )}
@@ -1289,7 +1383,24 @@ export default function Timeline() {
                                       : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 hover:scale-105'
                                   }`}
                                 >
-                                  <span className="text-lg">{country.flag}</span>
+                                  <span 
+                                    className="text-lg emoji" 
+                                    style={{ 
+                                      fontFamily: 'Twemoji Mozilla, Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, Segoe UI Symbol, Android Emoji, EmojiSymbols, sans-serif',
+                                      display: 'inline-block',
+                                      lineHeight: '1',
+                                      verticalAlign: 'middle',
+                                      fontSize: '1.2em',
+                                      minWidth: '1.2em',
+                                      textAlign: 'center',
+                                      unicodeBidi: 'bidi-override',
+                                      direction: 'ltr'
+                                    }}
+                                    role="img"
+                                    aria-label={`${country.name}の国旗`}
+                                  >
+                                    {country.flag || '🏳️'}
+                                  </span>
                                   <span>{country.name}</span>
                                 </button>
                               )
@@ -1331,21 +1442,25 @@ export default function Timeline() {
                       <button
                         key={location}
                         type="button"
-                        onClick={() => {
-                          setSelectedLocations(prev => {
-                            if (prev.includes(location)) {
-                              return prev.filter(l => l !== location)
-                            } else {
-                              return [...prev, location]
-                            }
-                          })
-                          setLocationSearch('')
-                        }}
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setSelectedLocations(prev => {
+                                if (prev.includes(location)) {
+                                  return prev.filter(l => l !== location)
+                                } else {
+                                  return [...prev, location]
+                                }
+                              })
+                              setLocationSearch('')
+                            }}
                         className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center space-x-2 border-b border-gray-100 last:border-b-0 ${
                           selectedLocations.includes(location) ? 'bg-primary-50' : ''
                         }`}
                       >
-                        <MapPin className="h-4 w-4 text-gray-400" />
+                        <span className="emoji text-base" style={{ fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, Segoe UI Symbol, Android Emoji, EmojiSymbols, sans-serif', display: 'inline-block', lineHeight: '1' }}>
+                          {getCountryFlag(location)}
+                        </span>
                         <span className="text-sm font-medium">{location}</span>
                       </button>
                     ))}
@@ -1354,14 +1469,128 @@ export default function Timeline() {
               </div>
               
               {selectedLocations.length > 0 && (
-                <p className="text-sm text-gray-600 mt-3 px-3 py-2 bg-primary-50 rounded-lg border border-primary-200">
-                  選択中: <span className="font-semibold text-primary-700">{selectedLocations.join(', ')}</span>
-                </p>
+                <div className="mt-3 px-3 py-2 bg-primary-50 rounded-lg border border-primary-200">
+                  <p className="text-sm text-gray-600 mb-2">選択中:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedLocations.map((location) => (
+                      <span 
+                        key={location}
+                        className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-white rounded-full text-xs font-semibold text-primary-700 border border-primary-300"
+                      >
+                        <span className="emoji text-sm" style={{ fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, Segoe UI Symbol, Android Emoji, EmojiSymbols, sans-serif', display: 'inline-block', lineHeight: '1' }}>
+                          {getCountryFlag(location)}
+                        </span>
+                        <span>{location}</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 大学フィルター */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-3">
+                大学で絞り込む
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <GraduationCap className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  value={universitySearch}
+                  onChange={(e) => {
+                    const query = e.target.value
+                    setUniversitySearch(query)
+                    handleUniversitySearch(query)
+                  }}
+                  onFocus={() => {
+                    if (universitySearch.length >= 2) {
+                      setShowUniversityDropdown(true)
+                    }
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => setShowUniversityDropdown(false), 200)
+                  }}
+                  placeholder="大学名を検索..."
+                  className="w-full pl-10 pr-4 py-2.5 bg-white border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                />
+                {showUniversityDropdown && universitySearchResults.length > 0 && (
+                  <div className="absolute z-20 w-full mt-1 bg-white border-2 border-gray-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                    {universitySearchResults.map((uni) => {
+                      const isSelected = selectedUniversities.includes(uni.id)
+                      return (
+                        <button
+                          key={uni.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedUniversities(prev => {
+                              if (prev.includes(uni.id)) {
+                                setSelectedUniversitiesData(prevData => prevData.filter(u => u.id !== uni.id))
+                                return prev.filter(id => id !== uni.id)
+                              } else {
+                                setSelectedUniversitiesData(prevData => [...prevData, uni])
+                                return [...prev, uni.id]
+                              }
+                            })
+                            setUniversitySearch('')
+                            setShowUniversityDropdown(false)
+                          }}
+                          className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors flex items-center space-x-2 border-b border-gray-100 last:border-b-0 ${
+                            isSelected ? 'bg-primary-50' : ''
+                          }`}
+                        >
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-900">
+                              {uni.name_ja || uni.name_en}
+                            </div>
+                            {uni.name_ja && (
+                              <div className="text-sm text-gray-500">{uni.name_en}</div>
+                            )}
+                            <div className="text-xs text-gray-400 mt-1">
+                              {uni.country_code} {uni.continent?.name_ja && `・${uni.continent.name_ja}`}
+                            </div>
+                          </div>
+                          {isSelected && (
+                            <CheckCircle2 className="h-5 w-5 text-primary-600" />
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+              {selectedUniversitiesData.length > 0 && (
+                <div className="mt-3 px-3 py-2 bg-primary-50 rounded-lg border border-primary-200">
+                  <p className="text-sm text-gray-600 mb-2">選択中:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedUniversitiesData.map((uni) => (
+                      <span
+                        key={uni.id}
+                        className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-white rounded-full text-xs font-semibold text-primary-700 border border-primary-300"
+                      >
+                        <GraduationCap className="h-3 w-3" />
+                        <span>{uni.name_ja || uni.name_en}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedUniversities(prev => prev.filter(id => id !== uni.id))
+                            setSelectedUniversitiesData(prev => prev.filter(u => u.id !== uni.id))
+                          }}
+                          className="ml-1 hover:text-red-600"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
 
             {/* フィルターリセット */}
-            {(selectedCategory !== 'all' || selectedMainCategories.length > 0 || selectedDetailCategories.length > 0 || selectedLocations.length > 0) && (
+            {(selectedCategory !== 'all' || selectedMainCategories.length > 0 || selectedDetailCategories.length > 0 || selectedLocations.length > 0 || selectedUniversities.length > 0) && (
               <div className="pt-4 border-t border-gray-200">
                 <button
                   onClick={() => {
@@ -1369,6 +1598,7 @@ export default function Timeline() {
                     setSelectedMainCategories([])
                     setSelectedDetailCategories([])
                     setSelectedLocations([])
+                    setSelectedUniversities([])
                   }}
                   className="text-sm text-primary-600 hover:text-primary-800 font-semibold transition-colors"
                 >
@@ -1380,7 +1610,7 @@ export default function Timeline() {
         )}
 
         {/* フィルターが非表示でも、フィルターが適用されている場合は簡易表示 */}
-        {view !== 'community' && !showFilters && (selectedCategory !== 'all' || selectedMainCategories.length > 0 || selectedDetailCategories.length > 0 || selectedLocations.length > 0) && (
+        {view !== 'community' && !showFilters && (selectedCategory !== 'all' || selectedMainCategories.length > 0 || selectedDetailCategories.length > 0 || selectedLocations.length > 0 || selectedUniversities.length > 0) && (
           <div className="mb-6 flex flex-wrap gap-2">
             {selectedCategory !== 'all' && (
               <span className="px-4 py-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300">
@@ -1398,8 +1628,24 @@ export default function Timeline() {
               </span>
             )}
             {selectedLocations.length > 0 && (
-              <span className="px-4 py-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300">
-                国: {selectedLocations.length}件
+              <div className="flex flex-wrap gap-2">
+                {selectedLocations.map((location) => (
+                  <span 
+                    key={location}
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300"
+                  >
+                    <span className="emoji text-sm" style={{ fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, Segoe UI Symbol, Android Emoji, EmojiSymbols, sans-serif', display: 'inline-block', lineHeight: '1' }}>
+                      {getCountryFlag(location)}
+                    </span>
+                    <span>{location}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+            {selectedUniversities.length > 0 && (
+              <span className="px-4 py-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300 flex items-center space-x-1.5">
+                <GraduationCap className="h-3 w-3" />
+                <span>大学: {selectedUniversities.length}件</span>
               </span>
             )}
           </div>
@@ -1694,9 +1940,11 @@ export default function Timeline() {
                               })
                             }
                           }}
-                          className="inline-flex items-center space-x-0.5 px-2 py-0.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-medium hover:from-primary-100 hover:to-primary-200 transition-all border border-primary-200"
+                          className="inline-flex items-center space-x-1 px-2 py-0.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-medium hover:from-primary-100 hover:to-primary-200 transition-all border border-primary-200"
                         >
-                          <MapPin className="h-2.5 w-2.5" />
+                          <span className="emoji text-xs" style={{ fontFamily: 'Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, Segoe UI Symbol, Android Emoji, EmojiSymbols, sans-serif', display: 'inline-block', lineHeight: '1' }}>
+                            {getCountryFlag(post.study_abroad_destination)}
+                          </span>
                           <span>{post.study_abroad_destination}</span>
                         </button>
                       )}
@@ -1723,11 +1971,12 @@ export default function Timeline() {
                           alt="カバー写真"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         />
-                        {/* グラデーションオーバーレイ */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/50 to-black/20"></div>
+                        {/* グラデーションオーバーレイ（上・下に寄せて中央は残す） */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/25 to-transparent"></div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent"></div>
                         
-                        {/* 左上：ユーザー情報（グラスモーフィズム） */}
-                        <div className="absolute top-3 left-3 z-20">
+                        {/* 下部：ユーザー情報（グラスモーフィズム） */}
+                        <div className="absolute bottom-3 left-3 z-20">
                           <div className="backdrop-blur-xl bg-white/20 border border-white/30 rounded-xl p-2.5 shadow-2xl">
                             <div className="flex items-center space-x-2 flex-wrap gap-1.5">
                               <UserAvatar 
@@ -1797,15 +2046,10 @@ export default function Timeline() {
                           </div>
                         </div>
                         
-                        {/* 下部オーバーレイ（タイトルとタグ用） */}
-                        <div className="absolute bottom-0 left-0 right-0 p-4 pb-5">
-                          {/* タイトル（画像の上に重ねて表示） */}
-                          <h2 className="text-xl font-bold text-white mb-3 leading-tight line-clamp-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] group-hover:text-primary-200 transition-colors">
-                            {post.title}
-                          </h2>
-                          
-                          {/* タグチップ */}
-                          <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* 上部オーバーレイ（タイトルとタグ用） */}
+                        <div className="absolute top-2 left-0 right-0 p-4 z-20">
+                          {/* タグチップ（一番上） */}
+                          <div className="flex items-center gap-1.5 flex-wrap mb-3">
                             {/* 日記タグ */}
                             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-0.5 ${getCategoryColor(post.category)} drop-shadow-lg`}>
                               {(() => {
@@ -1820,10 +2064,10 @@ export default function Timeline() {
                                 {post.study_abroad_destination}
                               </span>
                             )}
-                            {post.university && (
+                            {(post.university_id || post.university) && (
                               <span className="px-2 py-0.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-medium hover:from-primary-100 hover:to-primary-200 transition-all border border-primary-200 drop-shadow-lg flex items-center gap-0.5">
                                 <GraduationCap className="h-2.5 w-2.5" />
-                                {post.university}
+                                {post.university || '大学'}
                               </span>
                             )}
                             {post.tags && post.tags.length > 0 && post.tags.slice(0, 2).map((tag, idx) => (
@@ -1832,6 +2076,11 @@ export default function Timeline() {
                               </span>
                             ))}
                           </div>
+                          
+                          {/* タイトル（画像の上に重ねて表示） */}
+                          <h2 className="text-xl font-bold text-white leading-tight line-clamp-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] group-hover:text-primary-200 transition-colors">
+                            {post.title}
+                          </h2>
                         </div>
                       </div>
                     </div>
@@ -1914,10 +2163,10 @@ export default function Timeline() {
                           />
                         </>
                       )}
-                      {post.university && (
+                      {(post.university_id || post.university) && (
                         <span className="flex items-center text-gray-600">
                           <GraduationCap className="h-3 w-3 mr-0.5" />
-                          <span className="font-medium text-xs">{post.university}</span>
+                          <span className="font-medium text-xs">{post.university || '大学'}</span>
                         </span>
                       )}
                     </div>

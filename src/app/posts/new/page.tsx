@@ -11,6 +11,7 @@ import type { Quest } from '@/lib/supabase'
 import { uploadFile, validateFileType, validateFileSize, FILE_TYPES, isImageFile } from '@/lib/storage'
 import { ArrowLeft, Save, X, Search, ChevronLeft, ChevronRight, Flame, Image as ImageIcon, Upload } from 'lucide-react'
 import { MarkdownEditor } from '@/components/MarkdownEditor'
+import { searchUniversities, findUniversityByAlias, type University } from '@/lib/universities'
 
 function NewPostInner() {
   const { user } = useAuth()
@@ -24,12 +25,19 @@ function NewPostInner() {
     content: '',
     category: 'question' as 'question' | 'diary' | 'chat' | 'information' | 'official',
     tags: [] as string[],
+    university_id: null as string | null,
     study_abroad_destinations: [] as string[],
     is_official: false,
     official_category: '',
     community_id: '' as string | undefined,
     urgency_level: 'normal' as 'low' | 'normal' | 'high' | 'urgent'
   })
+  
+  // 大学検索用
+  const [universitySearchQuery, setUniversitySearchQuery] = useState('')
+  const [universitySearchResults, setUniversitySearchResults] = useState<University[]>([])
+  const [selectedUniversity, setSelectedUniversity] = useState<University | null>(null)
+  const [showUniversityDropdown, setShowUniversityDropdown] = useState(false)
   const [userCommunities, setUserCommunities] = useState<Array<{id: string, name: string}>>([])
   const [availableQuests, setAvailableQuests] = useState<Quest[]>([])
   const [selectedQuestId, setSelectedQuestId] = useState<string>('')
@@ -213,7 +221,7 @@ function NewPostInner() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('study_abroad_destination, languages')
+        .select('study_abroad_destination, languages, university_id, university')
         .eq('id', user.id)
         .single()
 
@@ -283,12 +291,39 @@ function NewPostInner() {
           autoTags.push(statusTagMap[studentStatus])
         }
 
+        // 大学情報を取得
+        let university: University | null = null
+        if (data.university_id) {
+          const { data: uniData } = await supabase
+            .from('universities')
+            .select(`
+              *,
+              continent:continents(*)
+            `)
+            .eq('id', data.university_id)
+            .single()
+          if (uniData) {
+            university = uniData as University
+          }
+        } else if (data.university) {
+          // 既存のテキストから大学を検索
+          const { data: foundUni } = await findUniversityByAlias(data.university)
+          if (foundUni) {
+            university = foundUni
+          }
+        }
+
         // フォームデータを更新（プロフィール属性を自動選択）
         setFormData(prev => ({
           ...prev,
           tags: autoTags,
-          study_abroad_destinations: destinations
+          study_abroad_destinations: destinations,
+          university_id: university?.id || null
         }))
+        
+        if (university) {
+          setSelectedUniversity(university)
+        }
         
         setProfileLoaded(true)
       }
@@ -415,11 +450,17 @@ function NewPostInner() {
       }
 
       // 複数の国を選択している場合は、最初の1つを保存（将来的には配列フィールドを追加）
+      const universityName = selectedUniversity 
+        ? (selectedUniversity.name_ja || selectedUniversity.name_en)
+        : null
+      
       const postData: any = {
         title: title,
         content: finalContent,
         category: category,
         tags: finalTags,
+        university_id: selectedUniversity?.id || formData.university_id || null,
+        university: universityName, // 後方互換性のため残す
         study_abroad_destination: formData.study_abroad_destinations.length > 0 ? formData.study_abroad_destinations[0] : null,
         author_id: user.id,
         is_official: isVerifiedOrganization && formData.is_official,
@@ -1045,6 +1086,84 @@ function NewPostInner() {
                 選択中: {formData.study_abroad_destinations.join(', ')}
               </p>
             )}
+          </div>
+
+          {/* 所属大学 */}
+          <div className="relative">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              所属大学（任意）
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={selectedUniversity ? (selectedUniversity.name_ja || selectedUniversity.name_en) : universitySearchQuery}
+                onChange={async (e) => {
+                  const query = e.target.value
+                  setUniversitySearchQuery(query)
+                  setShowUniversityDropdown(true)
+                  
+                  if (query.length >= 2) {
+                    const { data } = await searchUniversities({ query, limit: 10 })
+                    setUniversitySearchResults(data || [])
+                  } else {
+                    setUniversitySearchResults([])
+                  }
+                }}
+                onFocus={() => {
+                  if (universitySearchQuery.length >= 2) {
+                    setShowUniversityDropdown(true)
+                  }
+                }}
+                onBlur={() => {
+                  setTimeout(() => setShowUniversityDropdown(false), 200)
+                }}
+                placeholder="大学名を検索..."
+                className="input-field"
+              />
+              {selectedUniversity && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedUniversity(null)
+                    setUniversitySearchQuery('')
+                    setFormData({ ...formData, university_id: null })
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              )}
+              {showUniversityDropdown && universitySearchResults.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {universitySearchResults.map((uni) => (
+                    <button
+                      key={uni.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedUniversity(uni)
+                        setUniversitySearchQuery(uni.name_ja || uni.name_en)
+                        setFormData({ ...formData, university_id: uni.id })
+                        setShowUniversityDropdown(false)
+                      }}
+                      className="w-full px-4 py-2 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="font-medium text-gray-900">
+                        {uni.name_ja || uni.name_en}
+                      </div>
+                      {uni.name_ja && (
+                        <div className="text-sm text-gray-500">{uni.name_en}</div>
+                      )}
+                      <div className="text-xs text-gray-400 mt-1">
+                        {uni.country_code} {uni.continent?.name_ja && `・${uni.continent.name_ja}`}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              大学名を入力して検索してください。見つからない場合は、管理画面で追加できます。
+            </p>
           </div>
 
           {/* コミュニティ限定投稿（質問・日記のみ） */}

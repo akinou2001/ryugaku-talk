@@ -16,7 +16,16 @@
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install",
     "test:all": "npm run type-check && npm run lint && npm run test && npm run test:e2e",
-    "check-env": "tsx scripts/check-env.ts"
+    "check-env": "tsx scripts/check-env.ts",
+    "import-universities": "tsx scripts/import-universities.ts",
+    "check-universities": "tsx scripts/check-universities.ts",
+    "verify-universities": "tsx scripts/verify-university-count.ts",
+    "quick-check": "tsx scripts/quick-check-universities.ts",
+    "check-coordinates": "tsx scripts/check-coordinates-status.ts",
+    "enrich-coordinates": "tsx scripts/enrich-universities-coordinates.ts",
+    "enrich-japanese-names": "tsx scripts/enrich-japanese-universities.ts",
+    "reset-japanese-names": "tsx scripts/reset-japanese-names.ts",
+    "export-japanese-csv": "tsx scripts/export-japanese-universities-csv.ts"
   },
   "dependencies": {
     "@react-three/drei": "^9.88.13",
@@ -28,6 +37,7 @@
     "dotenv": "^17.2.3",
     "firebase": "^10.14.1",
     "i18next": "^23.7.6",
+    "jaro-winkler": "^0.2.8",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.294.0",
     "next": "14.0.4",
@@ -46,6 +56,7 @@
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^14.1.2",
     "@testing-library/user-event": "^14.5.1",
+    "@types/jaro-winkler": "^0.2.0",
     "@types/jest": "^29.5.11",
     "@types/leaflet": "^1.9.8",
     "@types/node": "^20",

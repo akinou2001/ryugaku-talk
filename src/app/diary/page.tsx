@@ -7,16 +7,20 @@ import type { Post } from '@/lib/supabase'
 import { BookOpen, MessageSquare, Clock, Search, Filter, Plus, Calendar, MapPin, GraduationCap, Heart, X } from 'lucide-react'
 import { UserAvatar } from '@/components/UserAvatar'
 import { AccountBadge } from '@/components/AccountBadge'
+import { searchUniversities, type University } from '@/lib/universities'
 
 export default function Diary() {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCountry, setSelectedCountry] = useState('all')
-  const [selectedUniversity, setSelectedUniversity] = useState('all')
+  const [selectedUniversityId, setSelectedUniversityId] = useState<string | null>(null)
+  const [selectedUniversityData, setSelectedUniversityData] = useState<University | null>(null)
   const [sortBy, setSortBy] = useState('newest')
   const [availableCountries, setAvailableCountries] = useState<string[]>([])
-  const [availableUniversities, setAvailableUniversities] = useState<string[]>([])
+  const [universitySearch, setUniversitySearch] = useState('')
+  const [universitySearchResults, setUniversitySearchResults] = useState<University[]>([])
+  const [showUniversityDropdown, setShowUniversityDropdown] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
 
   const fetchFilterOptions = useCallback(async () => {
@@ -28,35 +32,18 @@ export default function Diary() {
         .eq('category', 'diary')
         .not('study_abroad_destination', 'is', null)
 
-      // 留学日記の利用可能な大学を取得
-      const { data: universityData, error: universityError } = await supabase
-        .from('posts')
-        .select('university')
-        .eq('category', 'diary')
-        .not('university', 'is', null)
-
       if (countryError) {
         console.error('Error fetching countries:', countryError)
-      }
-
-      if (universityError) {
-        console.error('Error fetching universities:', universityError)
       }
 
       const countries = Array.from(new Set(
         (countryData || []).map(item => item.study_abroad_destination).filter(Boolean) as string[]
       )).sort()
 
-      const universities = Array.from(new Set(
-        (universityData || []).map(item => item.university).filter(Boolean) as string[]
-      )).sort()
-
       setAvailableCountries(countries)
-      setAvailableUniversities(universities)
     } catch (error) {
       console.error('Error fetching filter options:', error)
       setAvailableCountries([])
-      setAvailableUniversities([])
     }
   }, [])
 
@@ -76,8 +63,8 @@ export default function Diary() {
         query = query.eq('study_abroad_destination', selectedCountry)
       }
 
-      if (selectedUniversity !== 'all') {
-        query = query.eq('university', selectedUniversity)
+      if (selectedUniversityId) {
+        query = query.eq('university_id', selectedUniversityId)
       }
 
       if (searchTerm) {
@@ -104,7 +91,7 @@ export default function Diary() {
     } finally {
       setLoading(false)
     }
-  }, [selectedCountry, selectedUniversity, sortBy, searchTerm])
+  }, [selectedCountry, selectedUniversityId, sortBy, searchTerm])
 
   // フィルターオプションは初回のみ取得
   useEffect(() => {
@@ -225,11 +212,11 @@ export default function Diary() {
               <>
                 <Filter className="h-4 w-4" />
                 <span>フィルターを表示</span>
-                {(selectedCountry !== 'all' || selectedUniversity !== 'all' || sortBy !== 'newest') && (
+                {(selectedCountry !== 'all' || selectedUniversityId !== null || sortBy !== 'newest') && (
                   <span className="ml-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white text-xs px-2.5 py-1 rounded-full font-semibold">
                     {[
                       selectedCountry !== 'all' ? 1 : 0,
-                      selectedUniversity !== 'all' ? 1 : 0,
+                      selectedUniversityId !== null ? 1 : 0,
                       sortBy !== 'newest' ? 1 : 0
                     ].reduce((a, b) => a + b, 0)}
                   </span>
@@ -259,20 +246,76 @@ export default function Diary() {
                 </select>
               </div>
 
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 relative">
                 <GraduationCap className="h-5 w-5 text-gray-400" />
-                <select
-                  value={selectedUniversity}
-                  onChange={(e) => setSelectedUniversity(e.target.value)}
-                  className="flex-1 px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
-                >
-                  <option value="all">すべての大学</option>
-                  {availableUniversities.map((university) => (
-                    <option key={university} value={university}>
-                      {university}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex-1 relative">
+                  <input
+                    type="text"
+                    value={universitySearch}
+                    onChange={async (e) => {
+                      const query = e.target.value
+                      setUniversitySearch(query)
+                      if (query.length >= 2) {
+                        const { data } = await searchUniversities({ query, limit: 10 })
+                        setUniversitySearchResults(data || [])
+                        setShowUniversityDropdown(true)
+                      } else {
+                        setUniversitySearchResults([])
+                        setShowUniversityDropdown(false)
+                      }
+                    }}
+                    onFocus={() => {
+                      if (universitySearch.length >= 2) {
+                        setShowUniversityDropdown(true)
+                      }
+                    }}
+                    onBlur={() => {
+                      setTimeout(() => setShowUniversityDropdown(false), 200)
+                    }}
+                    placeholder="大学名を検索..."
+                    className="w-full px-4 py-3 bg-white border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                  />
+                  {selectedUniversityId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedUniversityId(null)
+                        setSelectedUniversityData(null)
+                        setUniversitySearch('')
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-600"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  )}
+                  {showUniversityDropdown && universitySearchResults.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border-2 border-gray-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
+                      {universitySearchResults.map((uni) => (
+                        <button
+                          key={uni.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedUniversityId(uni.id)
+                            setSelectedUniversityData(uni)
+                            setUniversitySearch(uni.name_ja || uni.name_en)
+                            setShowUniversityDropdown(false)
+                          }}
+                          className="w-full px-4 py-2 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                        >
+                          <div className="font-medium text-gray-900">
+                            {uni.name_ja || uni.name_en}
+                          </div>
+                          {uni.name_ja && (
+                            <div className="text-sm text-gray-500">{uni.name_en}</div>
+                          )}
+                          <div className="text-xs text-gray-400 mt-1">
+                            {uni.country_code} {uni.continent?.name_ja && `・${uni.continent.name_ja}`}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center space-x-2">
@@ -290,12 +333,14 @@ export default function Diary() {
             </div>
 
             {/* フィルターリセット */}
-            {(selectedCountry !== 'all' || selectedUniversity !== 'all' || sortBy !== 'newest') && (
+            {(selectedCountry !== 'all' || selectedUniversityId !== null || sortBy !== 'newest') && (
               <div className="mt-4">
                 <button
                   onClick={() => {
                     setSelectedCountry('all')
-                    setSelectedUniversity('all')
+                    setSelectedUniversityId(null)
+                    setSelectedUniversityData(null)
+                    setUniversitySearch('')
                     setSortBy('newest')
                   }}
                   className="text-sm text-primary-600 hover:text-primary-800 font-semibold transition-colors"
@@ -308,16 +353,17 @@ export default function Diary() {
         )}
 
         {/* フィルターが非表示でも、フィルターが適用されている場合は簡易表示 */}
-        {!showFilters && (selectedCountry !== 'all' || selectedUniversity !== 'all' || sortBy !== 'newest') && (
+        {!showFilters && (selectedCountry !== 'all' || selectedUniversityId !== null || sortBy !== 'newest') && (
           <div className="mb-6 flex flex-wrap gap-2">
             {selectedCountry !== 'all' && (
               <span className="px-4 py-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300">
                 国: {selectedCountry}
               </span>
             )}
-            {selectedUniversity !== 'all' && (
-              <span className="px-4 py-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300">
-                大学: {selectedUniversity}
+            {selectedUniversityData && (
+              <span className="px-4 py-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300 flex items-center space-x-1.5">
+                <GraduationCap className="h-3 w-3" />
+                <span>{selectedUniversityData.name_ja || selectedUniversityData.name_en}</span>
               </span>
             )}
             {sortBy !== 'newest' && (
@@ -343,14 +389,22 @@ export default function Diary() {
               <Link key={post.id} href={`/posts/${post.id}`} className="block group">
                 <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-2xl hover:border-primary-200 transition-all duration-300 transform hover:-translate-y-1">
                   <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-full text-xs font-bold flex items-center gap-1">
+                        <BookOpen className="h-3 w-3 text-white" />
+                        留学日記
+                      </span>
+                      {post.author?.study_abroad_destination && (
+                        <span className="px-2 py-0.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-medium border border-primary-200 flex items-center gap-0.5">
+                          <MapPin className="h-2.5 w-2.5" />
+                          {post.author.study_abroad_destination}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center space-x-2">
                       <Calendar className="h-4 w-4 text-gray-400" />
                       <span className="text-sm text-gray-500 font-medium">{formatDate(post.created_at)}</span>
                     </div>
-                    <span className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-full text-xs font-bold flex items-center gap-1">
-                      <BookOpen className="h-3 w-3 text-white" />
-                      留学日記
-                    </span>
                   </div>
                   
                   <h2 className="text-2xl font-bold text-gray-900 mb-3 group-hover:text-primary-600 transition-colors">
@@ -408,29 +462,25 @@ export default function Diary() {
                   )}
                   
                   <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                    <div className="flex items-center space-x-4 text-sm text-gray-600">
-                      <div className="flex items-center space-x-2 flex-wrap gap-2">
+                    <div className="flex items-center space-x-2 text-sm text-gray-600 flex-wrap gap-2">
+                      <div className="flex items-center space-x-1.5">
                         <UserAvatar 
                           iconUrl={post.author?.icon_url} 
                           name={post.author?.name} 
                           size="sm"
                         />
                         <span className="font-semibold">{post.author?.name || '匿名'}</span>
-                        {post.author && (
+                      </div>
+                      {post.author && (
+                        <>
                           <AccountBadge 
                             accountType={post.author.account_type} 
                             verificationStatus={post.author.verification_status}
                             organizationName={post.author.organization_name}
                             size="sm"
                           />
-                        )}
-                        {post.author?.study_abroad_destination && (
-                          <span className="text-gray-400">•</span>
-                        )}
-                        {post.author?.study_abroad_destination && (
-                          <span className="font-medium">{post.author.study_abroad_destination}</span>
-                        )}
-                      </div>
+                        </>
+                      )}
                     </div>
                     
                     <div className="flex items-center space-x-5 text-sm text-gray-600">

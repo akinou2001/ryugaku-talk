@@ -6,7 +6,7 @@ import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import type { Post, Comment } from '@/lib/supabase'
 import { notifyComment } from '@/lib/notifications'
-import { Heart, MessageSquare, Share, Flag, Clock, MapPin, GraduationCap, Edit, Trash2, HelpCircle, BookOpen, MessageCircle, CheckCircle2, X as XIcon, Link as LinkIcon, Copy, Check } from 'lucide-react'
+import { Heart, MessageSquare, Share, Flag, Clock, MapPin, GraduationCap, Edit, Trash2, HelpCircle, BookOpen, MessageCircle, CheckCircle2, X as XIcon, Link as LinkIcon, Copy, Check, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
@@ -15,6 +15,7 @@ import ReactMarkdown from 'react-markdown'
 import { MarkdownEditor } from '@/components/MarkdownEditor'
 import { uploadFile, validateFileType, validateFileSize, FILE_TYPES } from '@/lib/storage'
 import { ReportModal } from '@/components/ReportModal'
+import { getUniversityById, type University } from '@/lib/universities'
 
 // スケルトンローディング
 const SkeletonCard = () => {
@@ -36,6 +37,9 @@ export default function PostDetail() {
 
   const [post, setPost] = useState<Post | null>(null)
   const [comments, setComments] = useState<Comment[]>([])
+  const [postUniversity, setPostUniversity] = useState<University | null>(null)
+  const [authorUniversity, setAuthorUniversity] = useState<University | null>(null)
+  const [studyAbroadUniversity, setStudyAbroadUniversity] = useState<University | null>(null)
   const [loading, setLoading] = useState(true)
   const [commentLoading, setCommentLoading] = useState(false)
   const [newComment, setNewComment] = useState('')
@@ -72,7 +76,7 @@ export default function PostDetail() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, university, study_abroad_destination, major, account_type, verification_status, organization_name, icon_url, languages)
+          author:profiles(name, university, university_id, study_abroad_destination, study_abroad_university_id, major, account_type, verification_status, organization_name, icon_url, languages)
         `)
         .eq('id', postId)
         .single()
@@ -82,6 +86,30 @@ export default function PostDetail() {
       }
 
       setPost(data)
+      
+      // 投稿の大学情報を取得
+      if (data?.university_id) {
+        const { data: uniData } = await getUniversityById(data.university_id)
+        if (uniData) {
+          setPostUniversity(uniData)
+        }
+      }
+      
+      // 投稿者の大学情報を取得
+      if (data?.author?.university_id) {
+        const { data: uniData } = await getUniversityById(data.author.university_id)
+        if (uniData) {
+          setAuthorUniversity(uniData)
+        }
+      }
+      
+      // 投稿者の留学先大学情報を取得
+      if (data?.author?.study_abroad_university_id) {
+        const { data: uniData } = await getUniversityById(data.author.study_abroad_university_id)
+        if (uniData) {
+          setStudyAbroadUniversity(uniData)
+        }
+      }
       
       if (data) {
         setEditForm({
@@ -498,45 +526,228 @@ export default function PostDetail() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
-        {/* 投稿ヘッダー */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <span className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 ${getCategoryColor(post.category)}`}>
-              {(() => {
-                const Icon = getCategoryIcon(post.category)
-                return <Icon className="h-3 w-3 text-white" />
-              })()}
-              {getCategoryLabel(post.category)}
-            </span>
-            <div className="flex items-center text-sm text-gray-500 font-medium">
-              <Clock className="h-4 w-4 mr-1" />
-              {formatDate(post.created_at)}
-            </div>
-          </div>
+        {/* 戻るボタン */}
+        <div className="mb-4">
+          <button
+            onClick={() => {
+              if (post?.community_id) {
+                router.push(`/communities/${post.community_id}?tab=timeline`)
+              } else {
+                router.push('/timeline')
+              }
+            }}
+            className="flex items-center space-x-2 text-gray-600 hover:text-primary-600 transition-colors font-medium"
+          >
+            <ArrowLeft className="h-5 w-5" />
+            <span className="hidden sm:inline">タイムラインに戻る</span>
+            <span className="sm:hidden">戻る</span>
+          </button>
+        </div>
 
-          {post.category !== 'chat' && (
-            <div className="mb-6">
-              <div className="flex items-center gap-3 flex-wrap mb-2">
-                <h1 className="text-4xl font-bold text-gray-900">{post.title}</h1>
-                {post.category === 'question' && post.is_resolved && (
-                  <span className="px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white shadow-md">
-                    <CheckCircle2 className="h-4 w-4" />
-                    解決済み
-                  </span>
+        {/* 投稿ヘッダー */}
+        <div className={`bg-white rounded-2xl shadow-lg border border-gray-100 mb-6 ${
+          post.category === 'diary' && post.cover_image_url ? 'p-0 overflow-hidden' : 'p-6'
+        }`}>
+          {/* 日記でカバー画像がある場合の特別なレイアウト */}
+          {post.category === 'diary' && post.cover_image_url ? (
+            <div className="relative">
+              <div className="relative h-80 overflow-hidden">
+                <img
+                  src={post.cover_image_url}
+                  alt="カバー写真"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none'
+                  }}
+                />
+                {/* グラデーションオーバーレイ（下側に集中） */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent"></div>
+                
+                {/* 上部オーバーレイ（投稿種別、日付、タイトル、タグ用） */}
+                <div className="absolute inset-0 flex flex-col p-6 z-20">
+                  {/* 上部：投稿種別と日付 */}
+                  <div className="flex items-center justify-between mb-auto">
+                    <span className={`px-3 py-1.5 backdrop-blur-md bg-white/20 border border-white/30 rounded-full text-xs font-bold flex items-center gap-1 text-white shadow-lg ${getCategoryColor(post.category)}`}>
+                      {(() => {
+                        const Icon = getCategoryIcon(post.category)
+                        return <Icon className="h-3 w-3 text-white" />
+                      })()}
+                      {getCategoryLabel(post.category)}
+                    </span>
+                    <span className="px-3 py-1.5 backdrop-blur-md bg-white/20 border border-white/30 rounded-full text-xs font-semibold text-white shadow-lg flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {formatDate(post.created_at)}
+                    </span>
+                  </div>
+                  
+                  {/* 下部：タイトルとタグ */}
+                  <div className="mt-auto">
+                    {/* タイトル */}
+                    <h1 className="text-3xl font-bold text-white leading-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] mb-3">
+                      {post.title}
+                    </h1>
+                    {/* タグ */}
+                    {post.tags && post.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {post.tags.map((tag, index) => (
+                          <span
+                            key={index}
+                            className="px-2 py-0.5 bg-white/20 backdrop-blur-md border border-white/30 rounded-full text-xs font-medium text-white drop-shadow-lg"
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* 投稿者情報（カバー画像の下） */}
+              <div className="p-6 space-y-3">
+                <div className="flex items-center space-x-2 flex-wrap gap-2">
+                  <UserAvatar 
+                    iconUrl={post.author?.icon_url} 
+                    name={post.author?.name} 
+                    size="md"
+                  />
+                  {post.author_id ? (
+                    <Link 
+                      href={`/profile/${post.author_id}`}
+                      className="font-medium text-primary-600 hover:text-primary-800"
+                    >
+                      {post.author?.name || '匿名'}
+                    </Link>
+                  ) : (
+                    <span className="font-medium">{post.author?.name || '匿名'}</span>
+                  )}
+                  {post.author && (
+                    <>
+                      <AccountBadge 
+                        accountType={post.author.account_type} 
+                        verificationStatus={post.author.verification_status}
+                        organizationName={post.author.organization_name}
+                        size="sm"
+                      />
+                      {post.author.languages && (
+                        <StudentStatusBadge 
+                          languages={post.author.languages}
+                          size="sm"
+                        />
+                      )}
+                    </>
+                  )}
+                </div>
+                {studyAbroadUniversity && (
+                  <div className="flex items-start space-x-2">
+                    <GraduationCap className="h-5 w-5 text-primary-500 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center flex-wrap gap-2">
+                        <span className="text-gray-600 whitespace-nowrap">留学先大学:</span>
+                        <span className="font-medium text-gray-900">
+                          {studyAbroadUniversity.name_ja || studyAbroadUniversity.name_en}
+                        </span>
+                        {studyAbroadUniversity.name_ja && studyAbroadUniversity.name_en && (
+                          <span className="text-sm text-gray-500 whitespace-nowrap">
+                            ({studyAbroadUniversity.name_en})
+                          </span>
+                        )}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-2 py-0.5 bg-primary-100 text-primary-800 rounded-full text-xs font-medium whitespace-nowrap">
+                            {studyAbroadUniversity.country_code}
+                          </span>
+                          {studyAbroadUniversity.continent && (
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded-full text-xs font-medium whitespace-nowrap">
+                              {studyAbroadUniversity.continent.name_ja}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {(authorUniversity || post.author?.university) && (
+                  <div className="flex items-start space-x-2">
+                    <GraduationCap className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center flex-wrap gap-2">
+                        <span className="text-gray-600 whitespace-nowrap">所属大学:</span>
+                        <span className="font-medium text-gray-900">
+                          {authorUniversity ? (authorUniversity.name_ja || authorUniversity.name_en) : post.author?.university}
+                        </span>
+                        {authorUniversity && authorUniversity.name_ja && authorUniversity.name_en && (
+                          <span className="text-sm text-gray-500 whitespace-nowrap">
+                            ({authorUniversity.name_en})
+                          </span>
+                        )}
+                        {authorUniversity && (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs font-medium whitespace-nowrap">
+                              {authorUniversity.country_code}
+                            </span>
+                            {authorUniversity.continent && (
+                              <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded-full text-xs font-medium whitespace-nowrap">
+                                {authorUniversity.continent.name_ja}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {post.author?.study_abroad_destination && (
+                  <div className="flex items-start space-x-2">
+                    <MapPin className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center flex-wrap gap-2">
+                        <span className="text-gray-600 whitespace-nowrap">留学先:</span>
+                        <span className="font-medium text-gray-900">{post.author.study_abroad_destination}</span>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
-              {post.category === 'question' && !post.is_resolved && (
-                <p className="text-sm text-gray-500 flex items-center gap-1">
-                  <HelpCircle className="h-4 w-4" />
-                  この質問はまだ解決されていません
-                </p>
-              )}
             </div>
-          )}
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-4">
+                <span className={`px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 ${getCategoryColor(post.category)}`}>
+                  {(() => {
+                    const Icon = getCategoryIcon(post.category)
+                    return <Icon className="h-3 w-3 text-white" />
+                  })()}
+                  {getCategoryLabel(post.category)}
+                </span>
+                <div className="flex items-center text-sm text-gray-500 font-medium">
+                  <Clock className="h-4 w-4 mr-1" />
+                  {formatDate(post.created_at)}
+                </div>
+              </div>
 
-          {/* 投稿者情報 */}
-          <div className="flex items-center space-x-4 mb-6 flex-wrap">
-            <div className="flex items-center space-x-2">
+              {post.category !== 'chat' && (
+                <div className="mb-6">
+                  <div className="flex items-center gap-3 flex-wrap mb-2">
+                    <h1 className="text-4xl font-bold text-gray-900">{post.title}</h1>
+                    {post.category === 'question' && post.is_resolved && (
+                      <span className="px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 bg-gradient-to-r from-green-500 to-green-600 text-white shadow-md">
+                        <CheckCircle2 className="h-4 w-4" />
+                        解決済み
+                      </span>
+                    )}
+                  </div>
+                  {post.category === 'question' && !post.is_resolved && (
+                    <p className="text-sm text-gray-500 flex items-center gap-1">
+                      <HelpCircle className="h-4 w-4" />
+                      この質問はまだ解決されていません
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* 投稿者情報 */}
+              <div className="space-y-3 mb-6">
+            <div className="flex items-center space-x-2 flex-wrap gap-2">
               <UserAvatar 
                 iconUrl={post.author?.icon_url} 
                 name={post.author?.name} 
@@ -572,32 +783,107 @@ export default function PostDetail() {
                 </>
               )}
             </div>
-            {post.author?.university && (
+            {studyAbroadUniversity && (
+              <div className="flex items-start space-x-2">
+                <GraduationCap className="h-5 w-5 text-primary-500 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center flex-wrap gap-2">
+                    <span className="text-gray-600 whitespace-nowrap">留学先大学:</span>
+                    <span className="font-medium text-gray-900">
+                      {studyAbroadUniversity.name_ja || studyAbroadUniversity.name_en}
+                    </span>
+                    {studyAbroadUniversity.name_ja && studyAbroadUniversity.name_en && (
+                      <span className="text-sm text-gray-500 whitespace-nowrap">
+                        ({studyAbroadUniversity.name_en})
+                      </span>
+                    )}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="px-2 py-0.5 bg-primary-100 text-primary-800 rounded-full text-xs font-medium whitespace-nowrap">
+                        {studyAbroadUniversity.country_code}
+                      </span>
+                      {studyAbroadUniversity.continent && (
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded-full text-xs font-medium whitespace-nowrap">
+                          {studyAbroadUniversity.continent.name_ja}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {(authorUniversity || post.author?.university) && (
+              <div className="flex items-start space-x-2">
+                <GraduationCap className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center flex-wrap gap-2">
+                    <span className="text-gray-600 whitespace-nowrap">所属大学:</span>
+                    <span className="font-medium text-gray-900">
+                      {authorUniversity ? (authorUniversity.name_ja || authorUniversity.name_en) : post.author?.university}
+                    </span>
+                    {authorUniversity && authorUniversity.name_ja && authorUniversity.name_en && (
+                      <span className="text-sm text-gray-500 whitespace-nowrap">
+                        ({authorUniversity.name_en})
+                      </span>
+                    )}
+                    {authorUniversity && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs font-medium whitespace-nowrap">
+                          {authorUniversity.country_code}
+                        </span>
+                        {authorUniversity.continent && (
+                          <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded-full text-xs font-medium whitespace-nowrap">
+                            {authorUniversity.continent.name_ja}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            {postUniversity && (
               <div className="flex items-center space-x-2">
-                <GraduationCap className="h-5 w-5 text-gray-400" />
-                <span className="text-gray-600">{post.author.university}</span>
+                <GraduationCap className="h-5 w-5 text-primary-500" />
+                <div className="flex items-center space-x-2">
+                  <span className="text-gray-600 font-medium">
+                    投稿の大学: {postUniversity.name_ja || postUniversity.name_en}
+                  </span>
+                  {postUniversity.name_ja && (
+                    <span className="text-sm text-gray-500">({postUniversity.name_en})</span>
+                  )}
+                  <span className="px-2 py-0.5 bg-primary-100 text-primary-800 rounded-full text-xs font-medium">
+                    {postUniversity.country_code}
+                  </span>
+                </div>
               </div>
             )}
             {post.author?.study_abroad_destination && (
-              <div className="flex items-center space-x-2">
-                <MapPin className="h-5 w-5 text-gray-400" />
-                <span className="text-gray-600">{post.author.study_abroad_destination}</span>
+              <div className="flex items-start space-x-2">
+                <MapPin className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center flex-wrap gap-2">
+                    <span className="text-gray-600 whitespace-nowrap">留学先:</span>
+                    <span className="font-medium text-gray-900">{post.author.study_abroad_destination}</span>
+                  </div>
+                </div>
               </div>
             )}
-          </div>
+              </div>
 
-          {/* タグ */}
-          {post.tags && post.tags.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-6">
-              {post.tags.map((tag, index) => (
-                <span
-                  key={index}
-                  className="px-3 py-1.5 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-full text-sm font-medium border border-gray-300"
-                >
-                  #{tag}
-                </span>
-              ))}
-            </div>
+              {/* タグ */}
+              {post.tags && post.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {post.tags.map((tag, index) => (
+                    <span
+                      key={index}
+                      className="px-3 py-1.5 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-full text-sm font-medium border border-gray-300"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
           {/* 投稿内容 */}
@@ -732,70 +1018,74 @@ export default function PostDetail() {
           ) : null}
 
           {/* アクションボタン */}
-          <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-            <div className="flex items-center space-x-6">
+          <div className={`flex flex-row items-center justify-between gap-4 flex-wrap pt-6 pb-6 border-t border-gray-200 ${
+            post.category === 'diary' && post.cover_image_url ? 'px-6' : ''
+          }`}>
+            <div className="flex items-center space-x-3 sm:space-x-6 flex-shrink-0">
               <button
                 onClick={handleLike}
-                className={`flex items-center space-x-2 px-5 py-2.5 rounded-xl font-semibold transition-all duration-200 ${
+                className={`flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl font-semibold transition-all duration-200 text-sm sm:text-base ${
                   liked 
                     ? 'bg-gradient-to-r from-red-50 to-red-100 text-red-600 border-2 border-red-200 shadow-md' 
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-2 border-transparent'
                 }`}
               >
-                <Heart className={`h-5 w-5 ${liked ? 'fill-current' : ''}`} />
+                <Heart className={`h-4 w-4 sm:h-5 sm:w-5 ${liked ? 'fill-current' : ''}`} />
                 <span>{post.likes_count || 0}</span>
               </button>
-              <div className="flex items-center space-x-2 px-5 py-2.5 bg-gray-100 text-gray-600 rounded-xl font-semibold">
-                <MessageSquare className="h-5 w-5 text-primary-500" />
+              <div className="flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-gray-100 text-gray-600 rounded-xl font-semibold text-sm sm:text-base">
+                <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 text-primary-500" />
                 <span>{post.comments_count || 0}</span>
               </div>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-shrink-0">
               {user && post.author_id === user.id && (
                 <>
                   {post.category === 'question' && (
                     <button
                       onClick={handleResolve}
                       disabled={isResolving}
-                      className={`flex items-center space-x-2 px-3 lg:px-4 py-2.5 border-2 rounded-xl font-semibold transition-all duration-200 disabled:opacity-50 ${
+                      className={`flex items-center space-x-1.5 sm:space-x-2 px-3 py-2 sm:py-2.5 border-2 rounded-xl font-semibold transition-all duration-200 disabled:opacity-50 text-xs sm:text-sm whitespace-nowrap ${
                         post.is_resolved
                           ? 'bg-gradient-to-r from-green-50 to-green-100 text-green-600 border-green-200 hover:from-green-100 hover:to-green-200'
                           : 'bg-gradient-to-r from-blue-50 to-blue-100 text-blue-600 border-blue-200 hover:from-blue-100 hover:to-blue-200'
                       }`}
                       title={isResolving ? '更新中...' : post.is_resolved ? '解決済み' : '解決する'}
                     >
-                      <CheckCircle2 className="h-5 w-5 flex-shrink-0" />
-                      <span className="hidden lg:inline">{isResolving ? '更新中...' : post.is_resolved ? '解決済み' : '解決する'}</span>
+                      <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                      <span className="hidden sm:inline">{isResolving ? '更新中...' : post.is_resolved ? '解決済み' : '解決する'}</span>
+                      <span className="sm:hidden">{post.is_resolved ? '解決済み' : '解決'}</span>
                     </button>
                   )}
                   {post.category !== 'chat' && (
                     <button
                       onClick={() => setShowEditForm(!showEditForm)}
-                      className="flex items-center space-x-2 px-3 lg:px-4 py-2.5 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
+                      className="flex items-center space-x-1.5 sm:space-x-2 px-3 py-2 sm:py-2.5 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 text-xs sm:text-sm whitespace-nowrap"
                       title="編集"
                     >
-                      <Edit className="h-5 w-5 flex-shrink-0" />
-                      <span className="hidden lg:inline">編集</span>
+                      <Edit className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                      <span className="hidden sm:inline">編集</span>
                     </button>
                   )}
                   <button
                     onClick={handleDelete}
                     disabled={isDeleting}
-                    className="flex items-center space-x-2 px-3 lg:px-4 py-2.5 bg-gradient-to-r from-red-50 to-red-100 text-red-600 border-2 border-red-200 rounded-xl font-semibold hover:from-red-100 hover:to-red-200 transition-all duration-200 disabled:opacity-50"
+                    className="flex items-center space-x-1.5 sm:space-x-2 px-3 py-2 sm:py-2.5 bg-gradient-to-r from-red-50 to-red-100 text-red-600 border-2 border-red-200 rounded-xl font-semibold hover:from-red-100 hover:to-red-200 transition-all duration-200 disabled:opacity-50 text-xs sm:text-sm whitespace-nowrap"
                     title={isDeleting ? '削除中...' : '削除'}
                   >
-                    <Trash2 className="h-5 w-5 flex-shrink-0" />
-                    <span className="hidden lg:inline">{isDeleting ? '削除中...' : '削除'}</span>
+                    <Trash2 className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                    <span className="hidden sm:inline">{isDeleting ? '削除中...' : '削除'}</span>
+                    <span className="sm:hidden">削除</span>
                   </button>
                 </>
               )}
               <div className="relative">
                 <button 
                   onClick={() => setShowShareMenu(!showShareMenu)}
-                  className="flex items-center space-x-2 px-4 py-2.5 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
+                  className="flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-2.5 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 text-xs sm:text-sm whitespace-nowrap"
                 >
-                  <Share className="h-5 w-5" />
-                  <span>共有</span>
+                  <Share className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="hidden sm:inline">共有</span>
                 </button>
                 {showShareMenu && (
                   <>
@@ -865,11 +1155,11 @@ export default function PostDetail() {
               {user && post.author_id !== user.id && (
                 <button 
                   onClick={() => setShowReportModal(true)}
-                  className="flex items-center space-x-2 px-3 lg:px-4 py-2.5 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all duration-200" 
+                  className="flex items-center space-x-1.5 sm:space-x-2 px-3 py-2 sm:py-2.5 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 text-xs sm:text-sm whitespace-nowrap" 
                   title="通報"
                 >
-                  <Flag className="h-5 w-5 flex-shrink-0" />
-                  <span className="hidden lg:inline">通報</span>
+                  <Flag className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+                  <span className="hidden sm:inline">通報</span>
                 </button>
               )}
             </div>
