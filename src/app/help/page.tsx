@@ -59,7 +59,19 @@ export default function HelpPage() {
               </div>
 
               <div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">2. プロフィール設定</h3>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">2. アカウントタイプの選択</h3>
+                <p className="text-gray-700 mb-2">
+                  個人アカウントと組織アカウント（教育機関・企業・政府機関）から選択できます。
+                </p>
+                <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
+                  <li>個人アカウント：すぐに利用開始可能</li>
+                  <li>組織アカウント：認証審査が必要（1-3営業日）</li>
+                  <li>組織アカウントは公式コミュニティの作成が可能</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">3. プロフィール設定</h3>
                 <p className="text-gray-700 mb-2">
                   プロフィールを充実させることで、他のユーザーとの交流が深まります。
                 </p>
@@ -68,11 +80,12 @@ export default function HelpPage() {
                   <li>留学先の国や都市を登録</li>
                   <li>興味のある分野や専門分野を設定</li>
                   <li>自己紹介文を記入</li>
+                  <li>組織アカウントの場合は組織情報を登録</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">3. 最初の投稿</h3>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">4. 最初の投稿</h3>
                 <p className="text-gray-700 mb-2">
                   掲示板に投稿して、コミュニティに参加しましょう。
                 </p>
@@ -97,28 +110,13 @@ export default function HelpPage() {
                   タイムラインでは、最新の投稿やコミュニティの活動を一覧で確認できます。
                 </p>
                 <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
-                  <li>最新タブ：すべての投稿を時系列で表示</li>
-                  <li>コミュニティタブ：参加しているコミュニティの投稿・イベント・クエストを表示</li>
-                  <li>検索バーで投稿を検索</li>
-                  <li>フィルターでカテゴリ、地域、詳細カテゴリで絞り込み</li>
-                  <li>投稿種別：質問、日記、つぶやき、公式投稿</li>
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">投稿機能</h3>
-                <p className="text-gray-700 mb-2">
-                  質問、日記、つぶやき、公式投稿など様々な種類の投稿ができます。
-                </p>
-                <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
-                  <li>質問：留学に関する質問を投稿し、解決済みにマーク可能</li>
-                  <li>日記：Markdown形式で留学体験を記録（画像最大4枚添付可能）</li>
-                  <li>つぶやき：短い投稿で気軽に情報共有</li>
-                  <li>公式投稿：組織アカウントが公式情報を発信</li>
+                  <li>カテゴリ別に投稿を閲覧・検索（質問、日記、つぶやき）</li>
                   <li>コメントで他のユーザーと交流</li>
                   <li>いいね機能で投稿を応援</li>
-                  <li>共有機能（X（旧Twitter）、URLコピー）</li>
-                  <li>通報機能で不適切な投稿を報告</li>
+                  <li>質問投稿は解決済みにマーク可能</li>
+                  <li>画像の添付が可能</li>
+                  <li>投稿の編集・削除</li>
+                  <li>不適切な投稿の通報</li>
                 </ul>
               </div>
 
@@ -152,54 +150,43 @@ export default function HelpPage() {
               <div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-3">コミュニティ</h3>
                 <p className="text-gray-700 mb-2">
-                  興味や目的が同じユーザーとコミュニティを作成・参加できます。
+                  興味や目的が同じユーザーとコミュニティを作成・参加できます。個人はサークル、組織は公式コミュニティを作成可能です。
                 </p>
                 <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
-                  <li>サークル：個人が作成できるコミュニティ（公開/非公開設定可能）</li>
-                  <li>公式コミュニティ：組織アカウントが作成・運営（認証済み組織のみ）</li>
-                  <li>コミュニティ内で投稿・交流</li>
-                  <li>イベントを企画・参加（日時、場所、参加者管理）</li>
-                  <li>クエストを投稿・達成（ポイント報酬あり）</li>
-                  <li>コミュニティIDで検索して参加</li>
-                  <li>非公開コミュニティはURL共有またはID検索でのみ発見可能</li>
+                  <li>新しいコミュニティ（サークルまたは公式コミュニティ）を作成</li>
+                  <li>既存のコミュニティに加入申請・参加</li>
+                  <li>コミュニティ内で投稿・交流（タイムライン）</li>
+                  <li>コミュニティメンバーの確認</li>
+                  <li>公式コミュニティではイベントを企画・参加</li>
+                  <li>クエストの作成・完了申請</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">マップ機能</h3>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">イベント機能</h3>
                 <p className="text-gray-700 mb-2">
-                  投稿を地図上で確認できます。
+                  公式コミュニティの所有者は、イベントを開催できます。参加登録、締切管理、定員設定などが可能です。
                 </p>
                 <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
-                  <li>2Dマップ表示：投稿を地図上で確認</li>
-                  <li>3D地球儀表示：グローブ形式で投稿を確認</li>
-                  <li>地域やカテゴリでフィルタリング</li>
+                  <li>イベントの作成（タイトル、説明、開催日時、場所、会議室リンクなど）</li>
+                  <li>添付ファイルの共有（Word、Excel、PowerPoint、PDF、画像など）</li>
+                  <li>参加登録・キャンセル</li>
+                  <li>参加者一覧の確認（イベント作成者のみ）</li>
+                  <li>イベントの編集・削除</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">通知機能</h3>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">クエストシステム</h3>
                 <p className="text-gray-700 mb-2">
-                  メッセージ、コメント、いいね、安全確認などの通知を受け取れます。
+                  コミュニティ内でクエストを投稿し、達成するとポイントを獲得できます。
                 </p>
                 <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
-                  <li>通知一覧で確認</li>
-                  <li>検索バーで通知を検索</li>
-                  <li>フィルターで通知タイプで絞り込み（メッセージ、安全確認、コメント、いいねなど）</li>
-                  <li>既読/未読の管理</li>
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">組織アカウント</h3>
-                <p className="text-gray-700 mb-2">
-                  教育機関・企業・政府機関が公式コミュニティを作成・運営できます。
-                </p>
-                <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
-                  <li>組織アカウントとして登録（認証審査が必要、通常1-3営業日）</li>
-                  <li>公式コミュニティを作成・運営</li>
-                  <li>公式投稿で公式情報を発信</li>
-                  <li>イベントやクエストを開催</li>
+                  <li>クエストの作成（タイトル、説明、報酬ポイント、期限など）</li>
+                  <li>クエスト完了の申請（証明テキストやURLを添付）</li>
+                  <li>クエスト作成者による承認・拒否</li>
+                  <li>完了済みクエストの確認</li>
+                  <li>クエストの編集・削除</li>
                 </ul>
               </div>
             </div>
@@ -248,37 +235,28 @@ export default function HelpPage() {
 
               <div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  Q. 組織アカウントの認証にはどのくらい時間がかかりますか？
-                </h3>
-                <p className="text-gray-700">
-                  A. 通常1-3営業日で審査が完了します。審査完了後、公式コミュニティの作成や公式投稿が可能になります。
-                </p>
-              </div>
-
-              <div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">
                   Q. コミュニティの作成方法を教えてください
                 </h3>
                 <p className="text-gray-700">
-                  A. 「コミュニティ」ページから「新しいコミュニティを作成」をクリックし、コミュニティ名、説明、種別（サークル/公式コミュニティ）、公開設定などを入力して作成できます。組織アカウントのみ公式コミュニティを作成できます。
+                  A. 「コミュニティ」ページから「新しいコミュニティを作成」をクリックし、コミュニティ名、説明、公開設定（公開/非公開）などを入力して作成できます。個人アカウントはサークル、組織アカウントは公式コミュニティを作成できます。
                 </p>
               </div>
 
               <div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  Q. 非公開コミュニティに参加するにはどうすればいいですか？
+                  Q. コミュニティに参加するにはどうすればいいですか？
                 </h3>
                 <p className="text-gray-700">
-                  A. 非公開コミュニティは、運営者が共有したURLからアクセスするか、コミュニティIDを検索バーで検索することで発見・参加できます。通常の検索結果には表示されません。
+                  A. コミュニティ詳細ページから「加入申請」ボタンをクリックしてください。公開コミュニティは即座に参加できますが、非公開コミュニティは承認が必要です。承認待ちの場合は、コミュニティの所有者が承認するまでお待ちください。
                 </p>
               </div>
 
               <div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  Q. 日記に画像を添付する方法を教えてください
+                  Q. イベントは誰が作成できますか？
                 </h3>
                 <p className="text-gray-700">
-                  A. 日記投稿時にMarkdownエディタ内で画像を選択できます。最大4枚まで添付可能です。カバー写真を設定すると、タイムラインで目立つように表示されます。
+                  A. 公式コミュニティの所有者のみがイベントを作成できます。サークルではイベント機能は利用できません。イベントには参加登録、締切、定員、添付ファイルなどの機能があります。
                 </p>
               </div>
 
@@ -287,7 +265,16 @@ export default function HelpPage() {
                   Q. クエストとは何ですか？
                 </h3>
                 <p className="text-gray-700">
-                  A. コミュニティ内で投稿できる課題やミッションです。達成するとポイントを獲得できます。コミュニティの運営者がクエストを投稿し、メンバーが達成を報告します。
+                  A. クエストは、コミュニティ内で設定できるミッションです。クエストを完了すると、報酬としてポイントを獲得できます。コミュニティメンバーはクエストの完了を申請でき、クエスト作成者が承認するとポイントが付与されます。
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  Q. 組織アカウントとは何ですか？
+                </h3>
+                <p className="text-gray-700">
+                  A. 教育機関、企業、政府機関などの組織が利用できるアカウントです。認証審査が必要で、審査完了まで通常1-3営業日かかります。組織アカウントは公式コミュニティを作成し、イベントを開催できます。
                 </p>
               </div>
             </div>

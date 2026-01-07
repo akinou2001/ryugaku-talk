@@ -4,18 +4,26 @@ const nextConfig = {
     domains: ['avatars.githubusercontent.com'],
   },
   webpack: (config, { isServer }) => {
-    // three-mesh-bvhのBatchedMeshエラーを回避するため、three-mesh-bvhを無視
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      'three-mesh-bvh': false,
+    // three-mesh-bvhの互換性問題を回避
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        crypto: false,
+      }
     }
     
-    // @react-three/dreiからBvhを除外
-    if (!isServer) {
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        '@react-three/drei/core/Bvh': false,
-      }
+    // three-mesh-bvhのESM/CJS混在問題を回避
+    // MeshRefractionMaterialの自動読み込みを防ぐ
+    config.resolve.alias = {
+      ...config.resolve.alias,
+    }
+    
+    // three-mesh-bvhのバージョン互換性問題を回避
+    config.optimization = {
+      ...config.optimization,
+      sideEffects: false,
     }
     
     return config
