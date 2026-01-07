@@ -58,12 +58,12 @@ export function FloatingActionButton() {
               <button
                 key={action.id}
                 onClick={action.onClick}
-                className="flex items-center space-x-2 bg-white rounded-full shadow-lg px-3 lg:px-4 py-3 text-gray-700 hover:bg-gray-50 transition-all fab-action-button"
+                className="flex items-center space-x-2 bg-white rounded-full shadow-lg px-3 sm:px-4 py-3 text-gray-700 hover:bg-gray-50 transition-all fab-action-button"
                 style={{ animationDelay: `${index * 50}ms` }}
                 title={action.label}
               >
                 <Icon className="h-5 w-5 flex-shrink-0" />
-                <span className="text-sm font-medium whitespace-nowrap hidden lg:inline">{action.label}</span>
+                <span className="text-sm font-medium whitespace-nowrap">{action.label}</span>
               </button>
             )
           })}
