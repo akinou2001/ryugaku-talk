@@ -107,12 +107,12 @@ export function Header() {
   return (
     <>
     <header className="bg-white shadow-sm relative z-[100]">
-      <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-16">
+      <div className="container mx-auto px-3 sm:px-4">
+        <div className="flex items-center justify-between h-14 sm:h-16 min-w-0">
           {/* ロゴ */}
-          <Link href="/" className="flex items-center space-x-2">
-            <MessageCircle className="h-8 w-8 text-primary-600" />
-            <span className="text-xl font-bold text-gray-900">RyugakuTalk</span>
+          <Link href="/" className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
+            <MessageCircle className="h-6 w-6 sm:h-8 sm:w-8 text-primary-600 flex-shrink-0" />
+            <span className="text-base sm:text-xl font-bold text-gray-900 whitespace-nowrap">RyugakuTalk</span>
           </Link>
 
           {/* ナビゲーションタブ（広い画面で表示） */}
@@ -189,20 +189,20 @@ export function Header() {
           </nav>
 
           {/* ユーザーメニュー */}
-          <div className="flex items-center space-x-2 md:space-x-4">
+          <div className="flex items-center space-x-1 sm:space-x-2 md:space-x-4 flex-shrink-0">
             {user ? (
               <>
                 {/* メインメニューボタン（xl未満で表示） */}
                 <div className="relative main-menu-container xl:hidden">
                   <button
                     onClick={() => setIsMainMenuOpen(!isMainMenuOpen)}
-                    className="p-2 text-gray-700 hover:text-primary-600 transition-colors"
+                    className="p-1.5 sm:p-2 text-gray-700 hover:text-primary-600 transition-colors flex-shrink-0"
                     aria-label="メニュー"
                   >
                     {isMainMenuOpen ? (
-                      <X className="h-6 w-6" />
+                      <X className="h-5 w-5 sm:h-6 sm:w-6" />
                     ) : (
-                      <Menu className="h-6 w-6" />
+                      <Menu className="h-5 w-5 sm:h-6 sm:w-6" />
                     )}
                   </button>
                   
@@ -259,9 +259,9 @@ export function Header() {
                 {/* 通知アイコン */}
                 <Link
                   href="/notifications"
-                  className="relative p-2 text-gray-700 hover:text-primary-600 transition-colors"
+                  className="relative p-1.5 sm:p-2 text-gray-700 hover:text-primary-600 transition-colors flex-shrink-0"
                 >
-                  <Bell className="h-6 w-6" />
+                  <Bell className="h-5 w-5 sm:h-6 sm:w-6" />
                   {/* 未読通知バッジ */}
                   {unreadNotificationCount > 0 && (
                     <span className="absolute top-0 right-0 h-5 w-5 bg-red-500 rounded-full text-white text-xs font-bold flex items-center justify-center min-w-[20px] px-1">
@@ -337,11 +337,11 @@ export function Header() {
                 </div>
               </>
             ) : (
-              <div className="flex items-center space-x-2">
-                <Link href="/auth/signin" className="btn-secondary">
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                <Link href="/auth/signin" className="btn-secondary whitespace-nowrap text-sm sm:text-base px-3 sm:px-4 py-2">
                   ログイン
                 </Link>
-                <Link href="/auth/signup" className="btn-primary">
+                <Link href="/auth/signup" className="btn-primary whitespace-nowrap text-sm sm:text-base px-3 sm:px-4 py-2">
                   新規登録
                 </Link>
               </div>

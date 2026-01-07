@@ -12,6 +12,11 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'RyugakuTalk - 留学支援コミュニティ',
   description: '留学中・留学希望者・関係者が質問・共有・交流できる安全なオンラインコミュニティ',
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 5,
+  },
 }
 
 export default function RootLayout({
