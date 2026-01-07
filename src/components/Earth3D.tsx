@@ -215,7 +215,6 @@ function MarkerPin({
   return (
     <group ref={groupRef} position={marker.position}>
       {/* 平面のピン（Htmlコンポーネントで実装、グループの回転でカメラを向く） */}
-      {/* eslint-disable-next-line @typescript-eslint/ban-ts-comment */}
       {/* @ts-ignore */}
       <Html
         position={[0, 0, 0]}
