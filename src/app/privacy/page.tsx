@@ -16,7 +16,7 @@ export default function PrivacyPage() {
             <Shield className="h-16 w-16 text-primary-600 mx-auto mb-4" />
             <h1 className="text-4xl font-bold text-gray-900 mb-4">プライバシーポリシー</h1>
             <p className="text-lg text-gray-600">
-              最終更新日: 2024年1月1日
+              最終更新日: 2026年1月1日
             </p>
           </div>
 
@@ -71,9 +71,18 @@ export default function PrivacyPage() {
 
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-2">2.3 投稿内容</h3>
-                  <p className="text-gray-700 leading-relaxed">
-                    ユーザーが投稿した内容（テキスト、画像など）は、当サービスの利用目的のために保存されます。
+                  <p className="text-gray-700 leading-relaxed mb-2">
+                    ユーザーが投稿した内容（テキスト、画像など）は、当サービスの利用目的のために保存されます：
                   </p>
+                  <ul className="list-disc list-inside space-y-1 text-gray-700 ml-4 mt-2">
+                    <li>投稿内容（タイトル、本文、画像、タグなど）</li>
+                    <li>コメント内容</li>
+                    <li>チャットメッセージ</li>
+                    <li>コミュニティ情報（コミュニティ名、説明、設定など）</li>
+                    <li>イベント情報</li>
+                    <li>クエスト情報</li>
+                    <li>安全確認の回答</li>
+                  </ul>
                 </div>
 
                 <div>

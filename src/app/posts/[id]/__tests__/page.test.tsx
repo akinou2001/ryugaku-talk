@@ -107,7 +107,8 @@ describe('PostDetail', () => {
     render(<PostDetail />)
     
     await waitFor(() => {
-      const resolveButton = screen.queryByText(/解決/i)
+      // 「解決する」ボタンをより具体的に検索（「この質問はまだ解決されていません」と区別）
+      const resolveButton = screen.getByRole('button', { name: /解決する|解決済み/i })
       expect(resolveButton).toBeInTheDocument()
     })
   })

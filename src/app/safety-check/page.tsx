@@ -95,8 +95,8 @@ export default function SafetyCheckPage() {
       if (error) throw error
 
       const communities = (data || [])
-        .map(item => item.community)
-        .filter(Boolean) as Array<{id: string, name: string}>
+        .map((item: any) => item.community)
+        .filter((community: any): community is {id: string, name: string} => Boolean(community))
       
       setUserCommunities(communities)
     } catch (error) {
@@ -251,7 +251,10 @@ export default function SafetyCheckPage() {
         target_lng: '',
         target_radius: '',
         target_country: '',
-        target_region: ''
+        target_region: '',
+        is_recurring: false,
+        recurrence_type: 'daily',
+        recurrence_time: '09:00'
       })
       fetchSafetyChecks()
     } catch (error: any) {

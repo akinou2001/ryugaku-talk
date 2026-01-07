@@ -10,6 +10,14 @@ jest.mock('next/image', () => ({
   },
 }))
 
+// react-markdownをモック
+jest.mock('react-markdown', () => ({
+  __esModule: true,
+  default: ({ children }) => {
+    return <div>{children}</div>
+  },
+}))
+
 // Next.jsのルーターをモック
 jest.mock('next/navigation', () => ({
   useRouter() {

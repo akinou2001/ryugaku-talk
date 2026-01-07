@@ -105,9 +105,9 @@ export default function HelpPage() {
             
             <div className="space-y-6">
               <div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">掲示板</h3>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">タイムライン</h3>
                 <p className="text-gray-700 mb-2">
-                  掲示板では、質問や情報共有、相談など様々な投稿ができます。
+                  タイムラインでは、最新の投稿やコミュニティの活動を一覧で確認できます。
                 </p>
                 <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
                   <li>カテゴリ別に投稿を閲覧・検索（質問、日記、つぶやき）</li>
@@ -126,10 +126,12 @@ export default function HelpPage() {
                   留学中の体験や思い出を日記形式で記録・共有できます。
                 </p>
                 <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
-                  <li>日付ごとに日記を投稿</li>
-                  <li>写真を添付して記録</li>
-                  <li>他のユーザーの日記を閲覧</li>
+                  <li>Markdown形式でリッチな文章を作成</li>
+                  <li>画像を最大4枚添付可能</li>
+                  <li>カバー写真を設定してタイムラインで目立たせる</li>
+                  <li>国や大学でフィルタリングして他のユーザーの日記を閲覧</li>
                   <li>コメントで交流</li>
+                  <li>日記専用ページで一覧表示</li>
                 </ul>
               </div>
 

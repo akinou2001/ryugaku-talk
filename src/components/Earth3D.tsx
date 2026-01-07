@@ -215,6 +215,7 @@ function MarkerPin({
   return (
     <group ref={groupRef} position={marker.position}>
       {/* 平面のピン（Htmlコンポーネントで実装、グループの回転でカメラを向く） */}
+      {/* @ts-ignore */}
       <Html
         position={[0, 0, 0]}
         center
@@ -405,6 +406,7 @@ function MarkerPin({
 
       {/* ホバー時のカード表示（ピンの上に表示、グループの回転でカメラを向く） */}
       {marker.isHovered && (
+        // @ts-ignore - Html component type issue with @react-three/drei
         <Html
           position={[0, baseSize * 0.15, 0]}
           center

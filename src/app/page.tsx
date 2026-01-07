@@ -2,13 +2,14 @@ import { Hero } from '@/components/Hero'
 import { RecentPosts } from '@/components/RecentPosts'
 import { Features } from '@/components/Features'
 import Link from 'next/link'
-import { ArrowRight, Users, MessageSquare, Building2 } from 'lucide-react'
+import { ArrowRight, Users, MessageSquare, Building2, Sparkles, Globe } from 'lucide-react'
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-white">
+      {/* ヒーローセクション */}
       <Hero />
-      
+
       {/* 最近の投稿セクション */}
       <section className="py-16 bg-white">
         <div className="container mx-auto px-4">
@@ -41,7 +42,7 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
               <Link href="/auth/signup" className="bg-white text-blue-700 hover:bg-gray-100 px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 inline-flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl">
                 <span>無料で始める</span>
-                <ArrowRight className="h-5 w-5" />
+                <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </Link>
               <Link href="/communities" className="bg-cyan-500 hover:bg-cyan-600 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 inline-flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl">
                 <Users className="h-5 w-5" />
@@ -68,5 +69,3 @@ export default function Home() {
     </div>
   )
 }
-
-

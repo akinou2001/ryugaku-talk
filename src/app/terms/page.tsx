@@ -16,7 +16,7 @@ export default function TermsPage() {
             <FileText className="h-16 w-16 text-primary-600 mx-auto mb-4" />
             <h1 className="text-4xl font-bold text-gray-900 mb-4">利用規約</h1>
             <p className="text-lg text-gray-600">
-              最終更新日: 2024年1月1日
+              最終更新日: 2026年1月1日
             </p>
           </div>
 

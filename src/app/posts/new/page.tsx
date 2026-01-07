@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
@@ -12,7 +12,7 @@ import { uploadFile, validateFileType, validateFileSize, FILE_TYPES, isImageFile
 import { ArrowLeft, Save, X, Search, ChevronLeft, ChevronRight, Flame, Image as ImageIcon, Upload } from 'lucide-react'
 import { MarkdownEditor } from '@/components/MarkdownEditor'
 
-export default function NewPost() {
+function NewPostInner() {
   const { user } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -1128,5 +1128,21 @@ export default function NewPost() {
         </form>
       </div>
     </div>
+  )
+}
+
+export default function NewPost() {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-gray-500">読み込み中...</div>
+          </div>
+        </div>
+      </div>
+    }>
+      <NewPostInner />
+    </Suspense>
   )
 }
