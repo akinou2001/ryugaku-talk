@@ -3,7 +3,7 @@ import { MessageCircle, Users, Sparkles, MessageSquare, Award, Calendar, ArrowRi
 
 export function Hero() {
   return (
-    <section className="relative bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-600 py-24 min-h-[95vh] flex items-center overflow-hidden">
+    <section className="relative bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 py-24 min-h-[95vh] flex items-center overflow-hidden">
       {/* 背景装飾 */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-white/10 rounded-full blur-3xl"></div>
@@ -16,8 +16,8 @@ export function Hero() {
           {/* ロゴ */}
           <div className="mb-12 animate-fade-in">
             <div className="relative inline-block mb-8">
-              <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 rounded-full blur-xl opacity-60 animate-pulse"></div>
-              <div className="relative w-24 h-24 bg-gradient-to-br from-cyan-400 via-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-2xl transform hover:scale-110 transition-transform duration-300">
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 rounded-full blur-xl opacity-40 animate-pulse"></div>
+              <div className="relative w-24 h-24 bg-white/10 backdrop-blur-xl border-2 border-white/30 rounded-full flex items-center justify-center shadow-2xl transform hover:scale-110 hover:bg-white/20 hover:border-white/50 transition-all duration-300">
                 <MessageCircle className="h-14 w-14 text-white" strokeWidth={2} />
               </div>
             </div>
