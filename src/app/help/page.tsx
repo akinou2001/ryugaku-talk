@@ -92,15 +92,33 @@ export default function HelpPage() {
             
             <div className="space-y-6">
               <div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">掲示板</h3>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">タイムライン</h3>
                 <p className="text-gray-700 mb-2">
-                  掲示板では、質問や情報共有、相談など様々な投稿ができます。
+                  タイムラインでは、最新の投稿やコミュニティの活動を一覧で確認できます。
                 </p>
                 <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
-                  <li>カテゴリ別に投稿を閲覧・検索</li>
+                  <li>最新タブ：すべての投稿を時系列で表示</li>
+                  <li>コミュニティタブ：参加しているコミュニティの投稿・イベント・クエストを表示</li>
+                  <li>検索バーで投稿を検索</li>
+                  <li>フィルターでカテゴリ、地域、詳細カテゴリで絞り込み</li>
+                  <li>投稿種別：質問、日記、つぶやき、公式投稿</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">投稿機能</h3>
+                <p className="text-gray-700 mb-2">
+                  質問、日記、つぶやき、公式投稿など様々な種類の投稿ができます。
+                </p>
+                <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
+                  <li>質問：留学に関する質問を投稿し、解決済みにマーク可能</li>
+                  <li>日記：Markdown形式で留学体験を記録（画像最大4枚添付可能）</li>
+                  <li>つぶやき：短い投稿で気軽に情報共有</li>
+                  <li>公式投稿：組織アカウントが公式情報を発信</li>
                   <li>コメントで他のユーザーと交流</li>
                   <li>いいね機能で投稿を応援</li>
-                  <li>ブックマークで後から確認</li>
+                  <li>共有機能（X（旧Twitter）、URLコピー）</li>
+                  <li>通報機能で不適切な投稿を報告</li>
                 </ul>
               </div>
 
@@ -110,10 +128,12 @@ export default function HelpPage() {
                   留学中の体験や思い出を日記形式で記録・共有できます。
                 </p>
                 <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
-                  <li>日付ごとに日記を投稿</li>
-                  <li>写真を添付して記録</li>
-                  <li>他のユーザーの日記を閲覧</li>
+                  <li>Markdown形式でリッチな文章を作成</li>
+                  <li>画像を最大4枚添付可能</li>
+                  <li>カバー写真を設定してタイムラインで目立たせる</li>
+                  <li>国や大学でフィルタリングして他のユーザーの日記を閲覧</li>
                   <li>コメントで交流</li>
+                  <li>日記専用ページで一覧表示</li>
                 </ul>
               </div>
 
@@ -135,22 +155,51 @@ export default function HelpPage() {
                   興味や目的が同じユーザーとコミュニティを作成・参加できます。
                 </p>
                 <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
-                  <li>新しいコミュニティを作成</li>
-                  <li>既存のコミュニティに参加</li>
+                  <li>サークル：個人が作成できるコミュニティ（公開/非公開設定可能）</li>
+                  <li>公式コミュニティ：組織アカウントが作成・運営（認証済み組織のみ）</li>
                   <li>コミュニティ内で投稿・交流</li>
-                  <li>イベントを企画・参加</li>
+                  <li>イベントを企画・参加（日時、場所、参加者管理）</li>
+                  <li>クエストを投稿・達成（ポイント報酬あり）</li>
+                  <li>コミュニティIDで検索して参加</li>
+                  <li>非公開コミュニティはURL共有またはID検索でのみ発見可能</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-3">相談機能</h3>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">マップ機能</h3>
                 <p className="text-gray-700 mb-2">
-                  留学に関する相談を投稿し、経験者からアドバイスを受けられます。
+                  投稿を地図上で確認できます。
                 </p>
                 <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
-                  <li>相談内容を投稿</li>
-                  <li>メンターからアドバイスを受ける</li>
-                  <li>相談を解決済みにマーク</li>
+                  <li>2Dマップ表示：投稿を地図上で確認</li>
+                  <li>3D地球儀表示：グローブ形式で投稿を確認</li>
+                  <li>地域やカテゴリでフィルタリング</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">通知機能</h3>
+                <p className="text-gray-700 mb-2">
+                  メッセージ、コメント、いいね、安全確認などの通知を受け取れます。
+                </p>
+                <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
+                  <li>通知一覧で確認</li>
+                  <li>検索バーで通知を検索</li>
+                  <li>フィルターで通知タイプで絞り込み（メッセージ、安全確認、コメント、いいねなど）</li>
+                  <li>既読/未読の管理</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-3">組織アカウント</h3>
+                <p className="text-gray-700 mb-2">
+                  教育機関・企業・政府機関が公式コミュニティを作成・運営できます。
+                </p>
+                <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
+                  <li>組織アカウントとして登録（認証審査が必要、通常1-3営業日）</li>
+                  <li>公式コミュニティを作成・運営</li>
+                  <li>公式投稿で公式情報を発信</li>
+                  <li>イベントやクエストを開催</li>
                 </ul>
               </div>
             </div>
@@ -199,10 +248,10 @@ export default function HelpPage() {
 
               <div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                  Q. メンターになるにはどうすればいいですか？
+                  Q. 組織アカウントの認証にはどのくらい時間がかかりますか？
                 </h3>
                 <p className="text-gray-700">
-                  A. プロフィール設定でメンター登録を申請できます。審査後、メンターとして活動できるようになります。
+                  A. 通常1-3営業日で審査が完了します。審査完了後、公式コミュニティの作成や公式投稿が可能になります。
                 </p>
               </div>
 
@@ -211,7 +260,34 @@ export default function HelpPage() {
                   Q. コミュニティの作成方法を教えてください
                 </h3>
                 <p className="text-gray-700">
-                  A. 「コミュニティ」ページから「新しいコミュニティを作成」をクリックし、コミュニティ名、説明、設定などを入力して作成できます。
+                  A. 「コミュニティ」ページから「新しいコミュニティを作成」をクリックし、コミュニティ名、説明、種別（サークル/公式コミュニティ）、公開設定などを入力して作成できます。組織アカウントのみ公式コミュニティを作成できます。
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  Q. 非公開コミュニティに参加するにはどうすればいいですか？
+                </h3>
+                <p className="text-gray-700">
+                  A. 非公開コミュニティは、運営者が共有したURLからアクセスするか、コミュニティIDを検索バーで検索することで発見・参加できます。通常の検索結果には表示されません。
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  Q. 日記に画像を添付する方法を教えてください
+                </h3>
+                <p className="text-gray-700">
+                  A. 日記投稿時にMarkdownエディタ内で画像を選択できます。最大4枚まで添付可能です。カバー写真を設定すると、タイムラインで目立つように表示されます。
+                </p>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  Q. クエストとは何ですか？
+                </h3>
+                <p className="text-gray-700">
+                  A. コミュニティ内で投稿できる課題やミッションです。達成するとポイントを獲得できます。コミュニティの運営者がクエストを投稿し、メンバーが達成を報告します。
                 </p>
               </div>
             </div>
