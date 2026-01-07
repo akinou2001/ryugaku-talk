@@ -1,76 +1,83 @@
 import Link from 'next/link'
-import { MessageCircle, Users, Calendar, Sparkles, MessageSquare, Award } from 'lucide-react'
+import { MessageCircle, Sparkles, ArrowRight, Globe, Users, Zap } from 'lucide-react'
 
 export function Hero() {
   return (
-    <section className="bg-gradient-to-br from-primary-50 via-blue-50 to-purple-50 py-20">
-      <div className="container mx-auto px-4">
+    <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden bg-gradient-to-br from-primary-600 via-blue-600 to-purple-600">
+      <div className="container mx-auto px-4 relative z-10">
         <div className="max-w-5xl mx-auto text-center">
-          <div className="mb-8">
-            <MessageCircle className="h-16 w-16 text-primary-600 mx-auto mb-4" />
-            <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-4">
-              <span className="text-primary-600">RyugakuTalk</span>
+          {/* ロゴ・アイコン */}
+          <div className="mb-8 animate-fade-in">
+            <div className="inline-flex items-center justify-center w-24 h-24 bg-white/20 backdrop-blur-sm rounded-full mb-6 shadow-2xl">
+              <MessageCircle className="h-12 w-12 text-white" />
+            </div>
+            <h1 className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
+              <span className="block">RyugakuTalk</span>
             </h1>
-            <p className="text-2xl md:text-3xl text-gray-700 font-medium mb-6">
-              留学コミュニティプラットフォーム
-            </p>
           </div>
           
-          <p className="text-lg md:text-xl text-gray-600 mb-10 max-w-3xl mx-auto leading-relaxed">
-            留学中・留学希望者・関係者が質問・共有・交流できる安全なオンラインコミュニティ。
-            <br className="hidden md:block" />
-            個人から組織まで、多様なアカウントタイプで参加できるグローバル留学ネットワークを形成します。
+          {/* 説明文 */}
+          <p className="text-xl md:text-2xl text-blue-50 mb-12 max-w-3xl mx-auto leading-relaxed font-light">
+            みんなの留学体験が紡ぐ、次世代の留学コミュニティプラットフォーム
           </p>
 
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-            <Link href="/auth/signup" className="btn-primary text-lg px-8 py-3 flex items-center justify-center space-x-2">
-              <span>今すぐ始める</span>
+          {/* CTAボタン */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16 animate-fade-in-up">
+            <Link 
+              href="/auth/signup" 
+              className="group bg-white text-primary-600 hover:bg-gray-50 px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 inline-flex items-center justify-center space-x-2"
+            >
+              <span>今すぐ無料で始める</span>
+              <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
             </Link>
-            <Link href="/timeline" className="btn-secondary text-lg px-8 py-3 flex items-center justify-center space-x-2">
+            <Link 
+              href="/timeline" 
+              className="group bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 border-2 border-white/30 px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:-translate-y-1 inline-flex items-center justify-center space-x-2"
+            >
               <Sparkles className="h-5 w-5" />
               <span>タイムラインを見る</span>
             </Link>
           </div>
 
           {/* 主要機能のハイライト */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-16">
-            <div className="card text-center hover:shadow-lg transition-shadow">
-              <div className="bg-blue-100 rounded-full w-14 h-14 flex items-center justify-center mx-auto mb-4">
-                <MessageSquare className="h-7 w-7 text-blue-600" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 max-w-4xl mx-auto animate-fade-in-up-delay">
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 hover:bg-white/20 transition-all duration-300 transform hover:-translate-y-1 border border-white/20">
+              <div className="bg-gradient-to-br from-blue-400 to-blue-500 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3 shadow-lg">
+                <MessageCircle className="h-6 w-6 text-white" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">質問・投稿</h3>
-              <p className="text-sm text-gray-600">
-                質問、日記、つぶやきを投稿して交流
+              <h3 className="text-sm md:text-base font-semibold text-white mb-1">質問・投稿</h3>
+              <p className="text-xs md:text-sm text-blue-100">
+                交流できる
               </p>
             </div>
 
-            <div className="card text-center hover:shadow-lg transition-shadow">
-              <div className="bg-green-100 rounded-full w-14 h-14 flex items-center justify-center mx-auto mb-4">
-                <Users className="h-7 w-7 text-green-600" />
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 hover:bg-white/20 transition-all duration-300 transform hover:-translate-y-1 border border-white/20">
+              <div className="bg-gradient-to-br from-green-400 to-green-500 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3 shadow-lg">
+                <Users className="h-6 w-6 text-white" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">コミュニティ</h3>
-              <p className="text-sm text-gray-600">
-                サークルや公式コミュニティでつながる
+              <h3 className="text-sm md:text-base font-semibold text-white mb-1">コミュニティ</h3>
+              <p className="text-xs md:text-sm text-blue-100">
+                つながる
               </p>
             </div>
 
-            <div className="card text-center hover:shadow-lg transition-shadow">
-              <div className="bg-purple-100 rounded-full w-14 h-14 flex items-center justify-center mx-auto mb-4">
-                <Award className="h-7 w-7 text-purple-600" />
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 hover:bg-white/20 transition-all duration-300 transform hover:-translate-y-1 border border-white/20">
+              <div className="bg-gradient-to-br from-purple-400 to-purple-500 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3 shadow-lg">
+                <Zap className="h-6 w-6 text-white" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">クエスト</h3>
-              <p className="text-sm text-gray-600">
-                ミッションを達成してスコアを獲得
+              <h3 className="text-sm md:text-base font-semibold text-white mb-1">クエスト</h3>
+              <p className="text-xs md:text-sm text-blue-100">
+                スコア獲得
               </p>
             </div>
 
-            <div className="card text-center hover:shadow-lg transition-shadow">
-              <div className="bg-orange-100 rounded-full w-14 h-14 flex items-center justify-center mx-auto mb-4">
-                <Calendar className="h-7 w-7 text-orange-600" />
+            <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 hover:bg-white/20 transition-all duration-300 transform hover:-translate-y-1 border border-white/20">
+              <div className="bg-gradient-to-br from-orange-400 to-orange-500 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3 shadow-lg">
+                <Globe className="h-6 w-6 text-white" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">イベント</h3>
-              <p className="text-sm text-gray-600">
-                公式コミュニティのイベントに参加
+              <h3 className="text-sm md:text-base font-semibold text-white mb-1">グローバル</h3>
+              <p className="text-xs md:text-sm text-blue-100">
+                世界中とつながる
               </p>
             </div>
           </div>
@@ -79,5 +86,3 @@ export function Hero() {
     </section>
   )
 }
-
-
