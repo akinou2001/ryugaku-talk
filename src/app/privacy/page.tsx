@@ -49,7 +49,9 @@ export default function PrivacyPage() {
                     <li>メールアドレス</li>
                     <li>パスワード（暗号化して保存）</li>
                     <li>ユーザー名</li>
+                    <li>アカウントタイプ（個人/教育機関/企業/政府機関）</li>
                     <li>プロフィール情報（任意）</li>
+                    <li>組織アカウントの場合：組織名、組織タイプ、連絡先情報など</li>
                   </ul>
                 </div>
 
@@ -73,6 +75,13 @@ export default function PrivacyPage() {
                     ユーザーが投稿した内容（テキスト、画像など）は、当サービスの利用目的のために保存されます。
                   </p>
                 </div>
+
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">2.4 コミュニティ・イベント・クエスト情報</h3>
+                  <p className="text-gray-700 leading-relaxed">
+                    コミュニティの作成・参加、イベントの作成・参加登録、クエストの作成・完了申請に関する情報を収集します。
+                  </p>
+                </div>
               </div>
             </section>
 
@@ -87,6 +96,8 @@ export default function PrivacyPage() {
               <ul className="list-disc list-inside space-y-2 text-gray-700 ml-4">
                 <li>サービスの提供、維持、改善</li>
                 <li>ユーザー認証とアカウント管理</li>
+                <li>コミュニティ、イベント、クエスト機能の提供</li>
+                <li>組織アカウントの認証審査</li>
                 <li>ユーザーサポートの提供</li>
                 <li>不正利用の防止とセキュリティの確保</li>
                 <li>利用規約違反の調査と対応</li>

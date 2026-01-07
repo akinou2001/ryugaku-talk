@@ -10,13 +10,13 @@ export default function Home() {
       <Hero />
       
       {/* 最近の投稿セクション */}
-      <section className="py-12 bg-gray-50">
+      <section className="py-16 bg-white">
         <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900">最近の投稿</h2>
-            <Link href="/timeline" className="text-primary-600 hover:text-primary-800 flex items-center space-x-1 text-sm md:text-base">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-900">最近の投稿</h2>
+            <Link href="/timeline" className="text-primary-600 hover:text-primary-800 flex items-center space-x-2 text-base md:text-lg font-semibold">
               <span>すべて見る</span>
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="h-5 w-5" />
             </Link>
           </div>
           <RecentPosts />
@@ -27,38 +27,38 @@ export default function Home() {
       <Features />
 
       {/* CTAセクション */}
-      <section className="py-16 bg-gradient-to-br from-primary-600 to-blue-600 text-white">
+      <section className="py-20 bg-gradient-to-br from-blue-600 to-purple-700 text-white">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+            <h2 className="text-3xl md:text-4xl font-bold mb-6">
               RyugakuTalkで留学体験を共有しよう
             </h2>
-            <p className="text-lg md:text-xl mb-8 text-blue-100">
+            <p className="text-lg md:text-xl mb-10 text-white/90">
               個人アカウントから組織アカウントまで、様々な形で参加できます。
               <br />
               今すぐ無料で始めて、留学コミュニティに参加しましょう。
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link href="/auth/signup" className="bg-white text-primary-600 hover:bg-gray-100 px-8 py-3 rounded-lg font-semibold text-lg transition-colors inline-flex items-center justify-center space-x-2">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
+              <Link href="/auth/signup" className="bg-white text-blue-700 hover:bg-gray-100 px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 inline-flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl">
                 <span>無料で始める</span>
                 <ArrowRight className="h-5 w-5" />
               </Link>
-              <Link href="/communities" className="bg-primary-700 hover:bg-primary-800 text-white px-8 py-3 rounded-lg font-semibold text-lg transition-colors inline-flex items-center justify-center space-x-2">
+              <Link href="/communities" className="bg-cyan-500 hover:bg-cyan-600 text-white px-8 py-4 rounded-xl font-semibold text-lg transition-all duration-200 inline-flex items-center justify-center space-x-2 shadow-lg hover:shadow-xl">
                 <Users className="h-5 w-5" />
                 <span>コミュニティを探す</span>
               </Link>
             </div>
-            <div className="mt-8 flex flex-wrap justify-center gap-6 text-sm text-blue-100">
+            <div className="flex flex-wrap justify-center gap-8 text-sm text-white/80">
               <div className="flex items-center space-x-2">
-                <MessageSquare className="h-4 w-4" />
+                <MessageSquare className="h-5 w-5" />
                 <span>質問・投稿</span>
               </div>
               <div className="flex items-center space-x-2">
-                <Users className="h-4 w-4" />
+                <Users className="h-5 w-5" />
                 <span>コミュニティ</span>
               </div>
               <div className="flex items-center space-x-2">
-                <Building2 className="h-4 w-4" />
+                <Building2 className="h-5 w-5" />
                 <span>組織アカウント</span>
               </div>
             </div>
