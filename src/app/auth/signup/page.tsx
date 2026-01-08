@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/components/Providers'
@@ -24,6 +24,10 @@ export default function SignUp() {
   const [contactEmailError, setContactEmailError] = useState('')
   const [checkingEmail, setCheckingEmail] = useState(false)
   
+  // デバウンス用のタイマー
+  const emailCheckTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const contactEmailCheckTimerRef = useRef<NodeJS.Timeout | null>(null)
+  
   // 組織アカウント用フィールド
   const [organizationName, setOrganizationName] = useState('')
   const [organizationType, setOrganizationType] = useState('')
@@ -42,7 +46,7 @@ export default function SignUp() {
     return emailRegex.test(email)
   }
 
-  // 既に登録済みのメールアドレスかチェック
+  // 既に登録済みのメールアドレスかチェック（タイムアウト付き）
   const checkEmailExists = async (emailAddress: string): Promise<boolean> => {
     if (!emailAddress || !validateEmail(emailAddress)) {
       return false
@@ -50,68 +54,112 @@ export default function SignUp() {
 
     try {
       const normalizedEmail = emailAddress.trim().toLowerCase()
-      const { data, error } = await supabase
+      
+      // タイムアウト付きでクエリを実行（3秒でタイムアウト）
+      const queryPromise = supabase
         .from('profiles')
         .select('email')
         .eq('email', normalizedEmail)
         .maybeSingle()
+      
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout')), 3000)
+      })
+      
+      const { data, error } = await Promise.race([queryPromise, timeoutPromise]) as any
 
       if (error && error.code !== 'PGRST116') {
-        console.error('Error checking email:', error)
+        // タイムアウトエラーは無視して続行
+        if (error.message !== 'Timeout') {
+          console.error('Error checking email:', error)
+        }
         return false
       }
 
       return !!data
-    } catch (error) {
-      console.error('Error checking email:', error)
+    } catch (error: any) {
+      // タイムアウトやその他のエラーは無視して続行
+      if (error.message !== 'Timeout') {
+        console.error('Error checking email:', error)
+      }
       return false
     }
   }
 
-  // 個人アカウントのメールアドレスチェック
+  // 個人アカウントのメールアドレスチェック（デバウンス付き）
   const handleEmailBlur = async () => {
+    // 既存のタイマーをクリア
+    if (emailCheckTimerRef.current) {
+      clearTimeout(emailCheckTimerRef.current)
+    }
+    
     if (!email.trim()) {
       setEmailError('')
+      setCheckingEmail(false)
       return
     }
 
     if (!validateEmail(email)) {
       setEmailError('有効なメールアドレスを入力してください')
+      setCheckingEmail(false)
       return
     }
 
     setCheckingEmail(true)
     setEmailError('')
     
-    const exists = await checkEmailExists(email)
-    if (exists) {
-      setEmailError('このメールアドレスは既に登録されています。ログインページからログインしてください。')
-    }
-    
-    setCheckingEmail(false)
+    // デバウンス：500ms後にチェック実行
+    emailCheckTimerRef.current = setTimeout(async () => {
+      try {
+        const exists = await checkEmailExists(email)
+        if (exists) {
+          setEmailError('このメールアドレスは既に登録されています。ログインページからログインしてください。')
+        }
+      } catch (error) {
+        // エラーが発生した場合は無視（既存ユーザーチェックはsignUpで行う）
+        console.warn('Email check failed:', error)
+      } finally {
+        setCheckingEmail(false)
+      }
+    }, 500)
   }
 
-  // 組織アカウントの担当者メールアドレスチェック
+  // 組織アカウントの担当者メールアドレスチェック（デバウンス付き）
   const handleContactEmailBlur = async () => {
+    // 既存のタイマーをクリア
+    if (contactEmailCheckTimerRef.current) {
+      clearTimeout(contactEmailCheckTimerRef.current)
+    }
+    
     if (!contactPersonEmail.trim()) {
       setContactEmailError('')
+      setCheckingEmail(false)
       return
     }
 
     if (!validateEmail(contactPersonEmail)) {
       setContactEmailError('有効なメールアドレスを入力してください')
+      setCheckingEmail(false)
       return
     }
 
     setCheckingEmail(true)
     setContactEmailError('')
     
-    const exists = await checkEmailExists(contactPersonEmail)
-    if (exists) {
-      setContactEmailError('このメールアドレスは既に登録されています。ログインページからログインしてください。')
-    }
-    
-    setCheckingEmail(false)
+    // デバウンス：500ms後にチェック実行
+    contactEmailCheckTimerRef.current = setTimeout(async () => {
+      try {
+        const exists = await checkEmailExists(contactPersonEmail)
+        if (exists) {
+          setContactEmailError('このメールアドレスは既に登録されています。ログインページからログインしてください。')
+        }
+      } catch (error) {
+        // エラーが発生した場合は無視（既存ユーザーチェックはsignUpで行う）
+        console.warn('Email check failed:', error)
+      } finally {
+        setCheckingEmail(false)
+      }
+    }, 500)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -145,15 +193,9 @@ export default function SignUp() {
         setLoading(false)
         return
       }
+      // onBlurでチェックしたエラーがある場合は送信をブロック
       if (emailError) {
         setError(emailError)
-        setLoading(false)
-        return
-      }
-      // 最終チェック
-      const exists = await checkEmailExists(email)
-      if (exists) {
-        setError('このメールアドレスは既に登録されています。ログインページからログインしてください。')
         setLoading(false)
         return
       }
@@ -181,15 +223,9 @@ export default function SignUp() {
         setLoading(false)
         return
       }
+      // onBlurでチェックしたエラーがある場合は送信をブロック
       if (contactEmailError) {
         setError(contactEmailError)
-        setLoading(false)
-        return
-      }
-      // 最終チェック
-      const exists = await checkEmailExists(contactPersonEmail)
-      if (exists) {
-        setError('このメールアドレスは既に登録されています。ログインページからログインしてください。')
         setLoading(false)
         return
       }

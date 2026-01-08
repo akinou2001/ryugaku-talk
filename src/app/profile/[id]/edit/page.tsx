@@ -429,6 +429,13 @@ export default function EditProfile() {
         throw error
       }
 
+      // プロフィール未編集チェックのキャッシュをクリア
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem(`profile-completion-check-${userId}`)
+        // バナーを再表示するためにローカルストレージのフラグも削除
+        localStorage.removeItem(`profile-banner-dismissed-${userId}`)
+      }
+
       router.push(`/profile/${userId}`)
     } catch (error: any) {
       setError(error.message || 'プロフィールの更新に失敗しました')

@@ -436,6 +436,96 @@ RyugakuTalk - A next-generation study abroad community platform
 
 ---
 
+## 🔐 6. Reauthentication（再認証メール）
+
+### 日本語版（HTML）
+
+```html
+<h2>再認証が必要です</h2>
+
+<p>RyugakuTalkで重要な操作（パスワード変更、メールアドレス変更など）を行うには、再認証が必要です。</p>
+
+<p>以下のリンクをクリックして、認証を完了してください：</p>
+
+<p><a href="{{ .ConfirmationURL }}">認証を完了する</a></p>
+
+<p>このリンクは1時間有効です。</p>
+
+<p><strong>重要：</strong>このリクエストをしていない場合は、このメールを無視してください。あなたのアカウントは安全です。</p>
+
+<p>もし心当たりがない場合は、直ちにパスワードを変更することをお勧めします。</p>
+
+<hr>
+<p>RyugakuTalk - みんなの留学体験が紡ぐ、次世代の留学コミュニティプラットフォーム</p>
+<p><a href="{{ .SiteURL }}">{{ .SiteURL }}</a></p>
+```
+
+### 英語版（HTML）
+
+```html
+<h2>Reauthentication Required</h2>
+
+<p>To perform important actions on RyugakuTalk (such as changing your password or email address), reauthentication is required.</p>
+
+<p>Please click the link below to complete authentication:</p>
+
+<p><a href="{{ .ConfirmationURL }}">Complete Authentication</a></p>
+
+<p>This link will expire in 1 hour.</p>
+
+<p><strong>Important:</strong> If you didn't request this, please ignore this email. Your account is secure.</p>
+
+<p>If you didn't request this, we recommend changing your password immediately.</p>
+
+<hr>
+<p>RyugakuTalk - A next-generation study abroad community platform</p>
+<p><a href="{{ .SiteURL }}">{{ .SiteURL }}</a></p>
+```
+
+### 日本語版（テキスト）
+
+```
+再認証が必要です
+
+RyugakuTalkで重要な操作（パスワード変更、メールアドレス変更など）を行うには、再認証が必要です。
+
+以下のリンクをクリックして、認証を完了してください：
+{{ .ConfirmationURL }}
+
+このリンクは1時間有効です。
+
+重要：このリクエストをしていない場合は、このメールを無視してください。あなたのアカウントは安全です。
+
+もし心当たりがない場合は、直ちにパスワードを変更することをお勧めします。
+
+---
+RyugakuTalk - みんなの留学体験が紡ぐ、次世代の留学コミュニティプラットフォーム
+{{ .SiteURL }}
+```
+
+### 英語版（テキスト）
+
+```
+Reauthentication Required
+
+To perform important actions on RyugakuTalk (such as changing your password or email address), reauthentication is required.
+
+Please click the link below to complete authentication:
+{{ .ConfirmationURL }}
+
+This link will expire in 1 hour.
+
+Important: If you didn't request this, please ignore this email. Your account is secure.
+
+If you didn't request this, we recommend changing your password immediately.
+
+---
+RyugakuTalk - A next-generation study abroad community platform
+{{ .SiteURL }}
+```
+
+---
+
 ## 📝 使用上の注意
 
 ### Supabaseでの設定方法
@@ -453,6 +543,7 @@ RyugakuTalk - A next-generation study abroad community platform
    - Magic Link
    - Change Email Address
    - Invite user
+   - Reauthentication
 
 5. **HTMLまたはテキスト版を編集**
    - 上記のテンプレート文章をコピー＆ペースト
