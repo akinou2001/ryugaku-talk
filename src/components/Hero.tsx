@@ -26,7 +26,7 @@ export function Hero() {
                 RyugakuTalk
               </span>
             </h1>
-            <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-white/95 font-light mb-8 sm:mb-10 md:mb-12 max-w-3xl mx-auto leading-relaxed px-2">
+            <p className="text-base sm:text-lg md:text-xl lg:text-2xl text-white/95 font-light mb-8 sm:mb-10 md:mb-12 max-w-3xl mx-auto leading-relaxed px-2 lg:whitespace-nowrap">
               みんなの留学体験が紡ぐ、次世代の留学コミュニティプラットフォーム
             </p>
           </div>

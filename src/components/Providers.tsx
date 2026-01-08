@@ -86,6 +86,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
             if (profileError) {
               console.error('Error creating profile:', profileError)
               console.error('Profile error details:', profileError)
+              // プロフィールが既に存在する場合は無視（重複エラー）
+              if (!profileError.message.includes('duplicate key') && 
+                  !profileError.message.includes('already exists')) {
+                // その他のエラーはコンソールに記録のみ（ユーザーには表示しない）
+                console.error('プロフィール作成エラー（無視）:', profileError.message)
+              }
             } else {
               console.log('Profile created successfully')
             }
@@ -132,12 +138,52 @@ export function Providers({ children }: { children: React.ReactNode }) {
       })
       if (error) {
         console.error('Sign in error:', error)
-        throw new Error(error.message || 'ログインに失敗しました。メールアドレスとパスワードを確認してください。')
+        // エラーメッセージをユーザーフレンドリーに変換
+        let userFriendlyMessage = 'ログインに失敗しました。'
+        
+        if (error.message.includes('Invalid login credentials') || 
+            error.message.includes('invalid') ||
+            error.message.includes('credentials')) {
+          userFriendlyMessage = 'メールアドレスまたはパスワードが正しくありません。入力内容を確認してもう一度お試しください。'
+        } else if (error.message.includes('Email not confirmed') || 
+                   error.message.includes('email not confirmed')) {
+          userFriendlyMessage = 'メールアドレスの確認が完了していません。登録時に送信された確認メールをご確認ください。'
+        } else if (error.message.includes('Too many requests') || 
+                   error.message.includes('too many requests')) {
+          userFriendlyMessage = 'ログイン試行回数が多すぎます。しばらく時間をおいてから再度お試しください。'
+        } else if (error.message.includes('network') || 
+                   error.message.includes('Network')) {
+          userFriendlyMessage = 'ネットワークエラーが発生しました。インターネット接続を確認してもう一度お試しください。'
+        } else if (error.message.includes('User not found')) {
+          userFriendlyMessage = 'このメールアドレスで登録されているアカウントが見つかりません。新規登録ページからアカウントを作成してください。'
+        }
+        
+        throw new Error(userFriendlyMessage)
       }
     } catch (error: any) {
-      if (error.message) {
+      // 既にユーザーフレンドリーなメッセージに変換されている場合はそのまま使用
+      if (error.message && 
+          !error.message.includes('Invalid login credentials') && 
+          !error.message.includes('invalid') &&
+          !error.message.includes('credentials') &&
+          !error.message.includes('Email not confirmed') &&
+          !error.message.includes('Too many requests') &&
+          !error.message.includes('network') &&
+          !error.message.includes('Network')) {
         throw error
       }
+      
+      // その他の予期しないエラー
+      if (error.message) {
+        // 技術的なエラーメッセージをユーザーフレンドリーに変換
+        if (error.message.includes('Invalid login credentials') || 
+            error.message.includes('invalid') ||
+            error.message.includes('credentials')) {
+          throw new Error('メールアドレスまたはパスワードが正しくありません。入力内容を確認してもう一度お試しください。')
+        }
+        throw error
+      }
+      
       throw new Error('ネットワークエラーが発生しました。接続を確認してください。')
     }
   }
@@ -172,52 +218,130 @@ export function Providers({ children }: { children: React.ReactNode }) {
       })
       if (error) {
         console.error('Sign up error:', error)
-        // より詳細なエラーメッセージ
+        // エラーメッセージをユーザーフレンドリーに変換
+        let userFriendlyMessage = 'アカウント作成に失敗しました。'
+        
         if (error.message.includes('invalid') || error.message.includes('Email')) {
-          throw new Error('メールアドレスの形式が正しくありません。有効なメールアドレスを入力してください。')
+          userFriendlyMessage = 'メールアドレスの形式が正しくありません。有効なメールアドレスを入力してください。'
+        } else if (error.message.includes('User already registered') || 
+                   error.message.includes('already registered') ||
+                   error.message.includes('User already exists')) {
+          userFriendlyMessage = 'このメールアドレスは既に登録されています。ログインページからログインしてください。'
+        } else if (error.message.includes('Password') || error.message.includes('password')) {
+          userFriendlyMessage = 'パスワードが要件を満たしていません。6文字以上のパスワードを入力してください。'
+        } else if (error.message.includes('network') || error.message.includes('Network')) {
+          userFriendlyMessage = 'ネットワークエラーが発生しました。インターネット接続を確認してもう一度お試しください。'
         }
-        throw new Error(error.message || 'アカウント作成に失敗しました。')
+        
+        throw new Error(userFriendlyMessage)
       }
 
-      // プロフィール作成
+      // ユーザーが既に存在し、メール確認済みの場合（認証メールが送信されない）
+      // 注意：既存ユーザーの場合、data.userは返されるが、新しいメールは送信されない
       if (data.user) {
-        const profileData: any = {
-          id: data.user.id,
-          email: normalizedEmail,
-          name,
-          account_type: accountType,
-          contribution_score: 0,
-          languages: [],
-          verification_status: accountType === 'individual' ? 'unverified' : 'pending',
-          is_admin: false,
-          is_active: true
+        // ユーザーが既にメール確認済みで、セッションがない場合、既存ユーザーの可能性が高い
+        // ただし、メール確認が無効な場合でも、初回登録時はセッションが返される可能性がある
+        // より確実な判定のため、ユーザーの作成日時をチェック
+        const userCreatedAt = new Date(data.user.created_at)
+        const now = new Date()
+        const timeDiff = now.getTime() - userCreatedAt.getTime()
+        const minutesDiff = timeDiff / (1000 * 60)
+        
+        // ユーザーが5分以内に作成された場合は新規ユーザーとして扱う
+        // それ以外で、メール確認済みかつセッションがない場合は既存ユーザー
+        if (minutesDiff > 5 && data.user.email_confirmed_at && !data.session) {
+          throw new Error('このメールアドレスは既に登録されています。ログインページからログインしてください。')
         }
+        
+        // ユーザーが既に存在し、メール確認が必要な場合でも、既存ユーザーにはメールが送信されない
+        // ただし、メール確認が無効な場合はこのチェックをスキップ
+        // Supabaseの設定によっては、既存ユーザーでもパスワードリセットメールが送信される場合がある
+      }
 
-        // 組織アカウントの場合、組織情報を追加
-        if (accountType !== 'individual' && organizationData) {
-          profileData.organization_name = organizationData.organization_name
-          profileData.organization_type = organizationData.organization_type
-          profileData.organization_url = organizationData.organization_url
-          profileData.contact_person_name = organizationData.contact_person_name
-          profileData.contact_person_email = organizationData.contact_person_email
-          profileData.contact_person_phone = organizationData.contact_person_phone
-        }
-
-        const { error: profileError } = await supabase
+      // プロフィール作成（オプション：トリガーで自動作成される可能性があるため、失敗してもエラーにしない）
+      if (data.user) {
+        // まず、プロフィールが既に存在するか確認（トリガーで既に作成されている可能性がある）
+        const { data: existingProfile } = await supabase
           .from('profiles')
-          .insert(profileData)
-        if (profileError) {
-          console.error('Profile creation error:', profileError)
-          throw new Error(profileError.message || 'プロフィールの作成に失敗しました。データベースの設定を確認してください。')
+          .select('id')
+          .eq('id', data.user.id)
+          .single()
+
+        // プロフィールが存在しない場合のみ作成を試みる
+        if (!existingProfile) {
+          const profileData: any = {
+            id: data.user.id,
+            email: normalizedEmail,
+            name,
+            account_type: accountType,
+            contribution_score: 0,
+            languages: [],
+            verification_status: accountType === 'individual' ? 'unverified' : 'pending',
+            is_admin: false,
+            is_active: true
+          }
+
+          // 組織アカウントの場合、組織情報を追加
+          if (accountType !== 'individual' && organizationData) {
+            profileData.organization_name = organizationData.organization_name
+            profileData.organization_type = organizationData.organization_type
+            profileData.organization_url = organizationData.organization_url
+            profileData.contact_person_name = organizationData.contact_person_name
+            profileData.contact_person_email = organizationData.contact_person_email
+            profileData.contact_person_phone = organizationData.contact_person_phone
+          }
+
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert(profileData)
+          
+          // プロフィール作成エラーは無視（トリガーで自動作成される可能性があるため）
+          if (profileError) {
+            console.warn('Profile creation error (ignored, may be created by trigger):', profileError)
+            // 重複エラー（既に存在する）またはRLSエラー（トリガーで作成される）の場合は無視
+            const isIgnorableError = 
+              profileError.message.includes('duplicate key') || 
+              profileError.message.includes('already exists') ||
+              profileError.message.includes('row-level security policy') || 
+              profileError.message.includes('violates row-level security') ||
+              profileError.code === '42501' || 
+              profileError.code === 'PGRST301'
+            
+            // 無視できないエラーの場合のみ警告を記録（ただし、アカウント作成は成功として扱う）
+            if (!isIgnorableError) {
+              console.error('Unexpected profile creation error:', profileError)
+            }
+          } else {
+            console.log('Profile created successfully')
+          }
+        } else {
+          console.log('Profile already exists (created by trigger)')
         }
 
         // 組織アカウントの場合、認証申請は手動で提出する必要がある
         // ユーザーは /verification/request から申請フォームを提出する
       }
     } catch (error: any) {
-      if (error.message) {
+      // 既にユーザーフレンドリーなメッセージに変換されている場合はそのまま使用
+      if (error.message && !error.message.includes('row-level security') && 
+          !error.message.includes('violates row-level security') &&
+          !error.message.includes('duplicate key') &&
+          !error.message.includes('already exists') &&
+          !error.message.includes('invalid') &&
+          !error.message.includes('Email')) {
         throw error
       }
+      
+      // その他の予期しないエラー
+      if (error.message) {
+        // 技術的なエラーメッセージをユーザーフレンドリーに変換
+        if (error.message.includes('row-level security') || 
+            error.message.includes('violates row-level security')) {
+          throw new Error('アカウントの作成に失敗しました。システムの設定に問題がある可能性があります。しばらく時間をおいて再度お試しください。問題が続く場合は、お問い合わせください。')
+        }
+        throw error
+      }
+      
       throw new Error('ネットワークエラーが発生しました。接続を確認してください。')
     }
   }
@@ -225,13 +349,50 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
+    // ログアウト後、ランディングページ（ホームページ）にリダイレクト
+    if (typeof window !== 'undefined') {
+      window.location.href = '/'
+    }
   }
 
   const signInWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-    })
-    if (error) throw error
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+      })
+      if (error) {
+        console.error('Google sign in error:', error)
+        // エラーメッセージをユーザーフレンドリーに変換
+        let userFriendlyMessage = 'Googleログインに失敗しました。'
+        
+        if (error.message.includes('popup') || error.message.includes('closed')) {
+          userFriendlyMessage = 'ログインウィンドウが閉じられました。もう一度お試しください。'
+        } else if (error.message.includes('network') || error.message.includes('Network')) {
+          userFriendlyMessage = 'ネットワークエラーが発生しました。インターネット接続を確認してもう一度お試しください。'
+        } else if (error.message.includes('cancelled') || error.message.includes('user cancelled')) {
+          userFriendlyMessage = 'ログインがキャンセルされました。'
+        }
+        
+        throw new Error(userFriendlyMessage)
+      }
+    } catch (error: any) {
+      // 既にユーザーフレンドリーなメッセージに変換されている場合はそのまま使用
+      if (error.message && 
+          !error.message.includes('popup') && 
+          !error.message.includes('closed') &&
+          !error.message.includes('network') &&
+          !error.message.includes('Network') &&
+          !error.message.includes('cancelled')) {
+        throw error
+      }
+      
+      // その他の予期しないエラー
+      if (error.message) {
+        throw error
+      }
+      
+      throw new Error('Googleログインに失敗しました。しばらく時間をおいて再度お試しください。')
+    }
   }
 
   return (
