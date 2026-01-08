@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/components/Providers'
+import { supabase } from '@/lib/supabase'
 import { MessageCircle, Mail, Lock, Eye, EyeOff, User, Building2, GraduationCap, Briefcase, Shield } from 'lucide-react'
 import type { AccountType } from '@/lib/supabase'
 
@@ -17,6 +18,11 @@ export default function SignUp() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
+  const [emailError, setEmailError] = useState('')
+  const [contactEmailError, setContactEmailError] = useState('')
+  const [checkingEmail, setCheckingEmail] = useState(false)
   
   // 組織アカウント用フィールド
   const [organizationName, setOrganizationName] = useState('')
@@ -36,10 +42,84 @@ export default function SignUp() {
     return emailRegex.test(email)
   }
 
+  // 既に登録済みのメールアドレスかチェック
+  const checkEmailExists = async (emailAddress: string): Promise<boolean> => {
+    if (!emailAddress || !validateEmail(emailAddress)) {
+      return false
+    }
+
+    try {
+      const normalizedEmail = emailAddress.trim().toLowerCase()
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('email', normalizedEmail)
+        .maybeSingle()
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error checking email:', error)
+        return false
+      }
+
+      return !!data
+    } catch (error) {
+      console.error('Error checking email:', error)
+      return false
+    }
+  }
+
+  // 個人アカウントのメールアドレスチェック
+  const handleEmailBlur = async () => {
+    if (!email.trim()) {
+      setEmailError('')
+      return
+    }
+
+    if (!validateEmail(email)) {
+      setEmailError('有効なメールアドレスを入力してください')
+      return
+    }
+
+    setCheckingEmail(true)
+    setEmailError('')
+    
+    const exists = await checkEmailExists(email)
+    if (exists) {
+      setEmailError('このメールアドレスは既に登録されています。ログインページからログインしてください。')
+    }
+    
+    setCheckingEmail(false)
+  }
+
+  // 組織アカウントの担当者メールアドレスチェック
+  const handleContactEmailBlur = async () => {
+    if (!contactPersonEmail.trim()) {
+      setContactEmailError('')
+      return
+    }
+
+    if (!validateEmail(contactPersonEmail)) {
+      setContactEmailError('有効なメールアドレスを入力してください')
+      return
+    }
+
+    setCheckingEmail(true)
+    setContactEmailError('')
+    
+    const exists = await checkEmailExists(contactPersonEmail)
+    if (exists) {
+      setContactEmailError('このメールアドレスは既に登録されています。ログインページからログインしてください。')
+    }
+    
+    setCheckingEmail(false)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
+    setSuccess(false)
+    setSuccessMessage('')
 
     if (password !== confirmPassword) {
       setError('パスワードが一致しません')
@@ -62,6 +142,18 @@ export default function SignUp() {
       }
       if (!validateEmail(email)) {
         setError('有効なメールアドレスを入力してください（例: user@example.com）')
+        setLoading(false)
+        return
+      }
+      if (emailError) {
+        setError(emailError)
+        setLoading(false)
+        return
+      }
+      // 最終チェック
+      const exists = await checkEmailExists(email)
+      if (exists) {
+        setError('このメールアドレスは既に登録されています。ログインページからログインしてください。')
         setLoading(false)
         return
       }
@@ -89,6 +181,18 @@ export default function SignUp() {
         setLoading(false)
         return
       }
+      if (contactEmailError) {
+        setError(contactEmailError)
+        setLoading(false)
+        return
+      }
+      // 最終チェック
+      const exists = await checkEmailExists(contactPersonEmail)
+      if (exists) {
+        setError('このメールアドレスは既に登録されています。ログインページからログインしてください。')
+        setLoading(false)
+        return
+      }
     }
 
     try {
@@ -106,11 +210,17 @@ export default function SignUp() {
 
       await signUp(loginEmail, password, loginName, accountType, organizationData)
       
-      // 組織アカウントの場合は認証申請ページにリダイレクト
+      // アカウント作成成功メッセージを表示
+      // 注意：メール確認が必要な場合のみメールが送信される
+      // 既存ユーザーの場合はエラーがスローされるはず
+      setSuccess(true)
+      setSuccessMessage('認証メールを送信しました。メールボックスをご確認ください。メールが届かない場合は、迷惑メールフォルダもご確認ください。')
+      
+      // 組織アカウントの場合は認証申請ページにリダイレクト（少し遅延を入れる）
       if (isOrganizationAccount) {
-        router.push('/verification/request')
-      } else {
-        router.push('/')
+        setTimeout(() => {
+          router.push('/verification/request')
+        }, 3000)
       }
     } catch (error: any) {
       setError(error.message || 'アカウント作成に失敗しました')
@@ -173,6 +283,33 @@ export default function SignUp() {
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
               {error}
+            </div>
+          )}
+          
+          {success && (
+            <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3 flex-1">
+                  <p className="text-sm font-medium text-green-800">
+                    {successMessage}
+                  </p>
+                  {!isOrganizationAccount && (
+                    <div className="mt-3">
+                      <Link 
+                        href="/auth/signin" 
+                        className="text-sm font-medium text-green-700 hover:text-green-600 underline"
+                      >
+                        ログインページへ移動
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -252,11 +389,23 @@ export default function SignUp() {
                       autoComplete="email"
                       required
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="input-field pl-10"
+                      onChange={(e) => {
+                        setEmail(e.target.value)
+                        setEmailError('')
+                      }}
+                      onBlur={handleEmailBlur}
+                      className={`input-field pl-10 ${emailError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}`}
                       placeholder="your@email.com"
                     />
+                    {checkingEmail && (
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+                      </div>
+                    )}
                   </div>
+                  {emailError && (
+                    <p className="mt-1 text-sm text-red-600">{emailError}</p>
+                  )}
                 </div>
               </>
             )}
@@ -335,11 +484,23 @@ export default function SignUp() {
                       type="email"
                       required
                       value={contactPersonEmail}
-                      onChange={(e) => setContactPersonEmail(e.target.value)}
-                      className="input-field pl-10"
+                      onChange={(e) => {
+                        setContactPersonEmail(e.target.value)
+                        setContactEmailError('')
+                      }}
+                      onBlur={handleContactEmailBlur}
+                      className={`input-field pl-10 ${contactEmailError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}`}
                       placeholder="contact@example.com"
                     />
+                    {checkingEmail && (
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+                      </div>
+                    )}
                   </div>
+                  {contactEmailError && (
+                    <p className="mt-1 text-sm text-red-600">{contactEmailError}</p>
+                  )}
                 </div>
 
                 <div>
@@ -449,10 +610,10 @@ export default function SignUp() {
           <div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || success}
               className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
             >
-              {loading ? 'アカウント作成中...' : 'アカウントを作成'}
+              {loading ? 'アカウント作成中...' : success ? 'アカウント作成完了' : 'アカウントを作成'}
             </button>
           </div>
 

@@ -1,4 +1,4 @@
-import { MessageSquare, Users, Building2, Calendar, Sparkles, Shield, Star, Award, Zap, Globe, Heart, MessageCircle } from 'lucide-react'
+import { MessageSquare, Users, Building2, Calendar, Clock, Shield, Star, Award, Zap, Globe, Heart, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
 
 export function Features() {
@@ -13,7 +13,7 @@ export function Features() {
       link: '/timeline'
     },
     {
-      icon: Sparkles,
+      icon: Clock,
       title: 'タイムライン',
       description: 'おすすめや最新の投稿を一覧で確認。参加しているコミュニティのイベントやクエストも一緒に表示されます。',
       color: 'from-purple-500 to-purple-600',
