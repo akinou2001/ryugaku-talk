@@ -16,10 +16,19 @@ export default function SettingsPage() {
   const [success, setSuccess] = useState('')
 
   // アカウント設定（登録時の情報を表示）
-  const [accountData, setAccountData] = useState({
+  const [accountData, setAccountData] = useState<{
+    name: string
+    email: string
+    account_type: 'individual' | 'educational' | 'company' | 'government' | ''
+    organization_name: string
+    organization_type: string
+    contact_person_name: string
+    contact_person_email: string
+    contact_person_phone: string
+  }>({
     name: '',
     email: '',
-    account_type: '' as 'individual' | 'educational' | 'company' | 'government' | '',
+    account_type: '',
     organization_name: '',
     organization_type: '',
     contact_person_name: '',
@@ -578,8 +587,8 @@ export default function SettingsPage() {
                          '不明'}
                       </div>
                       {/* 個人アカウントまたは未認証の組織アカウントの場合、組織認証申請へのリンクを表示 */}
-                      {(accountData.account_type === 'individual' || 
-                        (accountData.account_type !== 'individual' && user && user.verification_status !== 'verified')) && (
+                      {((accountData.account_type === 'individual' || accountData.account_type === '' || !accountData.account_type) || 
+                        ((accountData.account_type === 'educational' || accountData.account_type === 'company' || accountData.account_type === 'government') && user && user.verification_status !== 'verified')) && (
                         <div className="mt-2">
                           <Link 
                             href="/verification/request" 

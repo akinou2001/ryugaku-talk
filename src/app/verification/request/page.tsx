@@ -88,7 +88,7 @@ export default function VerificationRequestPage() {
     setSuccess(false)
 
     // バリデーション
-    if (!formData.account_type || formData.account_type === 'individual') {
+    if (!formData.account_type) {
       setError('組織タイプを選択してください')
       setLoading(false)
       return
