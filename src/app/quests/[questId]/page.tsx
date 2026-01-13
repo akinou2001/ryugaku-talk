@@ -243,9 +243,9 @@ export default function GlobalQuestDetail() {
                             />
                           )}
                           {post.quest_id && (
-                            <QuestBadge 
-                              questId={post.quest_id} 
-                              isApproved={post.quest_approved}
+                            <QuestBadge
+                              questId={post.quest_id}
+                              approved={post.quest_approved}
                               size="sm"
                             />
                           )}
