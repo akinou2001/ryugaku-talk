@@ -67,6 +67,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           }
 
           // プロフィールが存在しない場合は作成
+          // 注意: 常にindividualとして作成（組織アカウントは認証申請後に昇格）
           if (!existingProfile && profileCheckError?.code === 'PGRST116') {
             console.log('Creating profile for user:', session.user.id)
             console.log('User email:', session.user.email)
@@ -78,7 +79,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
                 id: session.user.id,
                 email: session.user.email || '',
                 name: session.user.user_metadata?.full_name || session.user.email?.split('@')[0] || 'ユーザー',
-                account_type: 'individual',
+                account_type: 'individual', // 常にindividualとして作成
                 contribution_score: 0,
                 languages: [],
                 verification_status: 'unverified'
@@ -269,19 +270,21 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
         // プロフィールが存在しない場合のみ作成を試みる
         if (!existingProfile) {
+          // 常にindividualとして作成（組織アカウントは認証申請後に昇格）
           const profileData: any = {
             id: data.user.id,
             email: normalizedEmail,
             name,
-            account_type: accountType,
+            account_type: 'individual', // 常にindividualとして作成
             contribution_score: 0,
             languages: [],
-            verification_status: accountType === 'individual' ? 'unverified' : 'pending',
+            verification_status: 'unverified',
             is_admin: false,
             is_active: true
           }
 
-          // 組織アカウントの場合、組織情報を追加
+          // 組織アカウント申請の場合、組織情報を一時的に保存（認証申請時に使用）
+          // 注意: account_typeはindividualのまま。認証申請後に昇格
           if (accountType !== 'individual' && organizationData) {
             profileData.organization_name = organizationData.organization_name
             profileData.organization_type = organizationData.organization_type
@@ -357,8 +360,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = async () => {
     try {
+      // 環境変数からアプリのURLを取得（開発環境: localhost:3000、本番環境: Vercel URL）
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 
+                     (typeof window !== 'undefined' ? `${window.location.origin}` : 'http://localhost:3000')
+      
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
+        options: {
+          redirectTo: `${appUrl}/auth/callback`,
+        },
       })
       if (error) {
         console.error('Google sign in error:', error)
@@ -371,6 +381,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
           userFriendlyMessage = 'ネットワークエラーが発生しました。インターネット接続を確認してもう一度お試しください。'
         } else if (error.message.includes('cancelled') || error.message.includes('user cancelled')) {
           userFriendlyMessage = 'ログインがキャンセルされました。'
+        } else if (error.message.includes('redirect_uri_mismatch') || error.message.includes('redirect')) {
+          userFriendlyMessage = 'リダイレクトURLの設定に問題があります。管理者に問い合わせてください。'
         }
         
         throw new Error(userFriendlyMessage)

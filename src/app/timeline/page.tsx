@@ -9,6 +9,7 @@ import type { Post } from '@/lib/supabase'
 import { MessageCircle, MessageSquare, Clock, Search, MapPin, GraduationCap, Sparkles, Users, BookOpen, HelpCircle, Briefcase, Home, GraduationCap as LearnIcon, ChevronLeft, ChevronRight, Filter, X, Calendar, Award, TrendingUp, Heart, Eye, CheckCircle2, Loader2 } from 'lucide-react'
 import { AccountBadge } from '@/components/AccountBadge'
 import { StudentStatusBadge } from '@/components/StudentStatusBadge'
+import { QuestBadge } from '@/components/QuestBadge'
 import { useAuth } from '@/components/Providers'
 import { getUserCommunities } from '@/lib/community'
 import { UserAvatar } from '@/components/UserAvatar'
@@ -17,7 +18,7 @@ import { searchUniversities, type University } from '@/lib/universities'
 type TimelineView = 'latest' | 'community'
 type PostCategory = 'all' | 'question' | 'diary' | 'chat'
 type MainCategory = 'all' | 'learn' | 'work' | 'live'
-type DetailCategory = 'all' | 'regular-study' | 'language-study' | 'exchange' | 'research' | 'working-holiday' | 'residence' | 'local-hire' | 'volunteer' | 'internship' | 'nomad' | 'high-school' | 'summer-school' | 'current' | 'experienced' | 'applicant'
+type DetailCategory = 'all' | 'regular-study' | 'language-study' | 'exchange' | 'research' | 'working-holiday' | 'residence' | 'local-hire' | 'volunteer' | 'internship' | 'nomad' | 'high-school' | 'summer-school' | 'current' | 'experienced' | 'applicant' | 'overseas_work' | 'domestic_supporter'
 
 type CommunityPost = {
   id: string
@@ -34,6 +35,7 @@ type CommunityPost = {
     verification_status?: string
     organization_name?: string
     languages?: string[]
+    is_operator?: boolean
   }
   event_date?: string
   location?: string
@@ -365,7 +367,7 @@ export default function Timeline() {
           .select(`
             *,
             community:communities(id, name),
-            author:profiles(id, name, icon_url, account_type, verification_status, organization_name, languages)
+            author:profiles(id, name, icon_url, account_type, verification_status, organization_name, languages, is_operator)
           `)
           .in('community_id', ids)
           .order('created_at', { ascending: false }),
@@ -374,7 +376,7 @@ export default function Timeline() {
           .select(`
             *,
             community:communities(id, name),
-            creator:profiles(id, name, account_type, verification_status, organization_name, languages)
+            creator:profiles(id, name, account_type, verification_status, organization_name, languages, is_operator)
           `)
           .in('community_id', ids)
           .order('event_date', { ascending: false }),
@@ -383,7 +385,7 @@ export default function Timeline() {
           .select(`
             *,
             community:communities(id, name),
-            creator:profiles(id, name, account_type, verification_status, organization_name, languages)
+            creator:profiles(id, name, account_type, verification_status, organization_name, languages, is_operator)
           `)
           .in('community_id', ids)
           .eq('status', 'active')
@@ -414,7 +416,8 @@ export default function Timeline() {
           account_type: p.author.account_type,
           verification_status: p.author.verification_status,
           organization_name: p.author.organization_name,
-          languages: p.author.languages
+          languages: p.author.languages,
+          is_operator: p.author.is_operator
         } : undefined,
         category: p.category,
         likes_count: p.likes_count || 0,
@@ -434,7 +437,8 @@ export default function Timeline() {
           name: e.creator.name,
           account_type: e.creator.account_type,
           verification_status: e.creator.verification_status,
-          organization_name: e.creator.organization_name
+          organization_name: e.creator.organization_name,
+          is_operator: e.creator.is_operator
         } : undefined,
         event_date: e.event_date,
         location: e.location
@@ -453,7 +457,8 @@ export default function Timeline() {
           name: q.creator.name,
           account_type: q.creator.account_type,
           verification_status: q.creator.verification_status,
-          organization_name: q.creator.organization_name
+          organization_name: q.creator.organization_name,
+          is_operator: q.creator.is_operator
         } : undefined,
         deadline: q.deadline,
         reward_amount: q.reward_amount
@@ -594,7 +599,7 @@ export default function Timeline() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, account_type, verification_status, organization_name, study_abroad_destination, icon_url, languages)
+          author:profiles(name, account_type, verification_status, organization_name, study_abroad_destination, icon_url, languages, is_operator)
         `)
 
       // コミュニティ限定投稿は除外（通常のタイムラインでは表示しない）
@@ -622,7 +627,7 @@ export default function Timeline() {
           all: [],
           'learn': ['正規留学', '語学留学', '交換留学', '研究室交流', '中学・高校', 'サマースクール'],
           'work': ['ワーホリ', '駐在', '現地採用', 'ボランティア', 'インターンシップ', 'ノマド'],
-          'live': ['現役留学生', '留学経験者', '留学志願者']
+          'live': ['現役留学生', '留学経験者', '留学希望者', '海外ワーク', '国内サポーター']
         }
         const allTags: string[] = []
         selectedMainCategories.forEach(mainCat => {
@@ -654,7 +659,9 @@ export default function Timeline() {
           'summer-school': ['サマースクール', 'summer-school'],
           'current': ['現役留学生', 'current'],
           'experienced': ['留学経験者', 'experienced'],
-          'applicant': ['留学志願者', 'applicant']
+          'applicant': ['留学希望者', 'applicant'],
+          'overseas_work': ['海外ワーク', 'overseas_work'],
+          'domestic_supporter': ['国内サポーター', 'domestic_supporter']
         }
         const allTags: string[] = []
         selectedDetailCategories.forEach(detailCat => {
@@ -716,7 +723,7 @@ export default function Timeline() {
               .select(`
                 *,
                 community:communities(id, name),
-                creator:profiles(id, name)
+                creator:profiles(id, name, account_type, verification_status, organization_name, is_operator)
               `)
               .in('community_id', communityIds)
               .order('created_at', { ascending: false })
@@ -730,7 +737,13 @@ export default function Timeline() {
               created_at: e.created_at,
               community_id: e.community_id,
               community_name: e.community?.name,
-              creator: e.creator ? { name: e.creator.name } : undefined,
+              creator: e.creator ? { 
+                name: e.creator.name,
+                account_type: e.creator.account_type,
+                verification_status: e.creator.verification_status,
+                organization_name: e.creator.organization_name,
+                is_operator: e.creator.is_operator
+              } : undefined,
               event_date: e.event_date,
               location: e.location,
               deadline: e.deadline
@@ -742,7 +755,7 @@ export default function Timeline() {
               .select(`
                 *,
                 community:communities(id, name),
-                creator:profiles(id, name)
+                creator:profiles(id, name, account_type, verification_status, organization_name, is_operator)
               `)
               .in('community_id', communityIds)
               .eq('status', 'active')
@@ -757,7 +770,13 @@ export default function Timeline() {
               created_at: q.created_at,
               community_id: q.community_id,
               community_name: q.community?.name,
-              creator: q.creator ? { name: q.creator.name } : undefined,
+              creator: q.creator ? { 
+                name: q.creator.name,
+                account_type: q.creator.account_type,
+                verification_status: q.creator.verification_status,
+                organization_name: q.creator.organization_name,
+                is_operator: q.creator.is_operator
+              } : undefined,
               deadline: q.deadline,
               reward_type: q.reward_type,
               reward_amount: q.reward_amount
@@ -996,7 +1015,9 @@ export default function Timeline() {
       { id: 'summer-school', label: 'サマースクール' },
       { id: 'current', label: '現役留学生' },
       { id: 'experienced', label: '留学経験者' },
-      { id: 'applicant', label: '留学志願者' }
+      { id: 'applicant', label: '留学希望者' },
+      { id: 'overseas_work', label: '海外ワーク' },
+      { id: 'domestic_supporter', label: '国内サポーター' }
     ],
     work: [
       { id: 'all', label: 'すべて' },
@@ -1007,7 +1028,9 @@ export default function Timeline() {
       { id: 'nomad', label: 'ノマド' },
       { id: 'current', label: '現役留学生' },
       { id: 'experienced', label: '留学経験者' },
-      { id: 'applicant', label: '留学志願者' }
+      { id: 'applicant', label: '留学希望者' },
+      { id: 'overseas_work', label: '海外ワーク' },
+      { id: 'domestic_supporter', label: '国内サポーター' }
     ],
     live: [
       { id: 'all', label: 'すべて' },
@@ -1015,7 +1038,9 @@ export default function Timeline() {
       { id: 'residence', label: '駐在' },
       { id: 'current', label: '現役留学生' },
       { id: 'experienced', label: '留学経験者' },
-      { id: 'applicant', label: '留学志願者' }
+      { id: 'applicant', label: '留学希望者' },
+      { id: 'overseas_work', label: '海外ワーク' },
+      { id: 'domestic_supporter', label: '国内サポーター' }
     ]
   }
 
@@ -1038,8 +1063,8 @@ export default function Timeline() {
           </div>
 
           {/* セグメントコントロール */}
-          <div className="mb-3">
-            <div className="flex space-x-2 bg-white rounded-xl p-1 shadow-md border border-gray-200">
+          <div className="mb-3 px-2">
+            <div className="flex space-x-2 bg-white rounded-xl p-1 shadow-md border border-gray-200 overflow-hidden">
               <button
                 onClick={() => setView('latest')}
                 className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
@@ -1703,7 +1728,7 @@ export default function Timeline() {
                 ) : (
                   <>
                     <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-500 mb-2 text-lg font-medium">
+                    <p className="text-gray-500 mb-2 text-sm font-medium">
                       {userCommunityIds.length === 0 
                         ? '所属しているコミュニティがありません' 
                         : 'コミュニティの投稿が見つかりません'}
@@ -1741,9 +1766,16 @@ export default function Timeline() {
                             })()}
                           </span>
                         ) : post.type === 'event' ? (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-0.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-                            📅 イベント
-                          </span>
+                          <>
+                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-0.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white">
+                              📅 イベント
+                            </span>
+                            {post.event_date && new Date(post.event_date) < new Date() && (
+                              <span className="px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-0.5 bg-gradient-to-r from-gray-500 to-gray-600 text-white">
+                                終了
+                              </span>
+                            )}
+                          </>
                         ) : (
                           <span className="px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-0.5 bg-gradient-to-r from-orange-500 to-orange-600 text-white">
                             🎯 クエスト
@@ -1812,11 +1844,12 @@ export default function Timeline() {
                           <>
                             <span className="text-xs text-gray-600 font-medium">{post.creator.name}</span>
                             {/* 投稿カテゴリがofficialの場合はAccountBadgeを非表示 */}
-                            {post.creator.account_type && post.creator.account_type !== 'individual' && (post as any).category !== 'official' && (
+                            {((post.creator.account_type && post.creator.account_type !== 'individual') || post.creator.is_operator) && (post as any).category !== 'official' && (
                               <AccountBadge 
                                 accountType={post.creator.account_type as 'educational' | 'company' | 'government'} 
                                 verificationStatus={(post.creator.verification_status || 'unverified') as 'unverified' | 'pending' | 'verified' | 'rejected'}
                                 organizationName={post.creator.organization_name}
+                                isOperator={post.creator.is_operator}
                                 size="sm"
                               />
                             )}
@@ -1923,6 +1956,15 @@ export default function Timeline() {
                           解決済み
                         </span>
                       )}
+                      {/* クエストバッジ */}
+                      {post.quest_id && (
+                        <QuestBadge 
+                          questId={post.quest_id} 
+                          communityId={post.community_id || undefined}
+                          approved={post.quest_approved}
+                          size="sm"
+                        />
+                      )}
                       {/* ロケーションタグ（日記でカバー画像がある場合は非表示、それ以外は表示） */}
                       {post.study_abroad_destination && !(post.category === 'diary' && post.cover_image_url) && (
                         <button
@@ -1976,30 +2018,35 @@ export default function Timeline() {
                         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent"></div>
                         
                         {/* 下部：ユーザー情報（グラスモーフィズム） */}
-                        <div className="absolute bottom-3 left-3 z-20">
+                        <div className="absolute bottom-3 left-3 z-20 max-w-[calc(100%-120px)] sm:max-w-none">
                           <div className="backdrop-blur-xl bg-white/20 border border-white/30 rounded-xl p-2.5 shadow-2xl">
-                            <div className="flex items-center space-x-2 flex-wrap gap-1.5">
-                              <UserAvatar 
-                                iconUrl={post.author?.icon_url} 
-                                name={post.author?.name} 
-                                size="sm"
-                              />
-                              {post.author_id ? (
-                                <span
-                                  onClick={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    router.push(`/profile/${post.author_id}`)
-                                  }}
-                                  className="text-white font-semibold text-xs drop-shadow-lg hover:text-primary-200 transition-colors cursor-pointer"
-                                >
-                                  {post.author?.name || '匿名'}
-                                </span>
-                              ) : (
-                                <span className="text-white font-semibold text-xs drop-shadow-lg">{post.author?.name || '匿名'}</span>
-                              )}
+                            {/* スマホサイズ：2行表示、デスクトップ：1行表示 */}
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2 gap-1.5 sm:gap-0">
+                              {/* 1行目：ユーザーアイコンと名前 */}
+                              <div className="flex items-center space-x-2 gap-1.5">
+                                <UserAvatar 
+                                  iconUrl={post.author?.icon_url} 
+                                  name={post.author?.name} 
+                                  size="sm"
+                                />
+                                {post.author_id ? (
+                                  <span
+                                    onClick={(e) => {
+                                      e.preventDefault()
+                                      e.stopPropagation()
+                                      router.push(`/profile/${post.author_id}`)
+                                    }}
+                                    className="text-white font-semibold text-xs drop-shadow-lg hover:text-primary-200 transition-colors cursor-pointer"
+                                  >
+                                    {post.author?.name || '匿名'}
+                                  </span>
+                                ) : (
+                                  <span className="text-white font-semibold text-xs drop-shadow-lg">{post.author?.name || '匿名'}</span>
+                                )}
+                              </div>
+                              {/* 2行目（スマホ）/ 1行目続き（デスクトップ）：バッジ */}
                               {post.author && (
-                                <>
+                                <div className="flex items-center gap-1.5 flex-wrap">
                                   {/* 投稿カテゴリがofficialの場合はAccountBadgeを非表示 */}
                                   {post.author.account_type && post.author.account_type !== 'individual' && (
                                     <div className="drop-shadow-lg">
@@ -2007,6 +2054,7 @@ export default function Timeline() {
                                         accountType={post.author.account_type} 
                                         verificationStatus={post.author.verification_status}
                                         organizationName={post.author.organization_name}
+                                        isOperator={post.author.is_operator}
                                         size="sm"
                                       />
                                     </div>
@@ -2017,7 +2065,7 @@ export default function Timeline() {
                                       size="sm"
                                     />
                                   </div>
-                                </>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -2154,6 +2202,7 @@ export default function Timeline() {
                               accountType={post.author.account_type} 
                               verificationStatus={post.author.verification_status}
                               organizationName={post.author.organization_name}
+                              isOperator={post.author.is_operator}
                               size="sm"
                             />
                           )}

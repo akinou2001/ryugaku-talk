@@ -11,7 +11,9 @@ ADD COLUMN IF NOT EXISTS verification_status TEXT DEFAULT 'unverified' CHECK (ve
 ADD COLUMN IF NOT EXISTS verification_documents TEXT, -- 認証用書類のURLやパス
 ADD COLUMN IF NOT EXISTS contact_person_name TEXT,
 ADD COLUMN IF NOT EXISTS contact_person_email TEXT,
-ADD COLUMN IF NOT EXISTS contact_person_phone TEXT;
+ADD COLUMN IF NOT EXISTS contact_person_phone TEXT,
+ADD COLUMN IF NOT EXISTS is_organization_owner BOOLEAN DEFAULT FALSE, -- 組織のオーナー（最初の申請者）かどうか
+ADD COLUMN IF NOT EXISTS parent_organization_id UUID REFERENCES profiles(id) ON DELETE SET NULL; -- 親組織（招待された場合）
 
 -- 組織アカウント用のインデックス
 CREATE INDEX IF NOT EXISTS idx_profiles_account_type ON profiles(account_type);
@@ -105,4 +107,79 @@ USING (auth.uid() = profile_id AND status = 'pending');
 
 -- 注意: 管理者はSupabase Dashboardで直接statusを変更できます
 -- RLSポリシーでstatusの変更を制限しないことで、管理者がDashboardから操作可能にします
+
+-- 組織メンバー管理テーブル（親から子への紐付け）
+CREATE TABLE IF NOT EXISTS organization_members (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  organization_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL, -- 親組織（オーナー）
+  member_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL, -- 子メンバー
+  invited_by UUID REFERENCES profiles(id) ON DELETE SET NULL, -- 招待した人（通常はオーナー）
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'rejected')), -- 招待の状態
+  role TEXT DEFAULT 'member' CHECK (role IN ('member', 'admin')), -- メンバーの役割
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(organization_id, member_id) -- 同じ組織に同じメンバーは1人まで
+);
+
+-- 組織メンバーのインデックス
+CREATE INDEX IF NOT EXISTS idx_organization_members_organization_id ON organization_members(organization_id);
+CREATE INDEX IF NOT EXISTS idx_organization_members_member_id ON organization_members(member_id);
+CREATE INDEX IF NOT EXISTS idx_organization_members_status ON organization_members(status);
+
+-- 組織メンバーのRLSポリシー
+ALTER TABLE organization_members ENABLE ROW LEVEL SECURITY;
+
+-- 組織メンバーは誰でも閲覧可能（組織の公開情報）
+DROP POLICY IF EXISTS "組織メンバーは誰でも閲覧可能" ON organization_members;
+CREATE POLICY "組織メンバーは誰でも閲覧可能" 
+ON organization_members FOR SELECT 
+USING (true);
+
+-- 組織オーナーはメンバーを招待可能
+DROP POLICY IF EXISTS "組織オーナーはメンバーを招待可能" ON organization_members;
+CREATE POLICY "組織オーナーはメンバーを招待可能" 
+ON organization_members FOR INSERT 
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE id = organization_id 
+    AND is_organization_owner = true 
+    AND verification_status = 'verified'
+    AND auth.uid() = id
+  )
+);
+
+-- 組織オーナーはメンバー情報を更新可能
+DROP POLICY IF EXISTS "組織オーナーはメンバー情報を更新可能" ON organization_members;
+CREATE POLICY "組織オーナーはメンバー情報を更新可能" 
+ON organization_members FOR UPDATE 
+USING (
+  EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE id = organization_id 
+    AND is_organization_owner = true 
+    AND verification_status = 'verified'
+    AND auth.uid() = id
+  )
+);
+
+-- 招待されたメンバーは自分の招待を承認/拒否可能
+DROP POLICY IF EXISTS "招待されたメンバーは自分の招待を更新可能" ON organization_members;
+CREATE POLICY "招待されたメンバーは自分の招待を更新可能" 
+ON organization_members FOR UPDATE 
+USING (auth.uid() = member_id AND status = 'pending');
+
+-- 組織オーナーはメンバーを削除可能
+DROP POLICY IF EXISTS "組織オーナーはメンバーを削除可能" ON organization_members;
+CREATE POLICY "組織オーナーはメンバーを削除可能" 
+ON organization_members FOR DELETE 
+USING (
+  EXISTS (
+    SELECT 1 FROM profiles 
+    WHERE id = organization_id 
+    AND is_organization_owner = true 
+    AND verification_status = 'verified'
+    AND auth.uid() = id
+  )
+);
 

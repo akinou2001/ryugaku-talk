@@ -51,6 +51,8 @@ export interface User {
   // 管理者・アカウント管理用フィールド
   is_admin: boolean
   is_active: boolean
+  is_organization_owner?: boolean
+  is_operator?: boolean // 運営バッジ用フラグ
   suspended_until?: string
   suspension_reason?: string
   // アイコン画像
@@ -101,6 +103,9 @@ export interface Post {
   official_category?: string
   community_id?: string // コミュニティ限定投稿用
   post_type?: 'announcement' | 'event' | 'quest' | 'normal' // コミュニティ限定投稿の種別
+  quest_id?: string | null // クエストに紐づく投稿（親クエストのID）
+  quest?: Quest // クエスト情報（外部キーで取得）
+  quest_approved?: boolean // クエスト管理者による承認フラグ（OKスタンプ）
   attachments?: Array<{ url: string; filename: string; type: string }> // ファイル添付（JSONB形式）
   image_url?: string // 写真1枚用（通常投稿用）
   images?: string[] // 複数の画像URL（pro投稿用、JSONB形式）
@@ -158,6 +163,7 @@ export interface Community {
   visibility: CommunityVisibility
   is_public?: boolean // 誰でも参加可能か、承認制か
   community_type?: 'guild' | 'official' // サークル or 公式コミュニティ
+  is_archived?: boolean // アーカイブ済みかどうか
   created_at: string
   updated_at: string
   // 集計情報（クエリ時に追加）
@@ -203,6 +209,7 @@ export interface CommunityRoomMessage {
   sender_id: string
   sender?: User
   content: string
+  attachments?: Array<{ url: string; filename: string; type: string }>
   created_at: string
 }
 
@@ -215,6 +222,17 @@ export interface Announcement {
   image_url?: string
   attachment_url?: string
   attachment_filename?: string
+  created_by?: string
+  creator?: User
+  created_at: string
+  updated_at: string
+}
+
+// 全員向けお知らせ
+export interface GlobalAnnouncement {
+  id: string
+  title: string
+  content: string // Markdown形式
   created_by?: string
   creator?: User
   created_at: string
@@ -274,7 +292,7 @@ export type QuestCompletionStatus = 'pending' | 'approved' | 'rejected'
 
 export interface Quest {
   id: string
-  community_id: string
+  community_id?: string | null // 全員向けクエストの場合はnull
   community?: Community
   title: string
   description?: string
@@ -289,6 +307,7 @@ export interface Quest {
   // 集計情報
   completion_count?: number
   user_completion_status?: QuestCompletionStatus
+  post_count?: number // 回答数
 }
 
 export interface QuestCompletion {

@@ -16,6 +16,7 @@ export default function VerificationRequestPage() {
   const [existingRequest, setExistingRequest] = useState<any>(null)
   
   const [formData, setFormData] = useState({
+    account_type: 'educational' as 'educational' | 'company' | 'government',
     organization_name: '',
     contact_person_name: '',
     official_email: '',
@@ -29,12 +30,7 @@ export default function VerificationRequestPage() {
       return
     }
 
-    // 組織アカウントでない場合はリダイレクト
-    if (user.account_type === 'individual') {
-      router.push('/')
-      return
-    }
-
+    // 個人アカウントからも申請可能（組織アカウントへの昇格申請）
     // 既存の申請を確認
     checkExistingRequest()
   }, [user, router])
@@ -60,18 +56,20 @@ export default function VerificationRequestPage() {
         setExistingRequest(data)
         // 既存の申請がある場合はフォームに値を設定
         setFormData({
+          account_type: data.account_type || 'educational',
           organization_name: data.organization_name || user.organization_name || '',
-          contact_person_name: data.contact_person_name || user.contact_person_name || '',
-          official_email: data.contact_person_email || user.contact_person_email || '',
+          contact_person_name: data.contact_person_name || user.contact_person_name || user.name || '',
+          official_email: data.contact_person_email || user.contact_person_email || user.email || '',
           website_url: data.organization_url || user.organization_url || '',
           message: data.request_reason || ''
         })
       } else if (user) {
         // 既存の申請がない場合、プロフィール情報をデフォルト値として設定
         setFormData({
+          account_type: (user.account_type !== 'individual' ? user.account_type : 'educational') as 'educational' | 'company' | 'government',
           organization_name: user.organization_name || '',
-          contact_person_name: user.contact_person_name || '',
-          official_email: user.contact_person_email || '',
+          contact_person_name: user.contact_person_name || user.name || '',
+          official_email: user.contact_person_email || user.email || '',
           website_url: user.organization_url || '',
           message: ''
         })
@@ -90,6 +88,12 @@ export default function VerificationRequestPage() {
     setSuccess(false)
 
     // バリデーション
+    if (!formData.account_type || formData.account_type === 'individual') {
+      setError('組織タイプを選択してください')
+      setLoading(false)
+      return
+    }
+
     if (!formData.organization_name.trim()) {
       setError('組織名を入力してください')
       setLoading(false)
@@ -122,6 +126,7 @@ export default function VerificationRequestPage() {
         const { error: updateError } = await supabase
           .from('organization_verification_requests')
           .update({
+            account_type: formData.account_type,
             organization_name: formData.organization_name,
             contact_person_name: formData.contact_person_name,
             contact_person_email: formData.official_email,
@@ -136,7 +141,13 @@ export default function VerificationRequestPage() {
         // profilesテーブルのverification_statusを更新
         const { error: profileUpdateError } = await supabase
           .from('profiles')
-          .update({ verification_status: 'pending' })
+          .update({ 
+            verification_status: 'pending',
+            organization_name: formData.organization_name,
+            contact_person_name: formData.contact_person_name,
+            contact_person_email: formData.official_email,
+            organization_url: formData.website_url || null
+          })
           .eq('id', user.id)
 
         if (profileUpdateError) {
@@ -149,7 +160,7 @@ export default function VerificationRequestPage() {
           .from('organization_verification_requests')
           .insert({
             profile_id: user.id,
-            account_type: user.account_type,
+            account_type: formData.account_type, // 申請時に選択したタイプ
             organization_name: formData.organization_name,
             contact_person_name: formData.contact_person_name,
             contact_person_email: formData.official_email,
@@ -160,10 +171,16 @@ export default function VerificationRequestPage() {
 
         if (insertError) throw insertError
         
-        // profilesテーブルのverification_statusを'pending'に更新
+        // profilesテーブルのverification_statusを'pending'に更新し、組織情報を保存
         const { error: profileUpdateError } = await supabase
           .from('profiles')
-          .update({ verification_status: 'pending' })
+          .update({ 
+            verification_status: 'pending',
+            organization_name: formData.organization_name,
+            contact_person_name: formData.contact_person_name,
+            contact_person_email: formData.official_email,
+            organization_url: formData.website_url || null
+          })
           .eq('id', user.id)
 
         if (profileUpdateError) {
@@ -187,7 +204,7 @@ export default function VerificationRequestPage() {
     }
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
     setFormData(prev => ({
       ...prev,
@@ -195,7 +212,7 @@ export default function VerificationRequestPage() {
     }))
   }
 
-  if (!user || user.account_type === 'individual') {
+  if (!user) {
     return null
   }
 
@@ -219,7 +236,7 @@ export default function VerificationRequestPage() {
               <h1 className="text-3xl font-bold text-gray-900">組織認証申請</h1>
             </div>
             <p className="text-gray-600">
-              組織アカウントとして認証を受けることで、コミュニティ作成や公式投稿などの機能がご利用いただけます。
+              個人アカウントから組織アカウントへの昇格申請ができます。認証を受けることで、コミュニティ作成や公式投稿などの機能がご利用いただけます。
             </p>
           </div>
 
@@ -271,6 +288,28 @@ export default function VerificationRequestPage() {
                   認証申請を送信しました。審査結果をお待ちください。
                 </div>
               )}
+
+              {/* 組織タイプ */}
+              <div>
+                <label htmlFor="account_type" className="block text-sm font-medium text-gray-700 mb-2">
+                  組織タイプ <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="account_type"
+                  name="account_type"
+                  value={formData.account_type}
+                  onChange={handleChange}
+                  required
+                  className="input-field"
+                >
+                  <option value="educational">教育機関</option>
+                  <option value="company">企業</option>
+                  <option value="government">政府機関</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  申請する組織のタイプを選択してください
+                </p>
+              </div>
 
               {/* 組織名 */}
               <div>

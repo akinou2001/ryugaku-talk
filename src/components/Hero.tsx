@@ -53,7 +53,10 @@ export function Hero() {
           {/* 特徴カード */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mt-12 sm:mt-16 md:mt-20 animate-fade-in-up-delay px-2">
             {/* 質問・投稿 */}
-            <div className="group relative bg-white/10 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 text-center hover:bg-white/20 transition-all duration-500 border border-white/20 hover:border-white/40 hover:scale-105 transform shadow-xl hover:shadow-2xl">
+            <Link 
+              href="/timeline"
+              className="group relative bg-white/10 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 text-center hover:bg-white/20 transition-all duration-500 border border-white/20 hover:border-white/40 hover:scale-105 transform shadow-xl hover:shadow-2xl cursor-pointer"
+            >
               <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-2xl sm:rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
               <div className="relative">
                 <div className="relative inline-block mb-4 sm:mb-6">
@@ -67,10 +70,13 @@ export function Hero() {
                   質問、日記、つぶやきで<br />交流できる
                 </p>
               </div>
-            </div>
+            </Link>
 
             {/* コミュニティ */}
-            <div className="group relative bg-white/10 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 text-center hover:bg-white/20 transition-all duration-500 border border-white/20 hover:border-white/40 hover:scale-105 transform shadow-xl hover:shadow-2xl">
+            <Link 
+              href="/auth/signin"
+              className="group relative bg-white/10 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 text-center hover:bg-white/20 transition-all duration-500 border border-white/20 hover:border-white/40 hover:scale-105 transform shadow-xl hover:shadow-2xl cursor-pointer"
+            >
               <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/20 to-teal-500/20 rounded-2xl sm:rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
               <div className="relative">
                 <div className="relative inline-block mb-4 sm:mb-6">
@@ -84,10 +90,13 @@ export function Hero() {
                   サークルや公式コミュニティで<br />つながる
                 </p>
               </div>
-            </div>
+            </Link>
 
             {/* クエスト */}
-            <div className="group relative bg-white/10 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 text-center hover:bg-white/20 transition-all duration-500 border border-white/20 hover:border-white/40 hover:scale-105 transform shadow-xl hover:shadow-2xl">
+            <Link 
+              href="/auth/signin"
+              className="group relative bg-white/10 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 text-center hover:bg-white/20 transition-all duration-500 border border-white/20 hover:border-white/40 hover:scale-105 transform shadow-xl hover:shadow-2xl cursor-pointer"
+            >
               <div className="absolute inset-0 bg-gradient-to-br from-amber-500/20 to-orange-500/20 rounded-2xl sm:rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
               <div className="relative">
                 <div className="relative inline-block mb-4 sm:mb-6">
@@ -101,10 +110,13 @@ export function Hero() {
                   ミッションを達成して<br />スコア獲得
                 </p>
               </div>
-            </div>
+            </Link>
 
             {/* イベント */}
-            <div className="group relative bg-white/10 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 text-center hover:bg-white/20 transition-all duration-500 border border-white/20 hover:border-white/40 hover:scale-105 transform shadow-xl hover:shadow-2xl">
+            <Link 
+              href="/auth/signin"
+              className="group relative bg-white/10 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 text-center hover:bg-white/20 transition-all duration-500 border border-white/20 hover:border-white/40 hover:scale-105 transform shadow-xl hover:shadow-2xl cursor-pointer"
+            >
               <div className="absolute inset-0 bg-gradient-to-br from-pink-500/20 to-rose-500/20 rounded-2xl sm:rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
               <div className="relative">
                 <div className="relative inline-block mb-4 sm:mb-6">
@@ -118,7 +130,7 @@ export function Hero() {
                   公式コミュニティの<br />イベントに参加
                 </p>
               </div>
-            </div>
+            </Link>
           </div>
         </div>
       </div>

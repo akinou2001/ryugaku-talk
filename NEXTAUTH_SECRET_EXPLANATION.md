@@ -166,3 +166,6 @@ const optionalEnvVars = [
 
 **Vercelへのデプロイ時は、設定をスキップして問題ありません！**
 
+
+
+

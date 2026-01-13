@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS notifications (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('announcement', 'community_event', 'community_quest', 'urgent_question', 'safety_check', 'dm', 'comment', 'like')),
+  type TEXT NOT NULL CHECK (type IN ('announcement', 'community_event', 'community_quest', 'urgent_question', 'safety_check', 'dm', 'comment', 'like', 'organization_verification')),
   title TEXT NOT NULL,
   content TEXT,
   link_url TEXT,

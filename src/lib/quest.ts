@@ -1,11 +1,62 @@
 import { supabase } from './supabase'
-import type { Quest, QuestCompletion, QuestStatus, QuestCompletionStatus } from './supabase'
+import type { Quest, QuestCompletion, QuestStatus, QuestCompletionStatus, Post } from './supabase'
+
+/**
+ * 全員向けクエスト一覧を取得
+ */
+export async function getGlobalQuests(userId?: string, includeCompleted: boolean = true) {
+  // 期限が過ぎた全員向けクエストを自動的に〆切状態にする
+  await closeExpiredQuests(null)
+
+  let query = supabase
+    .from('quests')
+    .select(`
+      *,
+      creator:profiles(id, name, icon_url)
+    `)
+    .is('community_id', null)
+
+  // 完了済みも含める場合は、statusフィルタを適用しない
+  if (!includeCompleted) {
+    query = query.eq('status', 'active')
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching global quests:', error)
+    throw error
+  }
+
+  // ユーザーの完了状況を取得
+  if (userId && data) {
+    const { data: completions } = await supabase
+      .from('quest_completions')
+      .select('quest_id, status')
+      .eq('user_id', userId)
+      .in('quest_id', data.map(q => q.id))
+
+    const completionMap = new Map(
+      completions?.map(c => [c.quest_id, c.status]) || []
+    )
+
+    return data.map(quest => ({
+      ...quest,
+      user_completion_status: completionMap.get(quest.id) || undefined
+    })) as Quest[]
+  }
+
+  return data as Quest[]
+}
 
 /**
  * コミュニティのクエスト一覧を取得
  */
-export async function getQuests(communityId: string, userId?: string) {
-  const { data, error } = await supabase
+export async function getQuests(communityId: string, userId?: string, includeCompleted: boolean = true) {
+  // 期限が過ぎたクエストを自動的に〆切状態にする
+  await closeExpiredQuests(communityId)
+
+  let query = supabase
     .from('quests')
     .select(`
       *,
@@ -13,8 +64,13 @@ export async function getQuests(communityId: string, userId?: string) {
       creator:profiles(id, name, icon_url)
     `)
     .eq('community_id', communityId)
-    .eq('status', 'active')
-    .order('created_at', { ascending: false })
+
+  // 完了済みも含める場合は、statusフィルタを適用しない
+  if (!includeCompleted) {
+    query = query.eq('status', 'active')
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false })
 
   if (error) {
     console.error('Error fetching quests:', error)
@@ -146,6 +202,37 @@ export async function updateQuest(
 }
 
 /**
+ * 期限が過ぎたクエストを自動的に〆切状態にする
+ */
+export async function closeExpiredQuests(communityId?: string | null) {
+  const now = new Date().toISOString()
+  
+  let query = supabase
+    .from('quests')
+    .update({ 
+      status: 'completed',
+      updated_at: now
+    })
+    .eq('status', 'active')
+    .lt('deadline', now)
+    .not('deadline', 'is', null)
+
+  if (communityId !== undefined && communityId !== null) {
+    query = query.eq('community_id', communityId)
+  } else if (communityId === null) {
+    // 全員向けクエスト（community_id IS NULL）の場合
+    query = query.is('community_id', null)
+  }
+
+  const { error } = await query
+
+  if (error) {
+    console.error('Error closing expired quests:', error)
+    // エラーが発生しても処理を続行
+  }
+}
+
+/**
  * クエストを削除
  */
 export async function deleteQuest(questId: string) {
@@ -155,11 +242,16 @@ export async function deleteQuest(questId: string) {
   }
 
   // クエストの作成者か確認
-  const { data: quest } = await supabase
+  const { data: quest, error: fetchError } = await supabase
     .from('quests')
-    .select('created_by')
+    .select('created_by, community_id')
     .eq('id', questId)
     .single()
+
+  if (fetchError) {
+    console.error('Error fetching quest:', fetchError)
+    throw new Error('クエストの取得に失敗しました')
+  }
 
   if (!quest) {
     throw new Error('クエストが見つかりません')
@@ -169,6 +261,18 @@ export async function deleteQuest(questId: string) {
     throw new Error('クエストの作成者のみ削除できます')
   }
 
+  // クエストに関連するquest_completionsを先に削除（CASCADEが設定されていない場合）
+  const { error: deleteCompletionsError } = await supabase
+    .from('quest_completions')
+    .delete()
+    .eq('quest_id', questId)
+
+  if (deleteCompletionsError) {
+    console.error('Error deleting quest completions:', deleteCompletionsError)
+    // エラーが発生しても続行（CASCADEで自動削除される可能性があるため）
+  }
+
+  // クエストを削除
   const { error } = await supabase
     .from('quests')
     .delete()
@@ -176,7 +280,7 @@ export async function deleteQuest(questId: string) {
 
   if (error) {
     console.error('Error deleting quest:', error)
-    throw error
+    throw new Error(error.message || 'クエストの削除に失敗しました')
   }
 }
 
@@ -229,7 +333,7 @@ export async function requestQuestCompletion(
     .select(`
       *,
       quest:quests(*),
-      user:profiles(id, name)
+      user:profiles!quest_completions_user_id_fkey(id, name)
     `)
     .single()
 
@@ -296,7 +400,7 @@ export async function updateQuestCompletionStatus(
     .select(`
       *,
       quest:quests(*),
-      user:profiles(id, name)
+      user:profiles!quest_completions_user_id_fkey(id, name)
     `)
     .single()
 
@@ -360,7 +464,8 @@ export async function getQuestCompletions(questId: string) {
     .from('quest_completions')
     .select(`
       *,
-      user:profiles(id, name),
+      user:profiles!quest_completions_user_id_fkey(id, name),
+      completed_by_user:profiles!quest_completions_completed_by_fkey(id, name),
       quest:quests(title, reward_amount)
     `)
     .eq('quest_id', questId)
@@ -426,6 +531,203 @@ export async function getUserScore(userId: string) {
   }
 
   return data
+}
+
+/**
+ * クエストIDでクエストを取得
+ */
+export async function getQuestById(questId: string) {
+  const { data, error } = await supabase
+    .from('quests')
+    .select(`
+      *,
+      community:communities(id, name, community_type, owner_id),
+      creator:profiles(id, name, icon_url, account_type, verification_status, organization_name, is_operator)
+    `)
+    .eq('id', questId)
+    .single()
+
+  if (error) {
+    console.error('Error fetching quest:', error)
+    throw error
+  }
+
+  return data as Quest
+}
+
+/**
+ * クエストに紐づく投稿を取得（ツリー表示用）
+ */
+export async function getQuestPosts(questId: string) {
+  const { data, error } = await supabase
+    .from('posts')
+    .select(`
+      *,
+      author:profiles(id, name, icon_url, account_type, verification_status, organization_name, is_operator)
+    `)
+    .eq('quest_id', questId)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching quest posts:', error)
+    throw error
+  }
+
+  return data as Post[]
+}
+
+/**
+ * クエストに紐づく投稿数を取得
+ */
+export async function getQuestPostCount(questId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from('posts')
+    .select('*', { count: 'exact', head: true })
+    .eq('quest_id', questId)
+
+  if (error) {
+    console.error('Error fetching quest post count:', error)
+    return 0
+  }
+
+  return count || 0
+}
+
+/**
+ * 複数のクエストに紐づく投稿数を一括取得
+ */
+export async function getQuestPostCounts(questIds: string[]): Promise<Map<string, number>> {
+  if (questIds.length === 0) return new Map()
+
+  const { data, error } = await supabase
+    .from('posts')
+    .select('quest_id')
+    .in('quest_id', questIds)
+    .not('quest_id', 'is', null)
+
+  if (error) {
+    console.error('Error fetching quest post counts:', error)
+    return new Map()
+  }
+
+  const countMap = new Map<string, number>()
+  questIds.forEach(id => countMap.set(id, 0))
+  
+  data?.forEach(post => {
+    if (post.quest_id) {
+      countMap.set(post.quest_id, (countMap.get(post.quest_id) || 0) + 1)
+    }
+  })
+
+  return countMap
+}
+
+/**
+ * クエスト投稿を承認（管理者によるOKスタンプ）
+ */
+export async function approveQuestPost(postId: string) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // 投稿とクエスト情報を取得
+  const { data: post } = await supabase
+    .from('posts')
+    .select(`
+      quest_id,
+      quest:quests!inner(
+        id,
+        community_id,
+        community:communities!inner(owner_id)
+      )
+    `)
+    .eq('id', postId)
+    .single()
+
+  if (!post || !post.quest_id) {
+    throw new Error('クエスト投稿が見つかりません')
+  }
+
+  // コミュニティの管理者か確認
+  const quest = post.quest as any
+  const community = quest?.community as any
+  const communityOwnerId = community?.owner_id
+  if (communityOwnerId !== user.id) {
+    throw new Error('コミュニティの管理者のみ承認できます')
+  }
+
+  // 承認フラグを更新
+  const { data, error } = await supabase
+    .from('posts')
+    .update({ quest_approved: true })
+    .eq('id', postId)
+    .select(`
+      *,
+      author:profiles(id, name, icon_url, account_type, verification_status, organization_name, is_operator)
+    `)
+    .single()
+
+  if (error) {
+    console.error('Error approving quest post:', error)
+    throw error
+  }
+
+  return data as Post
+}
+
+/**
+ * クエスト投稿の承認を解除
+ */
+export async function unapproveQuestPost(postId: string) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // 投稿とクエスト情報を取得
+  const { data: post } = await supabase
+    .from('posts')
+    .select(`
+      quest_id,
+      quest:quests!inner(
+        id,
+        community_id,
+        community:communities!inner(owner_id)
+      )
+    `)
+    .eq('id', postId)
+    .single()
+
+  if (!post || !post.quest_id) {
+    throw new Error('クエスト投稿が見つかりません')
+  }
+
+  // コミュニティの管理者か確認
+  const quest = post.quest as any
+  const community = quest?.community as any
+  const communityOwnerId = community?.owner_id
+  if (communityOwnerId !== user.id) {
+    throw new Error('コミュニティの管理者のみ承認解除できます')
+  }
+
+  // 承認フラグを解除
+  const { data, error } = await supabase
+    .from('posts')
+    .update({ quest_approved: false })
+    .eq('id', postId)
+    .select(`
+      *,
+      author:profiles(id, name, icon_url, account_type, verification_status, organization_name, is_operator)
+    `)
+    .single()
+
+  if (error) {
+    console.error('Error unapproving quest post:', error)
+    throw error
+  }
+
+  return data as Post
 }
 
 /**

@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { Community, CommunityMember, MemberStatus, MemberRole } from './supabase'
+import type { Community, CommunityMember, MemberStatus, MemberRole, CommunityRoom } from './supabase'
 
 /**
  * コミュニティを検索
@@ -19,8 +19,9 @@ export async function searchCommunities(
     .from('communities')
     .select(`
       *,
-      owner:profiles(id, name, account_type, verification_status, organization_name)
+      owner:profiles(id, name, account_type, verification_status, organization_name, is_operator)
     `)
+    .eq('is_archived', false) // アーカイブされていないコミュニティのみ
     .order('created_at', { ascending: false })
 
   if (query) {
@@ -118,7 +119,7 @@ export async function getCommunityById(communityId: string, userId?: string) {
     .from('communities')
     .select(`
       *,
-      owner:profiles(id, name, account_type, verification_status, organization_name)
+      owner:profiles(id, name, account_type, verification_status, organization_name, is_operator)
     `)
     .eq('id', communityId)
     .single()
@@ -211,7 +212,7 @@ export async function createCommunity(
     })
     .select(`
       *,
-      owner:profiles(id, name, account_type, verification_status, organization_name)
+      owner:profiles(id, name, account_type, verification_status, organization_name, is_operator)
     `)
     .single()
 
@@ -252,6 +253,7 @@ export async function updateCommunity(
     cover_image_url?: string
     icon_url?: string
     visibility?: 'public' | 'private'
+    is_archived?: boolean
   }
 ) {
   const { data: { user } } = await supabase.auth.getUser()
@@ -276,7 +278,7 @@ export async function updateCommunity(
     .eq('id', communityId)
     .select(`
       *,
-      owner:profiles(id, name, account_type, verification_status, organization_name)
+      owner:profiles(id, name, account_type, verification_status, organization_name, is_operator)
     `)
     .single()
 
@@ -456,7 +458,7 @@ export async function getUserCommunities(userId: string) {
       *,
       community:communities(
         *,
-        owner:profiles(id, name, account_type, verification_status, organization_name)
+        owner:profiles(id, name, account_type, verification_status, organization_name, is_operator)
       )
     `)
     .eq('user_id', userId)
@@ -875,5 +877,235 @@ export async function deleteEvent(eventId: string) {
     console.error('Error deleting event:', error)
     throw error
   }
+}
+
+/**
+ * コミュニティのチャンネル一覧を取得
+ */
+export async function getCommunityChannels(communityId: string, userId?: string) {
+  const { data, error } = await supabase
+    .from('community_rooms')
+    .select(`
+      *,
+      creator:profiles(id, name, icon_url)
+    `)
+    .eq('community_id', communityId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching community channels:', error)
+    throw error
+  }
+
+  // メッセージ数を取得
+  if (data && data.length > 0) {
+    const channelIds = data.map(channel => channel.id)
+    const { data: messageCounts } = await supabase
+      .from('community_room_messages')
+      .select('room_id')
+      .in('room_id', channelIds)
+
+    const countMap = new Map<string, number>()
+    messageCounts?.forEach(msg => {
+      const current = countMap.get(msg.room_id) || 0
+      countMap.set(msg.room_id, current + 1)
+    })
+
+    return data.map(channel => ({
+      ...channel,
+      message_count: countMap.get(channel.id) || 0
+    }))
+  }
+
+  return data || []
+}
+
+/**
+ * チャンネルを作成
+ */
+export async function createChannel(
+  communityId: string,
+  name: string,
+  description?: string,
+  memberPermission: 'auto' | 'request' = 'auto'
+) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // コミュニティのメンバーか確認
+  const { data: community } = await supabase
+    .from('communities')
+    .select('owner_id')
+    .eq('id', communityId)
+    .single()
+
+  if (!community) {
+    throw new Error('コミュニティが見つかりません')
+  }
+
+  // 所有者でない場合、メンバーシップを確認
+  if (community.owner_id !== user.id) {
+    const { data: member } = await supabase
+      .from('community_members')
+      .select('status')
+      .eq('community_id', communityId)
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .single()
+
+    if (!member) {
+      throw new Error('コミュニティのメンバーのみチャンネルを作成できます')
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('community_rooms')
+    .insert({
+      community_id: communityId,
+      name,
+      description,
+      created_by: user.id,
+      member_permission: memberPermission
+    })
+    .select(`
+      *,
+      creator:profiles(id, name, icon_url)
+    `)
+    .single()
+
+  if (error) {
+    console.error('Error creating channel:', error)
+    throw error
+  }
+
+  return data
+}
+
+/**
+ * チャンネルを削除（運営者のみ）
+ */
+export async function deleteChannel(channelId: string) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // コミュニティの所有者か確認
+  const { data: channel } = await supabase
+    .from('community_rooms')
+    .select(`
+      *,
+      community:communities(owner_id)
+    `)
+    .eq('id', channelId)
+    .single()
+
+  if (!channel) {
+    throw new Error('チャンネルが見つかりません')
+  }
+
+  if (channel.community?.owner_id !== user.id) {
+    throw new Error('コミュニティの運営者のみチャンネルを削除できます')
+  }
+
+  const { error } = await supabase
+    .from('community_rooms')
+    .delete()
+    .eq('id', channelId)
+
+  if (error) {
+    console.error('Error deleting channel:', error)
+    throw error
+  }
+}
+
+/**
+ * チャンネルのメッセージを取得
+ */
+export async function getChannelMessages(channelId: string, limit: number = 50) {
+  const { data, error } = await supabase
+    .from('community_room_messages')
+    .select(`
+      *,
+      sender:profiles(id, name, icon_url, account_type, verification_status, organization_name, is_operator)
+    `)
+    .eq('room_id', channelId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error('Error fetching channel messages:', error)
+    throw error
+  }
+
+  // 時系列順にソート（古い順）
+  return (data || []).reverse()
+}
+
+/**
+ * チャンネルにメッセージを送信
+ */
+export async function sendChannelMessage(
+  channelId: string, 
+  content: string,
+  attachments?: Array<{ url: string; filename: string; type: string }>
+) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // チャンネルにアクセス権があるか確認
+  const { data: channel } = await supabase
+    .from('community_rooms')
+    .select(`
+      *,
+      community:communities(id, owner_id)
+    `)
+    .eq('id', channelId)
+    .single()
+
+  if (!channel) {
+    throw new Error('チャンネルが見つかりません')
+  }
+
+  // コミュニティのメンバーか確認
+  const isOwner = channel.community?.owner_id === user.id
+  if (!isOwner) {
+    const { data: member } = await supabase
+      .from('community_members')
+      .select('status')
+      .eq('community_id', channel.community?.id)
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .single()
+
+    if (!member) {
+      throw new Error('コミュニティのメンバーのみメッセージを送信できます')
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('community_room_messages')
+    .insert({
+      room_id: channelId,
+      sender_id: user.id,
+      content: content.trim() || '', // ファイルのみの場合も許可
+      attachments: attachments && attachments.length > 0 ? attachments : null
+    })
+    .select(`
+      *,
+      sender:profiles(id, name, icon_url, account_type, verification_status, organization_name, is_operator)
+    `)
+    .single()
+
+  if (error) {
+    console.error('Error sending channel message:', error)
+    throw error
+  }
+
+  return data
 }
 

@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
-import { Bell, X, CheckCircle, AlertCircle, MessageSquare, Calendar, Award, Shield, ArrowRight, Search, Filter } from 'lucide-react'
+import { Bell, X, CheckCircle, AlertCircle, MessageSquare, Calendar, Award, Shield, ArrowRight, Search, Filter, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 // 日付フォーマット関数（date-fnsの代替）
 const formatDistanceToNow = (date: Date) => {
@@ -21,7 +21,7 @@ const formatDistanceToNow = (date: Date) => {
 
 interface Notification {
   id: string
-  type: 'announcement' | 'community_event' | 'community_quest' | 'urgent_question' | 'safety_check' | 'dm' | 'comment' | 'like'
+  type: 'announcement' | 'community_event' | 'community_quest' | 'urgent_question' | 'safety_check' | 'dm' | 'comment' | 'like' | 'organization_verification' | 'global_announcement' | 'global_quest'
   title: string
   content?: string
   link_url?: string
@@ -29,7 +29,7 @@ interface Notification {
   created_at: string
 }
 
-type NotificationTypeFilter = 'all' | 'dm' | 'safety_check' | 'comment' | 'like' | 'announcement' | 'community_event' | 'community_quest' | 'urgent_question'
+type NotificationTypeFilter = 'all' | 'dm' | 'safety_check' | 'comment' | 'like' | 'announcement' | 'community_event' | 'community_quest' | 'urgent_question' | 'organization_verification' | 'global_announcement' | 'global_quest'
 
 export default function NotificationsPage() {
   const { user } = useAuth()
@@ -167,13 +167,16 @@ export default function NotificationsPage() {
   const getNotificationIcon = (type: Notification['type']) => {
     switch (type) {
       case 'announcement': return <AlertCircle className="h-5 w-5 text-blue-600" />
+      case 'global_announcement': return <AlertCircle className="h-5 w-5 text-blue-600" />
       case 'community_event': return <Calendar className="h-5 w-5 text-green-600" />
       case 'community_quest': return <Award className="h-5 w-5 text-yellow-600" />
+      case 'global_quest': return <Award className="h-5 w-5 text-yellow-600" />
       case 'urgent_question': return <AlertCircle className="h-5 w-5 text-red-600" />
       case 'safety_check': return <Shield className="h-5 w-5 text-orange-600" />
       case 'dm': return <MessageSquare className="h-5 w-5 text-purple-600" />
       case 'comment': return <MessageSquare className="h-5 w-5 text-blue-600" />
       case 'like': return <CheckCircle className="h-5 w-5 text-pink-600" />
+      case 'organization_verification': return <ShieldCheck className="h-5 w-5 text-indigo-600" />
       default: return <Bell className="h-5 w-5 text-gray-600" />
     }
   }
@@ -181,13 +184,16 @@ export default function NotificationsPage() {
   const getNotificationColor = (type: Notification['type']) => {
     switch (type) {
       case 'announcement': return 'bg-blue-50 border-blue-200'
+      case 'global_announcement': return 'bg-blue-50 border-blue-200'
       case 'community_event': return 'bg-green-50 border-green-200'
       case 'community_quest': return 'bg-yellow-50 border-yellow-200'
+      case 'global_quest': return 'bg-yellow-50 border-yellow-200'
       case 'urgent_question': return 'bg-red-50 border-red-200'
       case 'safety_check': return 'bg-orange-50 border-orange-200'
       case 'dm': return 'bg-purple-50 border-purple-200'
       case 'comment': return 'bg-blue-50 border-blue-200'
       case 'like': return 'bg-pink-50 border-pink-200'
+      case 'organization_verification': return 'bg-indigo-50 border-indigo-200'
       default: return 'bg-gray-50 border-gray-200'
     }
   }
@@ -216,9 +222,12 @@ export default function NotificationsPage() {
       case 'comment': return 'コメント'
       case 'like': return 'いいね'
       case 'announcement': return 'お知らせ'
+      case 'global_announcement': return '全員向けお知らせ'
       case 'community_event': return 'コミュニティイベント'
       case 'community_quest': return 'コミュニティクエスト'
+      case 'global_quest': return '全員向けクエスト'
       case 'urgent_question': return '緊急の質問'
+      case 'organization_verification': return '組織認証'
       default: return type
     }
   }
@@ -303,7 +312,7 @@ export default function NotificationsPage() {
             <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
               <label className="block text-sm font-semibold text-gray-700 mb-3">通知タイプ</label>
               <div className="flex flex-wrap gap-2">
-                {(['all', 'dm', 'safety_check', 'comment', 'like', 'announcement', 'community_event', 'community_quest', 'urgent_question'] as NotificationTypeFilter[]).map((type) => (
+                {(['all', 'dm', 'safety_check', 'comment', 'like', 'announcement', 'global_announcement', 'community_event', 'community_quest', 'global_quest', 'urgent_question', 'organization_verification'] as NotificationTypeFilter[]).map((type) => (
                   <button
                     key={type}
                     onClick={() => setTypeFilter(type)}

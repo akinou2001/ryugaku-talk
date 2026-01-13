@@ -1,12 +1,13 @@
 'use client'
 
-import { GraduationCap, Briefcase, Shield, CheckCircle } from 'lucide-react'
+import { GraduationCap, Briefcase, Shield, CheckCircle, Sparkles } from 'lucide-react'
 import type { AccountType, VerificationStatus } from '@/lib/supabase'
 
 interface AccountBadgeProps {
   accountType: AccountType
   verificationStatus: VerificationStatus
   organizationName?: string
+  isOperator?: boolean // 運営バッジ用フラグ
   size?: 'sm' | 'md' | 'lg'
 }
 
@@ -14,10 +15,28 @@ export function AccountBadge({
   accountType, 
   verificationStatus, 
   organizationName,
+  isOperator = false,
   size = 'md' 
 }: AccountBadgeProps) {
   const isVerified = verificationStatus === 'verified'
   const isOrganization = accountType !== 'individual'
+
+  // 運営バッジを優先表示
+  if (isOperator) {
+    const sizeClasses = {
+      sm: 'text-xs px-2 py-0.5',
+      md: 'text-sm px-2.5 py-1',
+      lg: 'text-base px-3 py-1.5'
+    }
+    
+    return (
+      <div className={`inline-flex items-center space-x-1 ${sizeClasses[size]} rounded-full border bg-gradient-to-r from-purple-500 to-pink-500 text-white border-purple-600`}>
+        <Sparkles className={size === 'sm' ? 'h-3 w-3' : size === 'lg' ? 'h-5 w-5' : 'h-4 w-4'} />
+        <span className="font-bold">RyugakuTalk運営</span>
+        <CheckCircle className={size === 'sm' ? 'h-3 w-3' : size === 'lg' ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
+      </div>
+    )
+  }
 
   if (!isOrganization) return null
 

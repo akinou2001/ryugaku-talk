@@ -5,11 +5,9 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
-import { MessageCircle, Mail, Lock, Eye, EyeOff, User, Building2, GraduationCap, Briefcase, Shield } from 'lucide-react'
-import type { AccountType } from '@/lib/supabase'
+import { MessageCircle, Mail, Lock, Eye, EyeOff, User } from 'lucide-react'
 
 export default function SignUp() {
-  const [accountType, setAccountType] = useState<AccountType>('individual')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -21,24 +19,13 @@ export default function SignUp() {
   const [success, setSuccess] = useState(false)
   const [successMessage, setSuccessMessage] = useState('')
   const [emailError, setEmailError] = useState('')
-  const [contactEmailError, setContactEmailError] = useState('')
   const [checkingEmail, setCheckingEmail] = useState(false)
   
   // デバウンス用のタイマー
   const emailCheckTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const contactEmailCheckTimerRef = useRef<NodeJS.Timeout | null>(null)
-  
-  // 組織アカウント用フィールド
-  const [organizationName, setOrganizationName] = useState('')
-  const [organizationType, setOrganizationType] = useState('')
-  const [contactPersonName, setContactPersonName] = useState('')
-  const [contactPersonEmail, setContactPersonEmail] = useState('')
-  const [contactPersonPhone, setContactPersonPhone] = useState('')
   
   const { signUp, signInWithGoogle } = useAuth()
   const router = useRouter()
-
-  const isOrganizationAccount = accountType !== 'individual'
 
   // メールアドレスのバリデーション
   const validateEmail = (email: string): boolean => {
@@ -124,43 +111,6 @@ export default function SignUp() {
     }, 500)
   }
 
-  // 組織アカウントの担当者メールアドレスチェック（デバウンス付き）
-  const handleContactEmailBlur = async () => {
-    // 既存のタイマーをクリア
-    if (contactEmailCheckTimerRef.current) {
-      clearTimeout(contactEmailCheckTimerRef.current)
-    }
-    
-    if (!contactPersonEmail.trim()) {
-      setContactEmailError('')
-      setCheckingEmail(false)
-      return
-    }
-
-    if (!validateEmail(contactPersonEmail)) {
-      setContactEmailError('有効なメールアドレスを入力してください')
-      setCheckingEmail(false)
-      return
-    }
-
-    setCheckingEmail(true)
-    setContactEmailError('')
-    
-    // デバウンス：500ms後にチェック実行
-    contactEmailCheckTimerRef.current = setTimeout(async () => {
-      try {
-        const exists = await checkEmailExists(contactPersonEmail)
-        if (exists) {
-          setContactEmailError('このメールアドレスは既に登録されています。ログインページからログインしてください。')
-        }
-      } catch (error) {
-        // エラーが発生した場合は無視（既存ユーザーチェックはsignUpで行う）
-        console.warn('Email check failed:', error)
-      } finally {
-        setCheckingEmail(false)
-      }
-    }, 500)
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -181,83 +131,33 @@ export default function SignUp() {
       return
     }
 
-    // 個人アカウントのバリデーション
-    if (!isOrganizationAccount) {
-      if (!email.trim()) {
-        setError('メールアドレスを入力してください')
-        setLoading(false)
-        return
-      }
-      if (!validateEmail(email)) {
-        setError('有効なメールアドレスを入力してください（例: user@example.com）')
-        setLoading(false)
-        return
-      }
-      // onBlurでチェックしたエラーがある場合は送信をブロック
-      if (emailError) {
-        setError(emailError)
-        setLoading(false)
-        return
-      }
+    // バリデーション
+    if (!email.trim()) {
+      setError('メールアドレスを入力してください')
+      setLoading(false)
+      return
     }
-
-    // 組織アカウントのバリデーション
-    if (isOrganizationAccount) {
-      if (!contactPersonName.trim()) {
-        setError('担当者名を入力してください')
-        setLoading(false)
-        return
-      }
-      if (!organizationName.trim()) {
-        setError('組織名を入力してください')
-        setLoading(false)
-        return
-      }
-      if (!contactPersonEmail.trim()) {
-        setError('担当者メールアドレスを入力してください')
-        setLoading(false)
-        return
-      }
-      if (!validateEmail(contactPersonEmail)) {
-        setError('有効な担当者メールアドレスを入力してください（例: contact@example.com）')
-        setLoading(false)
-        return
-      }
-      // onBlurでチェックしたエラーがある場合は送信をブロック
-      if (contactEmailError) {
-        setError(contactEmailError)
-        setLoading(false)
-        return
-      }
+    if (!validateEmail(email)) {
+      setError('有効なメールアドレスを入力してください（例: user@example.com）')
+      setLoading(false)
+      return
+    }
+    // onBlurでチェックしたエラーがある場合は送信をブロック
+    if (emailError) {
+      setError(emailError)
+      setLoading(false)
+      return
     }
 
     try {
-      const organizationData = isOrganizationAccount ? {
-        organization_name: organizationName,
-        organization_type: organizationType,
-        contact_person_name: contactPersonName,
-        contact_person_email: contactPersonEmail,
-        contact_person_phone: contactPersonPhone
-      } : undefined
-
-      // 組織アカウントの場合は担当者メールアドレスをログイン用メールアドレスとして使用
-      const loginEmail = isOrganizationAccount ? contactPersonEmail : email
-      const loginName = isOrganizationAccount ? contactPersonName : name
-
-      await signUp(loginEmail, password, loginName, accountType, organizationData)
+      // すべて個人アカウントとして登録
+      await signUp(email, password, name, 'individual')
       
       // アカウント作成成功メッセージを表示
       // 注意：メール確認が必要な場合のみメールが送信される
       // 既存ユーザーの場合はエラーがスローされるはず
       setSuccess(true)
       setSuccessMessage('認証メールを送信しました。メールボックスをご確認ください。メールが届かない場合は、迷惑メールフォルダもご確認ください。')
-      
-      // 組織アカウントの場合は認証申請ページにリダイレクト（少し遅延を入れる）
-      if (isOrganizationAccount) {
-        setTimeout(() => {
-          router.push('/verification/request')
-        }, 3000)
-      }
     } catch (error: any) {
       setError(error.message || 'アカウント作成に失敗しました')
     } finally {
@@ -271,31 +171,14 @@ export default function SignUp() {
 
     try {
       await signInWithGoogle()
-      router.push('/')
+      // コールバックページでリダイレクトされるため、ここでは何もしない
+      // エラーが発生した場合のみ処理
     } catch (error: any) {
       setError(error.message || 'Googleログインに失敗しました')
-    } finally {
       setLoading(false)
     }
   }
 
-  const getAccountTypeLabel = (type: AccountType) => {
-    switch (type) {
-      case 'individual': return '個人'
-      case 'educational': return '教育機関'
-      case 'company': return '企業'
-      case 'government': return '政府機関'
-    }
-  }
-
-  const getAccountTypeIcon = (type: AccountType) => {
-    switch (type) {
-      case 'individual': return <User className="h-5 w-5" />
-      case 'educational': return <GraduationCap className="h-5 w-5" />
-      case 'company': return <Briefcase className="h-5 w-5" />
-      case 'government': return <Shield className="h-5 w-5" />
-    }
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -334,227 +217,75 @@ export default function SignUp() {
                   <p className="text-sm font-medium text-green-800">
                     {successMessage}
                   </p>
-                  {!isOrganizationAccount && (
-                    <div className="mt-3">
-                      <Link 
-                        href="/auth/signin" 
-                        className="text-sm font-medium text-green-700 hover:text-green-600 underline"
-                      >
-                        ログインページへ移動
-                      </Link>
-                    </div>
-                  )}
+                  <div className="mt-3">
+                    <Link 
+                      href="/auth/signin" 
+                      className="text-sm font-medium text-green-700 hover:text-green-600 underline"
+                    >
+                      ログインページへ移動
+                    </Link>
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* アカウントタイプ選択 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              アカウントタイプ
-            </label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {(['individual', 'educational', 'company', 'government'] as AccountType[]).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => setAccountType(type)}
-                  className={`p-4 border-2 rounded-lg transition-all ${
-                    accountType === type
-                      ? 'border-primary-600 bg-primary-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex flex-col items-center space-y-2">
-                    <div className={`${accountType === type ? 'text-primary-600' : 'text-gray-400'}`}>
-                      {getAccountTypeIcon(type)}
-                    </div>
-                    <span className="text-sm font-medium text-gray-900">
-                      {getAccountTypeLabel(type)}
-                    </span>
-                  </div>
-                </button>
-              ))}
-            </div>
-            {isOrganizationAccount && (
-              <p className="mt-2 text-sm text-gray-500">
-                組織アカウントは認証審査が必要です。審査完了まで通常1-3営業日かかります。
-              </p>
-            )}
-          </div>
-
           <div className="space-y-4">
-            {/* 個人アカウント用フィールド */}
-            {!isOrganizationAccount && (
-              <>
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                    お名前
-                  </label>
-                  <div className="mt-1 relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <User className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      id="name"
-                      name="name"
-                      type="text"
-                      autoComplete="name"
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="input-field pl-10"
-                      placeholder="山田太郎"
-                    />
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                お名前
+              </label>
+              <div className="mt-1 relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <User className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  id="name"
+                  name="name"
+                  type="text"
+                  autoComplete="name"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="input-field pl-10"
+                  placeholder="山田太郎"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                メールアドレス
+              </label>
+              <div className="mt-1 relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Mail className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value)
+                    setEmailError('')
+                  }}
+                  onBlur={handleEmailBlur}
+                  className={`input-field pl-10 ${emailError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}`}
+                  placeholder="your@email.com"
+                />
+                {checkingEmail && (
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
                   </div>
-                </div>
-
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                    メールアドレス
-                  </label>
-                  <div className="mt-1 relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Mail className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      id="email"
-                      name="email"
-                      type="email"
-                      autoComplete="email"
-                      required
-                      value={email}
-                      onChange={(e) => {
-                        setEmail(e.target.value)
-                        setEmailError('')
-                      }}
-                      onBlur={handleEmailBlur}
-                      className={`input-field pl-10 ${emailError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}`}
-                      placeholder="your@email.com"
-                    />
-                    {checkingEmail && (
-                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
-                      </div>
-                    )}
-                  </div>
-                  {emailError && (
-                    <p className="mt-1 text-sm text-red-600">{emailError}</p>
-                  )}
-                </div>
-              </>
-            )}
-
-            {/* 組織アカウント用フィールド */}
-            {isOrganizationAccount && (
-              <>
-                <div>
-                  <label htmlFor="contactPersonName" className="block text-sm font-medium text-gray-700">
-                    担当者名 <span className="text-red-500">*</span>
-                  </label>
-                  <div className="mt-1 relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <User className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      id="contactPersonName"
-                      name="contactPersonName"
-                      type="text"
-                      required
-                      value={contactPersonName}
-                      onChange={(e) => setContactPersonName(e.target.value)}
-                      className="input-field pl-10"
-                      placeholder="山田太郎"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="organizationName" className="block text-sm font-medium text-gray-700">
-                    組織名 <span className="text-red-500">*</span>
-                  </label>
-                  <div className="mt-1 relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Building2 className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      id="organizationName"
-                      name="organizationName"
-                      type="text"
-                      required
-                      value={organizationName}
-                      onChange={(e) => setOrganizationName(e.target.value)}
-                      className="input-field pl-10"
-                      placeholder={accountType === 'educational' ? "東京大学" : accountType === 'company' ? "株式会社○○" : "文部科学省"}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label htmlFor="organizationType" className="block text-sm font-medium text-gray-700">
-                    組織種別
-                  </label>
-                  <input
-                    id="organizationType"
-                    name="organizationType"
-                    type="text"
-                    value={organizationType}
-                    onChange={(e) => setOrganizationType(e.target.value)}
-                    className="input-field"
-                    placeholder={accountType === 'educational' ? "国立大学" : accountType === 'company' ? "IT企業" : "省庁"}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="contactPersonEmail" className="block text-sm font-medium text-gray-700">
-                    担当者メールアドレス <span className="text-red-500">*</span>
-                  </label>
-                  <div className="mt-1 relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Mail className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      id="contactPersonEmail"
-                      name="contactPersonEmail"
-                      type="email"
-                      required
-                      value={contactPersonEmail}
-                      onChange={(e) => {
-                        setContactPersonEmail(e.target.value)
-                        setContactEmailError('')
-                      }}
-                      onBlur={handleContactEmailBlur}
-                      className={`input-field pl-10 ${contactEmailError ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : ''}`}
-                      placeholder="contact@example.com"
-                    />
-                    {checkingEmail && (
-                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
-                      </div>
-                    )}
-                  </div>
-                  {contactEmailError && (
-                    <p className="mt-1 text-sm text-red-600">{contactEmailError}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label htmlFor="contactPersonPhone" className="block text-sm font-medium text-gray-700">
-                    担当者電話番号
-                  </label>
-                  <input
-                    id="contactPersonPhone"
-                    name="contactPersonPhone"
-                    type="tel"
-                    value={contactPersonPhone}
-                    onChange={(e) => setContactPersonPhone(e.target.value)}
-                    className="input-field"
-                    placeholder="03-1234-5678"
-                  />
-                </div>
-              </>
-            )}
+                )}
+              </div>
+              {emailError && (
+                <p className="mt-1 text-sm text-red-600">{emailError}</p>
+              )}
+            </div>
 
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">

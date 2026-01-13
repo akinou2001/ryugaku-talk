@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
-import { isAdmin, getVerificationRequests, approveVerificationRequest, rejectVerificationRequest, getUsers, getAdminStats, updateVerificationStatus, getReports, updateReportStatus, deleteReportedPost, deleteReportedComment } from '@/lib/admin'
-import type { User, OrganizationVerificationRequest, Report } from '@/lib/supabase'
-import { Shield, Users, FileCheck, AlertCircle, CheckCircle, XCircle, Search, Filter, BarChart3, UserCheck, UserX, Flag, Trash2, GraduationCap, Plus, Edit, Trash } from 'lucide-react'
+import { isAdmin, getVerificationRequests, approveVerificationRequest, rejectVerificationRequest, getUsers, getAdminStats, updateVerificationStatus, getReports, updateReportStatus, deleteReportedPost, deleteReportedComment, getGlobalAnnouncements, createGlobalAnnouncement, updateGlobalAnnouncement, deleteGlobalAnnouncement, getGlobalQuests, createGlobalQuest } from '@/lib/admin'
+import type { User, OrganizationVerificationRequest, Report, GlobalAnnouncement, Quest } from '@/lib/supabase'
+import { Shield, Users, FileCheck, AlertCircle, CheckCircle, XCircle, Search, Filter, BarChart3, UserCheck, UserX, Flag, Trash2, GraduationCap, Plus, Edit, Trash, Megaphone, Award } from 'lucide-react'
 import { searchUniversities, getContinents, getCountryCodes, createUniversity, updateUniversity, deleteUniversity, getUniversityAliases, createAlias, deleteAlias, type University, type Continent, type UniversityAlias } from '@/lib/universities'
 
 export default function AdminDashboard() {
@@ -14,7 +14,7 @@ export default function AdminDashboard() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [adminStatus, setAdminStatus] = useState(false)
-  const [activeTab, setActiveTab] = useState<'stats' | 'verifications' | 'users' | 'reports' | 'universities'>('stats')
+  const [activeTab, setActiveTab] = useState<'stats' | 'verifications' | 'users' | 'reports' | 'universities' | 'announcements'>('stats')
   
   // 統計情報
   const [stats, setStats] = useState<any>(null)
@@ -65,6 +65,23 @@ export default function AdminDashboard() {
     longitude: '',
     website: '',
     tags: [] as string[],
+  })
+
+  // お知らせ管理
+  const [announcements, setAnnouncements] = useState<GlobalAnnouncement[]>([])
+  const [globalQuests, setGlobalQuests] = useState<Quest[]>([])
+  const [showAnnouncementForm, setShowAnnouncementForm] = useState(false)
+  const [showQuestForm, setShowQuestForm] = useState(false)
+  const [editingAnnouncement, setEditingAnnouncement] = useState<GlobalAnnouncement | null>(null)
+  const [announcementForm, setAnnouncementForm] = useState({
+    title: '',
+    content: ''
+  })
+  const [questForm, setQuestForm] = useState({
+    title: '',
+    description: '',
+    reward_amount: 0,
+    deadline: ''
   })
 
   useEffect(() => {
@@ -185,6 +202,30 @@ export default function AdminDashboard() {
           setUniversities(universitiesData || [])
         } else {
           setUniversities([])
+        }
+      } else if (activeTab === 'announcements') {
+        // 全員向けお知らせを取得
+        const { data: announcementsData, error: announcementsError } = await getGlobalAnnouncements()
+        if (announcementsError) {
+          console.error('Error loading announcements:', announcementsError)
+          alert(`お知らせの取得に失敗しました: ${announcementsError}`)
+        }
+        if (announcementsData) {
+          setAnnouncements(announcementsData || [])
+        } else {
+          setAnnouncements([])
+        }
+
+        // 全員向けクエストを取得
+        const { data: questsData, error: questsError } = await getGlobalQuests()
+        if (questsError) {
+          console.error('Error loading global quests:', questsError)
+          alert(`クエストの取得に失敗しました: ${questsError}`)
+        }
+        if (questsData) {
+          setGlobalQuests(questsData || [])
+        } else {
+          setGlobalQuests([])
         }
       }
     } catch (error: any) {
@@ -320,6 +361,17 @@ export default function AdminDashboard() {
             >
               <GraduationCap className="h-5 w-5 inline mr-2" />
               大学管理
+            </button>
+            <button
+              onClick={() => setActiveTab('announcements')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'announcements'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Megaphone className="h-5 w-5 inline mr-2" />
+              お知らせ管理
             </button>
           </nav>
         </div>
@@ -1324,6 +1376,345 @@ export default function AdminDashboard() {
                       setSelectedUniversity(null)
                       setSelectedUniversityAliases([])
                       setNewAlias({ alias: '', alias_type: 'other' })
+                    }}
+                    className="btn-secondary"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* お知らせ管理 */}
+        {activeTab === 'announcements' && (
+          <div className="space-y-6">
+            {/* お知らせセクション */}
+            <div className="card">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900">全員向けお知らせ</h2>
+                <button
+                  onClick={() => {
+                    setShowAnnouncementForm(true)
+                    setEditingAnnouncement(null)
+                    setAnnouncementForm({ title: '', content: '' })
+                  }}
+                  className="btn-primary flex items-center"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  お知らせを作成
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {announcements.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    お知らせはありません
+                  </div>
+                ) : (
+                  announcements.map((announcement) => (
+                    <div key={announcement.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-2">{announcement.title}</h3>
+                          <div className="text-sm text-gray-600 mb-2 whitespace-pre-wrap">{announcement.content}</div>
+                          <div className="text-xs text-gray-500">
+                            {new Date(announcement.created_at).toLocaleString('ja-JP')}
+                            {announcement.creator && ` by ${announcement.creator.name}`}
+                          </div>
+                        </div>
+                        <div className="flex space-x-2 ml-4">
+                          <button
+                            onClick={() => {
+                              setEditingAnnouncement(announcement)
+                              setAnnouncementForm({
+                                title: announcement.title,
+                                content: announcement.content
+                              })
+                              setShowAnnouncementForm(true)
+                            }}
+                            className="btn-secondary text-sm"
+                          >
+                            <Edit className="h-4 w-4 inline mr-1" />
+                            編集
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (confirm('このお知らせを削除しますか？')) {
+                                const { error } = await deleteGlobalAnnouncement(announcement.id)
+                                if (error) {
+                                  alert(`エラー: ${error}`)
+                                } else {
+                                  alert('お知らせを削除しました')
+                                  loadData()
+                                }
+                              }
+                            }}
+                            className="btn-secondary text-sm text-red-600 hover:bg-red-50"
+                          >
+                            <Trash className="h-4 w-4 inline mr-1" />
+                            削除
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* 全員向けクエストセクション */}
+            <div className="card">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900">全員向けクエスト</h2>
+                <button
+                  onClick={() => {
+                    setShowQuestForm(true)
+                    setQuestForm({ title: '', description: '', reward_amount: 0, deadline: '' })
+                  }}
+                  className="btn-primary flex items-center"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  クエストを作成
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {globalQuests.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    クエストはありません
+                  </div>
+                ) : (
+                  globalQuests.map((quest) => (
+                    <div key={quest.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <h3 className="text-lg font-semibold text-gray-900">{quest.title}</h3>
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              quest.status === 'active' ? 'bg-green-100 text-green-800' :
+                              quest.status === 'completed' ? 'bg-gray-100 text-gray-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {quest.status === 'active' ? '進行中' :
+                               quest.status === 'completed' ? '完了' : 'キャンセル'}
+                            </span>
+                          </div>
+                          {quest.description && (
+                            <div className="text-sm text-gray-600 mb-2">{quest.description}</div>
+                          )}
+                          <div className="flex items-center space-x-4 text-sm text-gray-500">
+                            <span>報酬: {quest.reward_amount}ポイント</span>
+                            {quest.deadline && (
+                              <span>締切: {new Date(quest.deadline).toLocaleString('ja-JP')}</span>
+                            )}
+                            <span>作成日: {new Date(quest.created_at).toLocaleString('ja-JP')}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* お知らせ作成・編集モーダル */}
+        {showAnnouncementForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                  {editingAnnouncement ? 'お知らせを編集' : 'お知らせを作成'}
+                </h2>
+                
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">タイトル *</label>
+                    <input
+                      type="text"
+                      value={announcementForm.title}
+                      onChange={(e) => setAnnouncementForm({ ...announcementForm, title: e.target.value })}
+                      className="input-field"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">内容（Markdown形式） *</label>
+                    <textarea
+                      value={announcementForm.content}
+                      onChange={(e) => setAnnouncementForm({ ...announcementForm, content: e.target.value })}
+                      rows={15}
+                      className="input-field font-mono text-sm"
+                      placeholder="# 見出し1&#10;## 見出し2&#10;&#10;**太字**&#10;&#10;*斜体*&#10;&#10;- リスト項目1&#10;- リスト項目2&#10;&#10;[リンクテキスト](URL)"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Markdown形式で記入できます。見出し、太字、リスト、リンクなどが使用可能です。
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex space-x-4">
+                  <button
+                    onClick={async () => {
+                      if (!announcementForm.title || !announcementForm.content) {
+                        alert('タイトルと内容を入力してください')
+                        return
+                      }
+                      if (!user) {
+                        alert('ユーザー情報が取得できません')
+                        return
+                      }
+
+                      if (editingAnnouncement) {
+                        const { error } = await updateGlobalAnnouncement(
+                          editingAnnouncement.id,
+                          announcementForm.title,
+                          announcementForm.content
+                        )
+                        if (error) {
+                          alert(`エラー: ${error}`)
+                        } else {
+                          alert('お知らせを更新しました')
+                          setShowAnnouncementForm(false)
+                          setEditingAnnouncement(null)
+                          setAnnouncementForm({ title: '', content: '' })
+                          loadData()
+                        }
+                      } else {
+                        const { error } = await createGlobalAnnouncement(
+                          announcementForm.title,
+                          announcementForm.content,
+                          user.id
+                        )
+                        if (error) {
+                          alert(`エラー: ${error}`)
+                        } else {
+                          alert('お知らせを作成しました。全ユーザーに通知が送信されます。')
+                          setShowAnnouncementForm(false)
+                          setAnnouncementForm({ title: '', content: '' })
+                          loadData()
+                        }
+                      }
+                    }}
+                    className="btn-primary flex-1"
+                  >
+                    {editingAnnouncement ? '更新' : '作成'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAnnouncementForm(false)
+                      setEditingAnnouncement(null)
+                      setAnnouncementForm({ title: '', content: '' })
+                    }}
+                    className="btn-secondary"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* クエスト作成モーダル */}
+        {showQuestForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">全員向けクエストを作成</h2>
+                
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">タイトル *</label>
+                    <input
+                      type="text"
+                      value={questForm.title}
+                      onChange={(e) => setQuestForm({ ...questForm, title: e.target.value })}
+                      className="input-field"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">説明</label>
+                    <textarea
+                      value={questForm.description}
+                      onChange={(e) => setQuestForm({ ...questForm, description: e.target.value })}
+                      rows={5}
+                      className="input-field"
+                      placeholder="クエストの説明を入力してください"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">報酬（ポイント） *</label>
+                      <input
+                        type="number"
+                        value={questForm.reward_amount}
+                        onChange={(e) => setQuestForm({ ...questForm, reward_amount: parseInt(e.target.value) || 0 })}
+                        className="input-field"
+                        min="0"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">締切日時</label>
+                      <input
+                        type="datetime-local"
+                        value={questForm.deadline}
+                        onChange={(e) => setQuestForm({ ...questForm, deadline: e.target.value })}
+                        className="input-field"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex space-x-4">
+                  <button
+                    onClick={async () => {
+                      if (!questForm.title || questForm.reward_amount < 0) {
+                        alert('タイトルと報酬を正しく入力してください')
+                        return
+                      }
+                      if (!user) {
+                        alert('ユーザー情報が取得できません')
+                        return
+                      }
+
+                      // deadlineをISO形式に変換（datetime-local形式から）
+                      let deadlineISO: string | null = null
+                      if (questForm.deadline) {
+                        deadlineISO = new Date(questForm.deadline).toISOString()
+                      }
+
+                      const result = await createGlobalQuest(
+                        questForm.title,
+                        questForm.description,
+                        questForm.reward_amount,
+                        deadlineISO,
+                        user.id
+                      )
+                      if (result.error) {
+                        alert(`エラー: ${result.error}`)
+                        console.error('Quest creation error:', result.error)
+                      } else {
+                        alert('クエストを作成しました。全ユーザーに通知が送信されます。')
+                        setShowQuestForm(false)
+                        setQuestForm({ title: '', description: '', reward_amount: 0, deadline: '' })
+                        loadData()
+                      }
+                    }}
+                    className="btn-primary flex-1"
+                  >
+                    作成
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowQuestForm(false)
+                      setQuestForm({ title: '', description: '', reward_amount: 0, deadline: '' })
                     }}
                     className="btn-secondary"
                   >

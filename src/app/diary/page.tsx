@@ -164,11 +164,11 @@ export default function Diary() {
           <div>
             <div className="flex items-center space-x-3 mb-2">
               <BookOpen className="h-10 w-10 text-primary-600" />
-              <h1 className="text-4xl font-bold text-gray-900 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
+              <h1 className="text-2xl font-bold text-gray-900 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
                 留学日記
               </h1>
             </div>
-            <p className="text-gray-600">留学の思い出を日記に残しましょう</p>
+            <p className="text-sm text-gray-600">留学の思い出を日記に残しましょう</p>
           </div>
           <Link href="/posts/new?category=diary" className="px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center">
             <Plus className="h-5 w-5 mr-2" />
@@ -378,7 +378,7 @@ export default function Diary() {
         {posts.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-2xl shadow-lg border border-gray-200">
             <BookOpen className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 mb-6 text-lg font-medium">まだ留学日記がありません</p>
+            <p className="text-gray-500 mb-6 text-sm font-medium">まだ留学日記がありません</p>
             <Link href="/posts/new?category=diary" className="inline-block px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200">
               最初の日記を書く
             </Link>
@@ -407,7 +407,7 @@ export default function Diary() {
                     </div>
                   </div>
                   
-                  <h2 className="text-2xl font-bold text-gray-900 mb-3 group-hover:text-primary-600 transition-colors">
+                  <h2 className="text-lg font-bold text-gray-900 mb-3 group-hover:text-primary-600 transition-colors">
                     {post.title || 'タイトルなし'}
                   </h2>
                   

@@ -23,7 +23,7 @@ export function RecentPosts() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, account_type, verification_status, organization_name, icon_url, languages, study_abroad_destination)
+          author:profiles(name, account_type, verification_status, organization_name, icon_url, languages, study_abroad_destination, is_operator)
         `)
         .is('community_id', null) // コミュニティ限定投稿は除外
         .order('created_at', { ascending: false })
@@ -279,6 +279,7 @@ export function RecentPosts() {
                                     accountType={post.author.account_type} 
                                     verificationStatus={post.author.verification_status}
                                     organizationName={post.author.organization_name}
+                                    isOperator={post.author.is_operator}
                                     size="sm"
                                   />
                                 </div>
@@ -400,6 +401,7 @@ export function RecentPosts() {
                             accountType={post.author.account_type} 
                             verificationStatus={post.author.verification_status}
                             organizationName={post.author.organization_name}
+                            isOperator={post.author.is_operator}
                             size="sm"
                           />
                         )}

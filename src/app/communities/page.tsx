@@ -99,15 +99,12 @@ export default function CommunitiesPage() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* ヘッダー */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
           <div>
-            <div className="flex items-center space-x-3 mb-2">
-              <Building2 className="h-10 w-10 text-primary-600" />
-              <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
-                コミュニティ
-              </h1>
-            </div>
-            <p className="text-gray-600 text-sm sm:text-base">コミュニティを見つけて参加しましょう</p>
+            <h1 className="text-2xl font-bold text-gray-900 mb-1 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
+              コミュニティ
+            </h1>
+            <p className="text-sm text-gray-600">コミュニティを見つけて参加しましょう</p>
           </div>
           <div className="flex items-center gap-2">
             {user && user.account_type !== 'individual' && user.verification_status === 'verified' && (
@@ -128,19 +125,19 @@ export default function CommunitiesPage() {
         </div>
 
         {/* 検索・フィルター */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-8">
-          <form onSubmit={handleSearch} className="space-y-4">
-            <div className="flex flex-col md:flex-row gap-3">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 mb-4">
+          <form onSubmit={handleSearch} className="space-y-3">
+            <div className="flex flex-col md:flex-row gap-2">
               <div className="flex-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-4 w-4 text-gray-400" />
                 </div>
                 <input
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="コミュニティ名、説明、またはIDで検索..."
-                  className="w-full pl-12 pr-4 py-3.5 bg-white border-2 border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all shadow-sm hover:shadow-md"
+                  className="w-full pl-10 pr-4 py-2.5 bg-white border-2 border-gray-200 rounded-xl text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all shadow-sm hover:shadow-md"
                 />
               </div>
               <select
@@ -148,13 +145,13 @@ export default function CommunitiesPage() {
                 onChange={(e) => {
                   setCommunityTypeFilter(e.target.value as 'all' | 'guild' | 'official')
                 }}
-                className="px-4 py-3.5 bg-white border-2 border-gray-200 rounded-xl text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all md:w-48"
+                className="px-4 py-2.5 bg-white border-2 border-gray-200 rounded-xl text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all md:w-48"
               >
                 <option value="all">すべての種別</option>
                 <option value="guild">サークル</option>
                 <option value="official">公式コミュニティ</option>
               </select>
-              <button type="submit" className="px-6 py-3.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 whitespace-nowrap">
+              <button type="submit" className="px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl text-sm font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 whitespace-nowrap">
                 検索
               </button>
             </div>
@@ -189,7 +186,7 @@ export default function CommunitiesPage() {
         ) : communities.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-lg border border-gray-200 text-center py-16">
             <Building2 className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 mb-2 text-lg font-medium">コミュニティが見つかりませんでした</p>
+            <p className="text-gray-500 mb-2 text-sm font-medium">コミュニティが見つかりませんでした</p>
             <p className="text-sm text-gray-400">検索条件を変更して再度お試しください</p>
           </div>
         ) : (
