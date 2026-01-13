@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { User, OrganizationVerificationRequest, Report, ReportStatus } from './supabase'
+import type { User, OrganizationVerificationRequest, Report, ReportStatus, GlobalAnnouncement, Quest } from './supabase'
 
 /**
  * 管理者権限をチェック
@@ -119,19 +119,40 @@ export async function approveVerificationRequest(
       throw updateError
     }
 
-    // プロフィールの認証ステータスを更新
-    console.log('Updating profile verification_status:', {
+    // プロフィールの認証ステータスとaccount_typeを更新
+    // 承認時にaccount_typeを申請時のタイプに変更し、is_organization_ownerフラグを設定
+    console.log('Updating profile verification_status and account_type:', {
       profile_id: request.profile_id,
       admin_id: adminId,
-      new_status: 'verified'
+      new_status: 'verified',
+      new_account_type: request.account_type
     })
+    
+    // プロフィール更新データを構築
+    const updateData: any = {
+      account_type: request.account_type, // 申請時の組織タイプに変更
+      verification_status: 'verified',
+      organization_name: request.organization_name,
+      organization_type: request.organization_type,
+      organization_url: request.organization_url,
+      contact_person_name: request.contact_person_name,
+      contact_person_email: request.contact_person_email,
+      contact_person_phone: request.contact_person_phone,
+      updated_at: new Date().toISOString()
+    }
+
+    // is_organization_ownerカラムが存在する場合のみ設定
+    // 注意: スキーマに追加されていない場合はエラーになる可能性がある
+    try {
+      updateData.is_organization_owner = true // 最初の申請者をオーナーに設定
+    } catch (e) {
+      // カラムが存在しない場合は無視
+      console.warn('is_organization_owner column may not exist:', e)
+    }
     
     const { data: updatedProfile, error: profileError } = await supabase
       .from('profiles')
-      .update({
-        verification_status: 'verified',
-        updated_at: new Date().toISOString()
-      })
+      .update(updateData)
       .eq('id', request.profile_id)
       .select()
 
@@ -142,6 +163,28 @@ export async function approveVerificationRequest(
     }
 
     console.log('Profile updated successfully:', updatedProfile)
+
+    // 承認通知を作成
+    try {
+      const { error: notificationError } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: request.profile_id,
+          type: 'organization_verification',
+          title: '組織認証が承認されました',
+          content: `${request.organization_name}の組織認証申請が承認されました。組織用機能をご利用いただけます。`,
+          link_url: `/profile/${request.profile_id}`,
+          is_read: false
+        })
+
+      if (notificationError) {
+        console.error('Error creating notification:', notificationError)
+        // 通知の作成に失敗しても承認処理は成功しているので続行
+      }
+    } catch (notificationError) {
+      console.error('Error creating notification:', notificationError)
+      // 通知の作成に失敗しても承認処理は成功しているので続行
+    }
 
     return { success: true, error: null }
   } catch (error: any) {
@@ -195,6 +238,28 @@ export async function rejectVerificationRequest(
 
     if (profileError) {
       throw profileError
+    }
+
+    // 拒否通知を作成
+    try {
+      const { error: notificationError } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: request.profile_id,
+          type: 'organization_verification',
+          title: '組織認証が拒否されました',
+          content: `${request.organization_name}の組織認証申請が拒否されました。詳細はお問い合わせください。`,
+          link_url: `/verification/request`,
+          is_read: false
+        })
+
+      if (notificationError) {
+        console.error('Error creating notification:', notificationError)
+        // 通知の作成に失敗しても拒否処理は成功しているので続行
+      }
+    } catch (notificationError) {
+      console.error('Error creating notification:', notificationError)
+      // 通知の作成に失敗しても拒否処理は成功しているので続行
     }
 
     return { success: true, error: null }
@@ -399,6 +464,47 @@ export async function updateVerificationStatus(
       }
     }
 
+    // 通知を作成（承認・拒否時）
+    if (status === 'verified' || status === 'rejected') {
+      try {
+        // 組織情報を取得
+        const { data: orgProfile } = await supabase
+          .from('profiles')
+          .select('organization_name')
+          .eq('id', userId)
+          .single()
+
+        const organizationName = orgProfile?.organization_name || '組織'
+
+        const notificationTitle = status === 'verified' 
+          ? '組織認証が承認されました'
+          : '組織認証が拒否されました'
+        
+        const notificationContent = status === 'verified'
+          ? `${organizationName}の組織認証申請が承認されました。組織用機能をご利用いただけます。`
+          : `${organizationName}の組織認証申請が拒否されました。詳細はお問い合わせください。`
+
+        const { error: notificationError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: userId,
+            type: 'organization_verification',
+            title: notificationTitle,
+            content: notificationContent,
+            link_url: status === 'verified' ? `/profile/${userId}` : `/verification/request`,
+            is_read: false
+          })
+
+        if (notificationError) {
+          console.error('Error creating notification:', notificationError)
+          // 通知の作成に失敗しても処理は成功しているので続行
+        }
+      } catch (notificationError) {
+        console.error('Error creating notification:', notificationError)
+        // 通知の作成に失敗しても処理は成功しているので続行
+      }
+    }
+
     return { success: true, error: null }
   } catch (error: any) {
     console.error('Error in updateVerificationStatus:', error)
@@ -579,6 +685,229 @@ export async function deleteReportedComment(commentId: string) {
     return { success: true, error: null }
   } catch (error: any) {
     return { success: false, error: error.message || 'コメントの削除に失敗しました' }
+  }
+}
+
+/**
+ * 全員向けお知らせ一覧を取得
+ */
+export async function getGlobalAnnouncements() {
+  try {
+    const { data, error } = await supabase
+      .from('global_announcements')
+      .select(`
+        *,
+        creator:profiles(id, name, icon_url)
+      `)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      throw error
+    }
+
+    return { data: data || [], error: null }
+  } catch (error: any) {
+    return { data: null, error: error.message || 'お知らせの取得に失敗しました' }
+  }
+}
+
+/**
+ * 全員向けお知らせを作成
+ */
+export async function createGlobalAnnouncement(
+  title: string,
+  content: string,
+  createdBy: string
+) {
+  try {
+    const { data, error } = await supabase
+      .from('global_announcements')
+      .insert({
+        title,
+        content,
+        created_by: createdBy
+      })
+      .select()
+      .single()
+
+    if (error) {
+      throw error
+    }
+
+    // 全ユーザーに通知を送信
+    await sendNotificationToAllUsers(
+      'global_announcement',
+      title,
+      content,
+      `/announcements/${data.id}`
+    )
+
+    return { data, error: null }
+  } catch (error: any) {
+    return { data: null, error: error.message || 'お知らせの作成に失敗しました' }
+  }
+}
+
+/**
+ * 全員向けお知らせを更新
+ */
+export async function updateGlobalAnnouncement(
+  id: string,
+  title: string,
+  content: string
+) {
+  try {
+    const { data, error } = await supabase
+      .from('global_announcements')
+      .update({
+        title,
+        content,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) {
+      throw error
+    }
+
+    return { data, error: null }
+  } catch (error: any) {
+    return { data: null, error: error.message || 'お知らせの更新に失敗しました' }
+  }
+}
+
+/**
+ * 全員向けお知らせを削除
+ */
+export async function deleteGlobalAnnouncement(id: string) {
+  try {
+    const { error } = await supabase
+      .from('global_announcements')
+      .delete()
+      .eq('id', id)
+
+    if (error) {
+      throw error
+    }
+
+    return { success: true, error: null }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'お知らせの削除に失敗しました' }
+  }
+}
+
+/**
+ * 全員向けクエストを作成
+ */
+export async function createGlobalQuest(
+  title: string,
+  description: string,
+  rewardAmount: number,
+  deadline: string | null,
+  createdBy: string
+) {
+  try {
+    const { data, error } = await supabase
+      .from('quests')
+      .insert({
+        title,
+        description,
+        reward_amount: rewardAmount,
+        deadline,
+        created_by: createdBy,
+        status: 'active',
+        community_id: null // 全員向けクエスト
+      })
+      .select()
+      .single()
+
+    if (error) {
+      throw error
+    }
+
+    // 全ユーザーに通知を送信
+    await sendNotificationToAllUsers(
+      'global_quest',
+      title,
+      description || '',
+      `/quests/${data.id}`
+    )
+
+    return { data, error: null }
+  } catch (error: any) {
+    return { data: null, error: error.message || 'クエストの作成に失敗しました' }
+  }
+}
+
+/**
+ * 全員向けクエスト一覧を取得
+ */
+export async function getGlobalQuests() {
+  try {
+    const { data, error } = await supabase
+      .from('quests')
+      .select(`
+        *,
+        creator:profiles(id, name, icon_url)
+      `)
+      .is('community_id', null)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      throw error
+    }
+
+    return { data: data || [], error: null }
+  } catch (error: any) {
+    return { data: null, error: error.message || 'クエストの取得に失敗しました' }
+  }
+}
+
+/**
+ * 全ユーザーに通知を送信
+ */
+async function sendNotificationToAllUsers(
+  type: 'global_announcement' | 'global_quest',
+  title: string,
+  content: string,
+  linkUrl: string
+) {
+  try {
+    // 全ユーザーのIDを取得
+    const { data: users, error: usersError } = await supabase
+      .from('profiles')
+      .select('id')
+
+    if (usersError || !users) {
+      console.error('Error fetching users for notifications:', usersError)
+      return
+    }
+
+    // バッチで通知を作成（Supabaseの制限を考慮して100件ずつ）
+    const batchSize = 100
+    for (let i = 0; i < users.length; i += batchSize) {
+      const batch = users.slice(i, i + batchSize)
+      const notifications = batch.map(user => ({
+        user_id: user.id,
+        type,
+        title,
+        content: content.substring(0, 500), // 通知の内容は500文字まで
+        link_url: linkUrl,
+        is_read: false
+      }))
+
+      const { error: notificationError } = await supabase
+        .from('notifications')
+        .insert(notifications)
+
+      if (notificationError) {
+        console.error('Error creating notifications:', notificationError)
+      }
+    }
+  } catch (error) {
+    console.error('Error sending notifications to all users:', error)
   }
 }
 

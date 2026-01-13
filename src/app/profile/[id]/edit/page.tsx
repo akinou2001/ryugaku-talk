@@ -31,7 +31,7 @@ export default function EditProfile() {
     study_abroad_destinations: [] as string[],
     study_purposes: [] as ('learn' | 'work' | 'live')[],
     study_details: [] as ('regular-study' | 'language-study' | 'exchange' | 'research' | 'working-holiday' | 'residence' | 'local-hire' | 'volunteer' | 'internship' | 'nomad' | 'high-school' | 'summer-school')[],
-    student_status: '' as '' | 'current' | 'experienced' | 'applicant',
+    student_status: '' as '' | 'current' | 'experienced' | 'applicant' | 'overseas_work' | 'domestic_supporter',
     bio: '',
     languages: [] as string[]
   })
@@ -256,7 +256,7 @@ export default function EditProfile() {
       
       // student_statusはlanguagesから復元（将来的には専用フィールドを追加）
       const statusTag = languages.find((lang: string) => lang.startsWith('status:'))
-      const studentStatus = statusTag ? (statusTag.replace('status:', '') as 'current' | 'experienced' | 'applicant') : ''
+      const studentStatus = statusTag ? (statusTag.replace('status:', '') as 'current' | 'experienced' | 'applicant' | 'overseas_work' | 'domestic_supporter') : ''
       
       // 大学情報を取得
       let university: University | null = null
@@ -1037,7 +1037,9 @@ export default function EditProfile() {
                   {[
                     { id: 'current' as const, label: '現役留学生' },
                     { id: 'experienced' as const, label: '留学経験者' },
-                    { id: 'applicant' as const, label: '留学志願者' }
+                    { id: 'applicant' as const, label: '留学希望者' },
+                    { id: 'overseas_work' as const, label: '海外ワーク' },
+                    { id: 'domestic_supporter' as const, label: '国内サポーター' }
                   ].map((status) => (
                     <button
                       key={status.id}

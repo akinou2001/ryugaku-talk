@@ -6,7 +6,7 @@ import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import type { User, Post, UserScore } from '@/lib/supabase'
 import { getUserScore } from '@/lib/quest'
-import { User as UserIcon, MapPin, GraduationCap, Calendar, MessageSquare, Edit, Settings, Send, Building2, Heart, HelpCircle, BookOpen, MessageCircle } from 'lucide-react'
+import { User as UserIcon, MapPin, GraduationCap, Calendar, MessageSquare, Edit, Settings, Send, Building2, Heart, HelpCircle, BookOpen, MessageCircle, Mail } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
@@ -245,19 +245,44 @@ export default function Profile() {
                     accountType={profile.account_type} 
                     verificationStatus={profile.verification_status}
                     organizationName={profile.organization_name}
+                    isOperator={profile.is_operator}
                     size="md"
                   />
                 </div>
               </div>
             </div>
             
-            <div className="flex space-x-2">
+            <div className="flex space-x-2 flex-wrap">
               {isOwnProfile ? (
                 <>
                   <Link href={`/profile/${profile.id}/edit`} className="px-4 py-2.5 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold flex items-center hover:bg-gray-50 hover:border-gray-300 transition-all duration-200">
                     <Edit className="h-4 w-4 mr-2" />
                     編集
                   </Link>
+                  {profile.account_type === 'individual' && (
+                    <>
+                      <Link href="/verification/request" className="px-4 py-2.5 bg-white border-2 border-blue-200 text-blue-700 rounded-xl font-semibold flex items-center hover:bg-blue-50 hover:border-blue-300 transition-all duration-200">
+                        <Building2 className="h-4 w-4 mr-2" />
+                        組織認証申請
+                      </Link>
+                      <Link href="/organization/invites" className="px-4 py-2.5 bg-white border-2 border-purple-200 text-purple-700 rounded-xl font-semibold flex items-center hover:bg-purple-50 hover:border-purple-300 transition-all duration-200">
+                        <Mail className="h-4 w-4 mr-2" />
+                        組織招待
+                      </Link>
+                    </>
+                  )}
+                  {profile.account_type !== 'individual' && profile.is_organization_owner && profile.verification_status === 'verified' && (
+                    <Link href="/organization/manage" className="px-4 py-2.5 bg-white border-2 border-green-200 text-green-700 rounded-xl font-semibold flex items-center hover:bg-green-50 hover:border-green-300 transition-all duration-200">
+                      <Building2 className="h-4 w-4 mr-2" />
+                      組織管理
+                    </Link>
+                  )}
+                  {profile.account_type !== 'individual' && !profile.is_organization_owner && (
+                    <Link href="/organization/invites" className="px-4 py-2.5 bg-white border-2 border-purple-200 text-purple-700 rounded-xl font-semibold flex items-center hover:bg-purple-50 hover:border-purple-300 transition-all duration-200">
+                      <Mail className="h-4 w-4 mr-2" />
+                      組織招待
+                    </Link>
+                  )}
                   <Link href="/settings" className="px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center">
                     <Settings className="h-4 w-4 mr-2" />
                     設定

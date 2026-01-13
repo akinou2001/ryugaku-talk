@@ -5,11 +5,11 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import { getUserCommunities } from '@/lib/community'
-import { getQuests } from '@/lib/quest'
+import { getQuests, getQuestById } from '@/lib/quest'
 import { requestQuestCompletion } from '@/lib/quest'
 import type { Quest } from '@/lib/supabase'
 import { uploadFile, validateFileType, validateFileSize, FILE_TYPES, isImageFile } from '@/lib/storage'
-import { ArrowLeft, Save, X, Search, ChevronLeft, ChevronRight, Flame, Image as ImageIcon, Upload } from 'lucide-react'
+import { ArrowLeft, Save, X, Search, ChevronLeft, ChevronRight, Flame, Image as ImageIcon, Upload, Award } from 'lucide-react'
 import { MarkdownEditor } from '@/components/MarkdownEditor'
 import { searchUniversities, findUniversityByAlias, type University } from '@/lib/universities'
 
@@ -41,6 +41,10 @@ function NewPostInner() {
   const [userCommunities, setUserCommunities] = useState<Array<{id: string, name: string}>>([])
   const [availableQuests, setAvailableQuests] = useState<Quest[]>([])
   const [selectedQuestId, setSelectedQuestId] = useState<string>('')
+  const [questFromUrl, setQuestFromUrl] = useState<string | null>(null)
+  const [questInfo, setQuestInfo] = useState<Quest | null>(null)
+  const [showQuestConfirmModal, setShowQuestConfirmModal] = useState(false)
+  const [pendingSubmit, setPendingSubmit] = useState<(() => void) | null>(null)
   const [countrySearch, setCountrySearch] = useState('')
   const [expandedRegions, setExpandedRegions] = useState<Set<string>>(new Set())
   const countryScrollRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -210,6 +214,28 @@ function NewPostInner() {
         category: (category === 'information' ? 'chat' : category) as 'question' | 'diary' | 'chat'
       }))
     }
+    
+    // URLパラメータからquest_idを取得
+    const questId = searchParams.get('quest_id')
+    const communityId = searchParams.get('community_id')
+    if (questId) {
+      setQuestFromUrl(questId)
+      setSelectedQuestId(questId)
+      // クエスト情報を取得
+      getQuestById(questId).then(quest => {
+        setQuestInfo(quest)
+        // コミュニティIDも設定
+        if (communityId && quest.community_id === communityId) {
+          setFormData(prev => ({
+            ...prev,
+            community_id: communityId
+          }))
+        }
+      }).catch(error => {
+        console.error('Error fetching quest:', error)
+      })
+    }
+    
     if (user) {
       fetchUserCommunities()
       fetchUserProfile()
@@ -374,8 +400,27 @@ function NewPostInner() {
       return
     }
 
+    // クエストIDがURLパラメータから設定されている場合、確認モーダルを表示
+    if (questFromUrl && !showQuestConfirmModal) {
+      setShowQuestConfirmModal(true)
+      setPendingSubmit(() => async () => {
+        await submitPost()
+      })
+      return
+    }
+
+    await submitPost()
+  }
+
+  const submitPost = async () => {
+    if (!user) {
+      setError('ログインが必要です')
+      return
+    }
+
     setLoading(true)
     setError('')
+    setShowQuestConfirmModal(false)
 
     try {
       // カテゴリが'information'の場合は'chat'に変換（後方互換性）
@@ -389,10 +434,13 @@ function NewPostInner() {
       // コミュニティ限定投稿の場合はpost_typeを設定
       const postType = formData.community_id ? 'normal' : null
       
+      // クエストIDを設定（選択されている場合、またはURLパラメータから）
+      const questIdToUse = selectedQuestId || questFromUrl || null
+      
       // クエストタグを追加（選択されている場合）
       const finalTags = [...formData.tags]
-      if (selectedQuestId) {
-        finalTags.push(`quest:${selectedQuestId}`)
+      if (questIdToUse) {
+        finalTags.push(`quest:${questIdToUse}`)
       }
       
       // 写真をアップロード（最大4枚）
@@ -467,6 +515,7 @@ function NewPostInner() {
         official_category: isVerifiedOrganization && formData.is_official ? formData.official_category : null,
         community_id: formData.community_id || null,
         post_type: postType,
+        quest_id: questIdToUse || null,
         images: images.length > 0 ? images : null, // 複数画像
         cover_image_url: coverImageUrl || null, // カバー写真
         is_pro: false, // すべての投稿で同じ機能のためfalse
@@ -483,11 +532,11 @@ function NewPostInner() {
         throw error
       }
 
-      // クエストタグが含まれている場合、自動的にクエスト完了申請を作成
-      if (selectedQuestId && data) {
+      // クエストIDが設定されている場合、自動的にクエスト完了申請を作成（旧方式との互換性のため）
+      if (questIdToUse && data) {
         try {
           await requestQuestCompletion(
-            selectedQuestId,
+            questIdToUse,
             `投稿: ${data.title}`,
             `/posts/${data.id}`
           )
@@ -1166,8 +1215,8 @@ function NewPostInner() {
             </p>
           </div>
 
-          {/* コミュニティ限定投稿（質問・日記のみ） */}
-          {userCommunities.length > 0 && (formData.category === 'question' || formData.category === 'diary') && (
+          {/* コミュニティ限定投稿（質問・日記・つぶやき） */}
+          {userCommunities.length > 0 && (formData.category === 'question' || formData.category === 'diary' || formData.category === 'chat') && (
             <>
               <div>
                 <label htmlFor="community_id" className="block text-sm font-medium text-gray-700 mb-2">
@@ -1191,7 +1240,7 @@ function NewPostInner() {
                   ))}
                 </select>
                 <p className="text-xs text-gray-500 mt-1">
-                  コミュニティを選択すると、そのコミュニティのメンバーのみに表示されます。質問・日記のみコミュニティ限定投稿が可能です。
+                  コミュニティを選択すると、そのコミュニティのメンバーのみに表示されます。質問・日記・つぶやきでコミュニティ限定投稿が可能です。
                 </p>
               </div>
 
@@ -1245,6 +1294,56 @@ function NewPostInner() {
             </button>
           </div>
         </form>
+
+        {/* クエスト回答確認モーダル */}
+        {showQuestConfirmModal && questInfo && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">クエストへの回答</h2>
+              <div className="mb-4">
+                <p className="text-gray-700 mb-2">
+                  この投稿は以下のクエストに対する回答となります。よろしいですか？
+                </p>
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <Award className="h-5 w-5 text-primary-600" />
+                    <h3 className="font-semibold text-gray-900">{questInfo.title}</h3>
+                  </div>
+                  {questInfo.description && (
+                    <p className="text-sm text-gray-600">{questInfo.description}</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowQuestConfirmModal(false)
+                    setQuestFromUrl(null)
+                    setSelectedQuestId('')
+                    setQuestInfo(null)
+                    if (pendingSubmit) {
+                      setPendingSubmit(null)
+                    }
+                  }}
+                  className="btn-secondary flex-1"
+                >
+                  修正する
+                </button>
+                <button
+                  onClick={async () => {
+                    if (pendingSubmit) {
+                      await pendingSubmit()
+                      setPendingSubmit(null)
+                    }
+                  }}
+                  className="btn-primary flex-1"
+                >
+                  そのまま投稿する
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

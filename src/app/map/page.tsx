@@ -369,10 +369,10 @@ export default function MapPage() {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
             <div>
-              <h1 className="text-4xl font-bold text-gray-900 mb-2 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
+              <h1 className="text-2xl font-bold text-gray-900 mb-1 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
                 眺める
               </h1>
-              <p className="text-gray-600">世界で挑戦している留学生の「今」をチェックしよう</p>
+              <p className="text-sm text-gray-600">世界で挑戦している留学生の「今」をチェックしよう</p>
             </div>
             {/* 2D/3D切り替えボタン */}
             <div className="flex items-center space-x-2 bg-white rounded-xl p-1 shadow-md border border-gray-200">
@@ -599,7 +599,7 @@ export default function MapPage() {
               <div className="absolute inset-0 bg-white bg-opacity-90 z-10 flex items-center justify-center rounded-xl">
                 <div className="text-center">
                   <MapPin className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500 text-lg font-medium">投稿が見つかりません</p>
+                  <p className="text-gray-500 text-sm font-medium">投稿が見つかりません</p>
                   <p className="text-gray-400 text-sm mt-2">地図上に表示する投稿がありません</p>
                 </div>
               </div>

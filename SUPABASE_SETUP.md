@@ -144,8 +144,38 @@ CREATE POLICY "ユーザーは自分のプロフィールを挿入可能" ON pro
 1. 「Enable email confirmations」を無効にする
 2. テスト用のメールアドレスで登録できるようになります
 
-### ステップ3: Google認証（オプション）
-Google認証は有料プランが必要なため、今回はスキップします。
+### ステップ3: Google認証の設定（オプション）
+
+Googleアカウントでのログイン・登録を有効にする場合：
+
+1. **Google Cloud ConsoleでOAuth認証情報を作成**
+   - [Google Cloud Console](https://console.cloud.google.com/)にアクセス
+   - プロジェクトを作成（または既存のプロジェクトを選択）
+   - 「APIとサービス」→「認証情報」を開く
+   - 「認証情報を作成」→「OAuth 2.0 クライアント ID」を選択
+   - アプリケーションの種類: 「ウェブアプリケーション」
+   - 承認済みのリダイレクト URI に以下を追加：
+     ```
+     https://your-project-id.supabase.co/auth/v1/callback
+     ```
+     （`your-project-id`はSupabaseのプロジェクトID）
+
+2. **SupabaseでGoogle認証を有効化**
+   - Supabaseダッシュボード → 「Authentication」→ 「Providers」を開く
+   - 「Google」を有効にする
+   - 「Client ID」と「Client Secret」を入力（Google Cloud Consoleで取得した値）
+   - 「Save」をクリック
+
+3. **リダイレクトURLの設定**
+   - 「Authentication」→「URL Configuration」を開く
+   - 「Redirect URLs」に以下を追加：
+     ```
+     http://localhost:3000/auth/callback
+     https://your-app.vercel.app/auth/callback
+     ```
+     （本番環境のURLがある場合）
+
+**注意**: 開発環境では`http://localhost:3000/auth/callback`を、本番環境では実際のURLを設定してください。
 
 ---
 

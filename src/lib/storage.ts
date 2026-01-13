@@ -29,7 +29,22 @@ export async function uploadFile(
 
   if (error) {
     console.error('Error uploading file:', error)
-    throw new Error(`ファイルのアップロードに失敗しました: ${error.message}`)
+    console.error('Bucket:', bucket)
+    console.error('FilePath:', filePath)
+    console.error('File size:', file.size)
+    console.error('File type:', file.type)
+    
+    // より詳細なエラーメッセージ
+    let errorMessage = `ファイルのアップロードに失敗しました: ${error.message}`
+    if (error.message.includes('Bucket not found')) {
+      errorMessage = `バケット "${bucket}" が見つかりません。Supabaseダッシュボードでバケットを作成してください。`
+    } else if (error.message.includes('new row violates row-level security policy')) {
+      errorMessage = `バケット "${bucket}" のRLSポリシーが正しく設定されていません。Storageのポリシーを確認してください。`
+    } else if (error.message.includes('The resource already exists')) {
+      errorMessage = `同じファイル名のファイルが既に存在します。`
+    }
+    
+    throw new Error(errorMessage)
   }
 
   // 公開URLを取得

@@ -6,7 +6,7 @@ import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import type { Post, Comment } from '@/lib/supabase'
 import { notifyComment } from '@/lib/notifications'
-import { Heart, MessageSquare, Share, Flag, Clock, MapPin, GraduationCap, Edit, Trash2, HelpCircle, BookOpen, MessageCircle, CheckCircle2, X as XIcon, Link as LinkIcon, Copy, Check, ArrowLeft } from 'lucide-react'
+import { Heart, MessageSquare, Share, Flag, Clock, MapPin, GraduationCap, Edit, Trash2, HelpCircle, BookOpen, MessageCircle, CheckCircle2, X as XIcon, Link as LinkIcon, Copy, Check, ArrowLeft, Award } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
@@ -16,6 +16,8 @@ import { MarkdownEditor } from '@/components/MarkdownEditor'
 import { uploadFile, validateFileType, validateFileSize, FILE_TYPES } from '@/lib/storage'
 import { ReportModal } from '@/components/ReportModal'
 import { getUniversityById, type University } from '@/lib/universities'
+import { getQuestById, getQuestCompletions, updateQuestCompletionStatus } from '@/lib/quest'
+import type { Quest, QuestCompletion } from '@/lib/supabase'
 
 // スケルトンローディング
 const SkeletonCard = () => {
@@ -62,6 +64,11 @@ export default function PostDetail() {
   const [urlCopied, setUrlCopied] = useState(false)
   const [showReportModal, setShowReportModal] = useState(false)
   const [showCommentReportModal, setShowCommentReportModal] = useState<string | null>(null)
+  const [quest, setQuest] = useState<Quest | null>(null)
+  const [questCompletion, setQuestCompletion] = useState<QuestCompletion | null>(null)
+  const [showQuestClearModal, setShowQuestClearModal] = useState(false)
+  const [questClearAction, setQuestClearAction] = useState<'clear' | 'fail' | null>(null)
+  const [isUpdatingQuestStatus, setIsUpdatingQuestStatus] = useState(false)
 
   useEffect(() => {
     if (postId) {
@@ -70,13 +77,48 @@ export default function PostDetail() {
     }
   }, [postId])
 
+  // ユーザーが変更されたときにいいね状態を再チェック
+  useEffect(() => {
+    if (user && postId) {
+      checkLikedStatus()
+    } else {
+      setLiked(false)
+    }
+  }, [user, postId])
+
+  const checkLikedStatus = async () => {
+    if (!user) {
+      setLiked(false)
+      return
+    }
+
+    try {
+      const { data: likeData, error } = await supabase
+        .from('likes')
+        .select('id')
+        .eq('post_id', postId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error checking like status:', error)
+        return
+      }
+      
+      setLiked(!!likeData)
+    } catch (error) {
+      console.error('Error checking like status:', error)
+      setLiked(false)
+    }
+  }
+
   const fetchPost = async () => {
     try {
       const { data, error } = await supabase
         .from('posts')
         .select(`
           *,
-          author:profiles(name, university, university_id, study_abroad_destination, study_abroad_university_id, major, account_type, verification_status, organization_name, icon_url, languages)
+          author:profiles(name, university, university_id, study_abroad_destination, study_abroad_university_id, major, account_type, verification_status, organization_name, icon_url, languages, is_operator)
         `)
         .eq('id', postId)
         .single()
@@ -119,24 +161,66 @@ export default function PostDetail() {
         })
       }
       
-      if (user) {
-        try {
-          const { data: likeData } = await supabase
-            .from('likes')
-            .select('id')
-            .eq('post_id', postId)
-            .eq('user_id', user.id)
-            .single()
-          
-          setLiked(!!likeData)
-        } catch (likeError) {
-          setLiked(false)
-        }
-      }
+      // いいね状態は別のuseEffectでチェック
     } catch (error: any) {
       setError(error.message || '投稿の取得に失敗しました')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchQuestInfo = async () => {
+    if (!post?.quest_id) return
+    
+    try {
+      const questData = await getQuestById(post.quest_id)
+      setQuest(questData)
+    } catch (error: any) {
+      console.error('Error fetching quest:', error)
+    }
+  }
+
+  const fetchQuestCompletion = async () => {
+    if (!post?.quest_id || !user) return
+    
+    try {
+      const completions = await getQuestCompletions(post.quest_id)
+      // この投稿の作成者に関連する完了記録を探す
+      const completion = completions.find(c => c.user_id === post?.author_id)
+      setQuestCompletion(completion || null)
+    } catch (error: any) {
+      console.error('Error fetching quest completion:', error)
+    }
+  }
+
+  // クエストの締め切りが過ぎているかチェック
+  const isQuestDeadlinePassed = (): boolean => {
+    if (!quest?.deadline) return false
+    return new Date(quest.deadline) < new Date()
+  }
+
+  // クエスト作成者かどうかをチェック
+  const isQuestCreator = (): boolean => {
+    if (!quest || !user) return false
+    return quest.created_by === user.id
+  }
+
+  // クエストクリア/失敗判定を実行
+  const handleQuestClearAction = async (action: 'clear' | 'fail') => {
+    if (!post?.quest_id || !user || !questCompletion) return
+
+    setIsUpdatingQuestStatus(true)
+    try {
+      const status = action === 'clear' ? 'approved' : 'rejected'
+      await updateQuestCompletionStatus(questCompletion.id, status)
+      await fetchQuestCompletion()
+      setShowQuestClearModal(false)
+      setQuestClearAction(null)
+      setError('')
+    } catch (error: any) {
+      setError(error.message || 'クエスト判定の更新に失敗しました')
+    } finally {
+      setIsUpdatingQuestStatus(false)
     }
   }
 
@@ -167,18 +251,28 @@ export default function PostDetail() {
       return
     }
 
+    if (!post) return
+
     try {
       if (liked) {
+        // いいねを削除
         const { error } = await supabase
           .from('likes')
           .delete()
           .eq('post_id', postId)
           .eq('user_id', user.id)
 
-        if (error) throw error
+        if (error) {
+          console.error('Error removing like:', error)
+          setError('いいねの削除に失敗しました')
+          return
+        }
+        
         setLiked(false)
-        setPost(prev => prev ? { ...prev, likes_count: (prev.likes_count || 0) - 1 } : null)
+        // トリガーで自動更新されるが、即座にUIを更新
+        setPost(prev => prev ? { ...prev, likes_count: Math.max(0, (prev.likes_count || 0) - 1) } : null)
       } else {
+        // いいねを追加
         const { error } = await supabase
           .from('likes')
           .insert({
@@ -186,12 +280,25 @@ export default function PostDetail() {
             user_id: user.id
           })
 
-        if (error) throw error
+        if (error) {
+          console.error('Error adding like:', error)
+          // 重複エラーの場合は既にいいね済みとして扱う
+          if (error.code === '23505') {
+            setLiked(true)
+            await checkLikedStatus()
+          } else {
+            setError('いいねの追加に失敗しました')
+          }
+          return
+        }
+        
         setLiked(true)
+        // トリガーで自動更新されるが、即座にUIを更新
         setPost(prev => prev ? { ...prev, likes_count: (prev.likes_count || 0) + 1 } : null)
       }
     } catch (error: any) {
       console.error('Error toggling like:', error)
+      setError('いいねの処理に失敗しました')
     }
   }
 
@@ -544,6 +651,71 @@ export default function PostDetail() {
           </button>
         </div>
 
+        {/* クエストクリア承認ボタン（クエスト作成者のみ、締め切り後） - 投稿カードの一番上 */}
+        {post.quest_id && isQuestCreator() && isQuestDeadlinePassed() && questCompletion && (
+          <div className="mb-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-200 rounded-xl">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-gray-900 mb-1 flex items-center space-x-2">
+                  <Award className="h-5 w-5 text-amber-600" />
+                  <span>クエストクリア判定</span>
+                </h3>
+                <p className="text-sm text-gray-600">
+                  この投稿に対するクエストのクリア/失敗を判定してください。
+                </p>
+              </div>
+              <div className="flex items-center space-x-2 ml-4">
+                <button
+                  onClick={() => {
+                    setQuestClearAction('clear')
+                    setShowQuestClearModal(true)
+                  }}
+                  disabled={isUpdatingQuestStatus || (questCompletion && questCompletion.status === 'approved')}
+                  className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                    questCompletion && questCompletion.status === 'approved'
+                      ? 'bg-green-200 text-green-700 cursor-not-allowed'
+                      : 'bg-green-600 text-white hover:bg-green-700 shadow-md hover:shadow-lg'
+                  }`}
+                >
+                  <CheckCircle2 className="h-4 w-4 inline mr-1" />
+                  クリア
+                </button>
+                <button
+                  onClick={() => {
+                    setQuestClearAction('fail')
+                    setShowQuestClearModal(true)
+                  }}
+                  disabled={isUpdatingQuestStatus || (questCompletion && questCompletion.status === 'rejected')}
+                  className={`px-4 py-2 rounded-lg font-semibold transition-all ${
+                    questCompletion && questCompletion.status === 'rejected'
+                      ? 'bg-red-200 text-red-700 cursor-not-allowed'
+                      : 'bg-red-600 text-white hover:bg-red-700 shadow-md hover:shadow-lg'
+                  }`}
+                >
+                  <XIcon className="h-4 w-4 inline mr-1" />
+                  失敗
+                </button>
+              </div>
+            </div>
+            {questCompletion && questCompletion.status === 'approved' && (
+              <div className="mt-3 p-2 bg-green-100 border border-green-300 rounded-lg">
+                <p className="text-sm text-green-800 font-medium flex items-center space-x-1">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>クリア済み</span>
+                </p>
+              </div>
+            )}
+            {questCompletion && questCompletion.status === 'rejected' && (
+              <div className="mt-3 p-2 bg-red-100 border border-red-300 rounded-lg">
+                <p className="text-sm text-red-800 font-medium flex items-center space-x-1">
+                  <XIcon className="h-4 w-4" />
+                  <span>失敗判定済み</span>
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 投稿ヘッダー */}
         <div className={`bg-white rounded-2xl shadow-lg border border-gray-100 mb-6 ${
           post.category === 'diary' && post.cover_image_url ? 'p-0 overflow-hidden' : 'p-6'
@@ -627,6 +799,7 @@ export default function PostDetail() {
                         accountType={post.author.account_type} 
                         verificationStatus={post.author.verification_status}
                         organizationName={post.author.organization_name}
+                        isOperator={post.author.is_operator}
                         size="sm"
                       />
                       {post.author.languages && (
@@ -771,6 +944,7 @@ export default function PostDetail() {
                       accountType={post.author.account_type} 
                       verificationStatus={post.author.verification_status}
                       organizationName={post.author.organization_name}
+                      isOperator={post.author.is_operator}
                       size="sm"
                     />
                   )}
@@ -896,7 +1070,7 @@ export default function PostDetail() {
                   </div>
                 </div>
               ) : (post.category === 'diary' || post.category === 'official') ? (
-              <div className="prose prose-lg max-w-none 
+              <div className="prose prose-lg max-w-none px-4 sm:px-6 md:px-8 lg:px-12
                       prose-headings:text-gray-900 prose-headings:font-bold 
                       prose-h1:text-4xl prose-h1:mt-8 prose-h1:mb-6 prose-h1:font-extrabold prose-h1:leading-tight
                       prose-h2:text-3xl prose-h2:mt-6 prose-h2:mb-4 prose-h2:font-bold prose-h2:leading-tight
@@ -1361,6 +1535,60 @@ export default function PostDetail() {
             type="comment"
             itemTitle={comments.find(c => c.id === showCommentReportModal)?.content?.substring(0, 50) || ''}
           />
+        )}
+
+        {/* クエストクリア判定モーダル */}
+        {showQuestClearModal && questClearAction && quest && questCompletion && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+              <h2 className="text-xl font-bold text-gray-900 mb-4">
+                {questClearAction === 'clear' ? 'クエストクリア判定' : 'クエスト失敗判定'}
+              </h2>
+              <div className="mb-4">
+                <p className="text-gray-700 mb-2">
+                  {questClearAction === 'clear' 
+                    ? 'この投稿をクエストのクリアとして承認しますか？'
+                    : 'この投稿をクエストの失敗として判定しますか？'}
+                </p>
+                <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <Award className="h-5 w-5 text-primary-600" />
+                    <h3 className="font-semibold text-gray-900">{quest.title}</h3>
+                  </div>
+                  {quest.description && (
+                    <p className="text-sm text-gray-600 mb-2">{quest.description}</p>
+                  )}
+                  <div className="text-xs text-gray-500">
+                    <p>投稿者: {post.author?.name || '不明'}</p>
+                    <p>投稿タイトル: {post.title}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowQuestClearModal(false)
+                    setQuestClearAction(null)
+                  }}
+                  className="btn-secondary flex-1"
+                  disabled={isUpdatingQuestStatus}
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={() => handleQuestClearAction(questClearAction)}
+                  disabled={isUpdatingQuestStatus}
+                  className={`flex-1 px-4 py-2 rounded-lg font-semibold transition-all ${
+                    questClearAction === 'clear'
+                      ? 'bg-green-600 text-white hover:bg-green-700'
+                      : 'bg-red-600 text-white hover:bg-red-700'
+                  } disabled:opacity-50`}
+                >
+                  {isUpdatingQuestStatus ? '処理中...' : questClearAction === 'clear' ? 'クリアとして承認' : '失敗として判定'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

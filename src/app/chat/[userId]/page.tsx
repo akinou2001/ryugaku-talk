@@ -8,6 +8,7 @@ import type { User, Message } from '@/lib/supabase'
 import { ArrowLeft, Send, User as UserIcon, Clock, Check, CheckCheck, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
+import { UserAvatar } from '@/components/UserAvatar'
 import { notifyDM } from '@/lib/notifications'
 
 export default function ChatDetail() {
@@ -274,24 +275,44 @@ export default function ChatDetail() {
             
             <Link href={`/profile/${otherUser.id}`} className="flex items-center space-x-3 flex-1 min-w-0">
               <div className="relative">
-                <div className="w-12 h-12 bg-gradient-to-br from-primary-400 to-primary-600 rounded-full flex items-center justify-center text-white font-semibold text-lg shadow-md">
-                  {getInitials(otherUser.name)}
-                </div>
+                <UserAvatar
+                  iconUrl={(otherUser as any).icon_url}
+                  name={otherUser.name}
+                  size="lg"
+                  className="shadow-md"
+                />
                 <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center space-x-2">
                   <h1 className="text-lg font-semibold text-gray-900 truncate">{otherUser.name}</h1>
-                  {otherUser.account_type && otherUser.account_type !== 'individual' && (
+                  {((otherUser.account_type && otherUser.account_type !== 'individual') || otherUser.is_operator) && (
                     <AccountBadge 
                       accountType={otherUser.account_type}
                       verificationStatus={otherUser.verification_status}
                       organizationName={otherUser.organization_name}
+                      isOperator={otherUser.is_operator}
                       size="sm"
                     />
                   )}
                 </div>
-                <p className="text-sm text-gray-500 truncate">{otherUser.email}</p>
+                {((otherUser as any).student_status || (otherUser as any).study_abroad_destination) && (
+                  <p className="text-sm text-gray-500 truncate">
+                    {(() => {
+                      const statusMap: Record<string, string> = {
+                        'current': '現役留学生',
+                        'experienced': '留学経験者',
+                        'applicant': '留学志願者',
+                        'overseas_work': '海外ワーク',
+                        'domestic_supporter': '国内サポーター'
+                      }
+                      const status = (otherUser as any).student_status
+                      const statusText = status ? statusMap[status] || status : ''
+                      const destination = (otherUser as any).study_abroad_destination || ''
+                      return [statusText, destination].filter(Boolean).join(' • ')
+                    })()}
+                  </p>
+                )}
               </div>
             </Link>
 
@@ -341,9 +362,11 @@ export default function ChatDetail() {
                     {!isMyMessage && (
                       <div className="flex-shrink-0">
                         {showAvatar ? (
-                          <div className="w-8 h-8 bg-gradient-to-br from-primary-400 to-primary-600 rounded-full flex items-center justify-center text-white text-xs font-semibold">
-                            {getInitials(otherUser.name)}
-                          </div>
+                          <UserAvatar
+                            iconUrl={(otherUser as any).icon_url}
+                            name={otherUser.name}
+                            size="sm"
+                          />
                         ) : (
                           <div className="w-8 h-8"></div>
                         )}
@@ -398,9 +421,11 @@ export default function ChatDetail() {
                     {/* 自分のアバター（通常は非表示） */}
                     {isMyMessage && showAvatar && (
                       <div className="flex-shrink-0">
-                        <div className="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-600 rounded-full flex items-center justify-center text-white text-xs font-semibold">
-                          {getInitials(user.name)}
-                        </div>
+                        <UserAvatar
+                          iconUrl={(user as any).icon_url}
+                          name={user.name}
+                          size="sm"
+                        />
                       </div>
                     )}
                   </div>

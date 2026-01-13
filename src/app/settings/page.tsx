@@ -42,6 +42,14 @@ export default function SettingsPage() {
   // 退会
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [ownedCommunities, setOwnedCommunities] = useState<any[]>([])
+  const [checkingCommunities, setCheckingCommunities] = useState(false)
+  const [showCommunityTransferModal, setShowCommunityTransferModal] = useState(false)
+  const [selectedCommunityId, setSelectedCommunityId] = useState<string | null>(null)
+  const [transferTargetUserId, setTransferTargetUserId] = useState('')
+  const [transferring, setTransferring] = useState(false)
+  const [communityMembers, setCommunityMembers] = useState<any[]>([])
+  const [loadingMembers, setLoadingMembers] = useState(false)
 
   // 組織認証申請
   const [verificationData, setVerificationData] = useState({
@@ -65,7 +73,51 @@ export default function SettingsPage() {
     if (user && user.account_type !== 'individual') {
       checkExistingVerificationRequest()
     }
+    
+    // コミュニティのオーナーシップを確認
+    if (user) {
+      checkOwnedCommunities()
+    }
   }, [user, router])
+  
+  const checkOwnedCommunities = async () => {
+    if (!user) return
+    
+    setCheckingCommunities(true)
+    try {
+      const { data: communities, error } = await supabase
+        .from('communities')
+        .select('id, name, description')
+        .eq('owner_id', user.id)
+      
+      if (error) {
+        console.error('Error checking owned communities:', error)
+        return
+      }
+      
+      // 各コミュニティのメンバー数を取得
+      const communitiesWithMemberCount = await Promise.all(
+        (communities || []).map(async (community) => {
+          const { count } = await supabase
+            .from('community_members')
+            .select('*', { count: 'exact', head: true })
+            .eq('community_id', community.id)
+            .eq('status', 'approved')
+          
+          return {
+            ...community,
+            member_count: count || 0
+          }
+        })
+      )
+      
+      setOwnedCommunities(communitiesWithMemberCount)
+    } catch (error) {
+      console.error('Error checking owned communities:', error)
+    } finally {
+      setCheckingCommunities(false)
+    }
+  }
 
   const loadAccountData = async () => {
     if (!user) return
@@ -251,10 +303,116 @@ export default function SettingsPage() {
     }
   }
 
+  const loadCommunityMembers = async (communityId: string) => {
+    if (!user) return
+
+    setLoadingMembers(true)
+    try {
+      const { data, error } = await supabase
+        .from('community_members')
+        .select(`
+          *,
+          user:profiles(id, name, email, icon_url)
+        `)
+        .eq('community_id', communityId)
+        .eq('status', 'approved')
+        .order('joined_at', { ascending: false })
+
+      if (error) throw error
+
+      setCommunityMembers(data || [])
+    } catch (error: any) {
+      console.error('Error loading community members:', error)
+      setError('メンバー情報の取得に失敗しました')
+    } finally {
+      setLoadingMembers(false)
+    }
+  }
+
+  const handleTransferCommunity = async (communityId: string, newOwnerId: string) => {
+    if (!user || !newOwnerId.trim()) return
+
+    setTransferring(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      // 新しいオーナーが存在するか確認
+      const { data: newOwner, error: ownerError } = await supabase
+        .from('profiles')
+        .select('id, name')
+        .eq('id', newOwnerId.trim())
+        .single()
+
+      if (ownerError || !newOwner) {
+        setError('指定されたユーザーが見つかりません')
+        setTransferring(false)
+        return
+      }
+
+      // コミュニティのオーナーを更新
+      const { error: updateError } = await supabase
+        .from('communities')
+        .update({ owner_id: newOwnerId.trim() })
+        .eq('id', communityId)
+        .eq('owner_id', user.id) // セキュリティ: 現在のオーナーのみ更新可能
+
+      if (updateError) throw updateError
+
+      setSuccess(`${newOwner.name}さんにコミュニティのオーナー権限を移管しました`)
+      await checkOwnedCommunities()
+      setTimeout(() => {
+        setShowCommunityTransferModal(false)
+        setSelectedCommunityId(null)
+        setTransferTargetUserId('')
+        setCommunityMembers([])
+        setSuccess('')
+      }, 2000)
+    } catch (error: any) {
+      setError(error.message || 'コミュニティの移管に失敗しました')
+    } finally {
+      setTransferring(false)
+    }
+  }
+
+  const handleDeleteCommunity = async (communityId: string) => {
+    if (!user) return
+
+    if (!confirm('このコミュニティを削除しますか？この操作は取り消せません。')) return
+
+    setLoading(true)
+    setError('')
+
+    try {
+      // コミュニティを削除（CASCADEで関連データも削除される）
+      const { error: deleteError } = await supabase
+        .from('communities')
+        .delete()
+        .eq('id', communityId)
+        .eq('owner_id', user.id) // セキュリティ: オーナーのみ削除可能
+
+      if (deleteError) throw deleteError
+
+      setSuccess('コミュニティを削除しました')
+      await checkOwnedCommunities()
+    } catch (error: any) {
+      setError(error.message || 'コミュニティの削除に失敗しました')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleDeleteAccount = async () => {
     if (!user) return
     if (deleteConfirm !== '退会') {
       setError('「退会」と入力してください')
+      return
+    }
+
+    // 組織アカウントでコミュニティのオーナーがいる場合は退会不可
+    if (user.account_type !== 'individual' && ownedCommunities.length > 0) {
+      setError('コミュニティのオーナーであるため、退会できません。まずコミュニティの移管または削除を行ってください。')
+      setShowDeleteModal(false)
       return
     }
 
@@ -419,6 +577,36 @@ export default function SettingsPage() {
                          accountData.account_type === 'government' ? '政府機関アカウント' :
                          '不明'}
                       </div>
+                      {/* 個人アカウントまたは未認証の組織アカウントの場合、組織認証申請へのリンクを表示 */}
+                      {(accountData.account_type === 'individual' || 
+                        (accountData.account_type !== 'individual' && user && user.verification_status !== 'verified')) && (
+                        <div className="mt-2">
+                          <Link 
+                            href="/verification/request" 
+                            className="inline-flex items-center text-sm text-primary-600 hover:text-primary-700 font-medium"
+                          >
+                            <Building2 className="h-4 w-4 mr-1" />
+                            組織認証申請
+                          </Link>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {accountData.account_type === 'individual'
+                              ? '個人アカウントから組織アカウント（教育機関・企業・政府機関）として認証を受けることができます'
+                              : '組織アカウントとして認証を受けることで、コミュニティ作成などの機能がご利用いただけます'}
+                          </p>
+                        </div>
+                      )}
+                      {/* 認証済みの組織アカウントの場合、認証ステータスを表示 */}
+                      {accountData.account_type !== 'individual' && user && user.verification_status === 'verified' && (
+                        <div className="mt-2">
+                          <div className="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
+                            <CheckCircle className="h-3 w-3 mr-1" />
+                            認証済み
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            組織アカウントとして認証されています
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -835,6 +1023,57 @@ export default function SettingsPage() {
                 <div className="card space-y-6">
                   <h2 className="text-xl font-semibold text-gray-900">退会</h2>
 
+                  {/* 組織アカウントでコミュニティのオーナーがいる場合 */}
+                  {user && user.account_type !== 'individual' && ownedCommunities.length > 0 && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+                      <h3 className="text-lg font-semibold text-yellow-800 mb-2 flex items-center">
+                        <Building2 className="h-5 w-5 mr-2" />
+                        コミュニティの管理が必要です
+                      </h3>
+                      <p className="text-sm text-yellow-800 mb-4">
+                        あなたは{ownedCommunities.length}つのコミュニティのオーナーです。退会する前に、以下のいずれかの操作を行ってください：
+                      </p>
+                      <ul className="list-disc list-inside text-sm text-yellow-800 mb-4 space-y-1">
+                        <li>コミュニティのオーナー権限を他のメンバーに移管する</li>
+                        <li>コミュニティを削除して運営を終了する</li>
+                      </ul>
+                      
+                      <div className="space-y-3">
+                        {ownedCommunities.map((community) => (
+                          <div key={community.id} className="bg-white rounded-lg p-3 border border-yellow-300">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="font-semibold text-gray-900">{community.name}</h4>
+                              <span className="text-xs text-gray-500">
+                                {community.member_count || 0}名のメンバー
+                              </span>
+                            </div>
+                            {community.description && (
+                              <p className="text-xs text-gray-600 mb-3">{community.description}</p>
+                            )}
+                            <div className="flex space-x-2">
+                              <button
+                                onClick={async () => {
+                                  setSelectedCommunityId(community.id)
+                                  setShowCommunityTransferModal(true)
+                                  await loadCommunityMembers(community.id)
+                                }}
+                                className="btn-secondary text-sm"
+                              >
+                                オーナー権限を移管
+                              </button>
+                              <button
+                                onClick={() => handleDeleteCommunity(community.id)}
+                                className="btn-secondary text-sm text-red-600 hover:bg-red-50"
+                              >
+                                コミュニティを削除
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="border-t border-gray-200 pt-6">
                     <h3 className="text-lg font-semibold text-red-600 mb-4">危険な操作</h3>
                     <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -844,11 +1083,17 @@ export default function SettingsPage() {
                       </p>
                       <button
                         onClick={() => setShowDeleteModal(true)}
-                        className="btn-secondary bg-red-600 hover:bg-red-700 text-white"
+                        disabled={user && user.account_type !== 'individual' && ownedCommunities.length > 0}
+                        className="btn-secondary bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
                         退会する
                       </button>
+                      {user && user.account_type !== 'individual' && ownedCommunities.length > 0 && (
+                        <p className="text-xs text-red-700 mt-2">
+                          コミュニティの管理を完了してから退会できます
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -876,6 +1121,11 @@ export default function SettingsPage() {
               placeholder="退会"
               className="input-field mb-4"
             />
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4 text-sm">
+                {error}
+              </div>
+            )}
             <div className="flex space-x-4">
               <button
                 onClick={() => {
@@ -893,6 +1143,118 @@ export default function SettingsPage() {
                 className="btn-primary bg-red-600 hover:bg-red-700 text-white flex-1 disabled:opacity-50"
               >
                 {loading ? '退会処理中...' : '退会する'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* コミュニティ移管モーダル */}
+      {showCommunityTransferModal && selectedCommunityId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">コミュニティのオーナー権限を移管</h3>
+            <p className="text-gray-600 mb-4">
+              新しいオーナーを選択してください。この操作は取り消せません。
+            </p>
+            
+            {loadingMembers ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+                <p className="text-sm text-gray-600 mt-2">メンバーを読み込み中...</p>
+              </div>
+            ) : communityMembers.length > 0 ? (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  新しいオーナーを選択 <span className="text-red-500">*</span>
+                </label>
+                <div className="space-y-2 max-h-60 overflow-y-auto border border-gray-200 rounded-lg p-2">
+                  {communityMembers.map((member) => (
+                    <button
+                      key={member.id}
+                      onClick={() => setTransferTargetUserId(member.user_id)}
+                      className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
+                        transferTargetUserId === member.user_id
+                          ? 'border-primary-500 bg-primary-50'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="flex-shrink-0">
+                          {member.user?.icon_url ? (
+                            <img
+                              src={member.user.icon_url}
+                              alt={member.user.name}
+                              className="h-10 w-10 rounded-full"
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
+                              <User className="h-5 w-5 text-primary-600" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900 truncate">{member.user?.name || '不明'}</p>
+                          <p className="text-xs text-gray-500 truncate">{member.user?.email || '不明'}</p>
+                        </div>
+                        {transferTargetUserId === member.user_id && (
+                          <CheckCircle className="h-5 w-5 text-primary-600 flex-shrink-0" />
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-yellow-800">
+                  このコミュニティには承認済みメンバーがいません。ユーザーIDを直接入力してください。
+                </p>
+                <div className="mt-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    新しいオーナーのユーザーID <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={transferTargetUserId}
+                    onChange={(e) => setTransferTargetUserId(e.target.value)}
+                    placeholder="ユーザーID（UUID）"
+                    className="input-field w-full"
+                  />
+                </div>
+              </div>
+            )}
+            
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4 text-sm">
+                {error}
+              </div>
+            )}
+            {success && (
+              <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded-lg mb-4 text-sm">
+                {success}
+              </div>
+            )}
+            <div className="flex space-x-4">
+              <button
+                onClick={() => {
+                  setShowCommunityTransferModal(false)
+                  setSelectedCommunityId(null)
+                  setTransferTargetUserId('')
+                  setCommunityMembers([])
+                  setError('')
+                  setSuccess('')
+                }}
+                className="btn-secondary flex-1"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => handleTransferCommunity(selectedCommunityId, transferTargetUserId)}
+                disabled={transferring || !transferTargetUserId.trim()}
+                className="btn-primary flex-1 disabled:opacity-50"
+              >
+                {transferring ? '移管中...' : '移管する'}
               </button>
             </div>
           </div>

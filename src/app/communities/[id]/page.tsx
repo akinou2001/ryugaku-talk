@@ -1,19 +1,19 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
-import { getCommunityById, getCommunityStats, getCommunityMembers, getCommunityPosts, getCommunityEvents, requestCommunityMembership, updateMembershipStatus, createEvent, registerEvent, cancelEventRegistration, getEventParticipants, updateEvent, deleteEvent, updateCommunity } from '@/lib/community'
+import { getCommunityById, getCommunityStats, getCommunityMembers, getCommunityPosts, getCommunityEvents, requestCommunityMembership, updateMembershipStatus, createEvent, registerEvent, cancelEventRegistration, getEventParticipants, updateEvent, deleteEvent, updateCommunity, getCommunityChannels, createChannel, deleteChannel, getChannelMessages, sendChannelMessage } from '@/lib/community'
 import { uploadFiles, uploadFile, validateFileType, validateFileSize, FILE_TYPES, getFileIcon, isImageFile } from '@/lib/storage'
-import { getQuests, createQuest, requestQuestCompletion, updateQuestCompletionStatus, getQuestCompletions, updateQuest, deleteQuest } from '@/lib/quest'
+import { getQuests, createQuest, requestQuestCompletion, updateQuestCompletionStatus, getQuestCompletions, updateQuest, deleteQuest, getQuestPostCounts, getQuestPosts } from '@/lib/quest'
 import type { Community, Quest, QuestCompletion, Post, Event, CommunityMember } from '@/lib/supabase'
-import { ArrowLeft, Plus, Users, Building2, CheckCircle, X, Clock, MessageSquare, Calendar, UserPlus, Settings, MapPin, Upload, File, Image as ImageIcon, Edit, Trash2, Award, Heart } from 'lucide-react'
+import { ArrowLeft, Plus, Users, Building2, CheckCircle, X, Clock, MessageSquare, Calendar, UserPlus, Settings, MapPin, Upload, File, Image as ImageIcon, Edit, Trash2, Award, Heart, Archive, ArchiveRestore, Hash, Send } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
 
-type TabType = 'timeline' | 'members' | 'events' | 'quests'
+type TabType = 'timeline' | 'members' | 'events' | 'quests' | 'channels'
 
 export default function CommunityDetail() {
   const { user } = useAuth()
@@ -65,6 +65,8 @@ export default function CommunityDetail() {
   const [showCreateQuest, setShowCreateQuest] = useState(false)
   const [showCompletionForm, setShowCompletionForm] = useState<string | null>(null)
   const [questCompletions, setQuestCompletions] = useState<Record<string, QuestCompletion[]>>({})
+  const [questPostCounts, setQuestPostCounts] = useState<Map<string, number>>(new Map())
+  const [questPostAuthors, setQuestPostAuthors] = useState<Record<string, Array<{ id: string; name: string; icon_url?: string }>>>({})
 
   // クエスト作成フォーム
   const [questForm, setQuestForm] = useState({
@@ -91,6 +93,24 @@ export default function CommunityDetail() {
   const [communityCoverImagePreview, setCommunityCoverImagePreview] = useState<string | null>(null)
   const [communityCoverImageUploading, setCommunityCoverImageUploading] = useState(false)
 
+  // チャンネル
+  const [channels, setChannels] = useState<any[]>([])
+  const [channelsLoading, setChannelsLoading] = useState(false)
+  const [showCreateChannel, setShowCreateChannel] = useState(false)
+  const [channelForm, setChannelForm] = useState({
+    name: '',
+    description: '',
+    member_permission: 'auto' as 'auto' | 'request'
+  })
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null)
+  const [channelMessages, setChannelMessages] = useState<any[]>([])
+  const [channelMessagesLoading, setChannelMessagesLoading] = useState(false)
+  const [newChannelMessage, setNewChannelMessage] = useState('')
+  const [sendingMessage, setSendingMessage] = useState(false)
+  const [channelMessageFiles, setChannelMessageFiles] = useState<File[]>([])
+  const [channelMessageFilesUploading, setChannelMessageFilesUploading] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (communityId) {
       fetchCommunity()
@@ -111,8 +131,12 @@ export default function CommunityDetail() {
   // URLパラメータからタブを設定
   useEffect(() => {
     const tabParam = searchParams.get('tab')
-    if (tabParam && ['timeline', 'members', 'events', 'quests'].includes(tabParam)) {
+    if (tabParam && ['timeline', 'members', 'events', 'quests', 'channels'].includes(tabParam)) {
       setActiveTab(tabParam as TabType)
+    }
+    const channelParam = searchParams.get('channel')
+    if (channelParam) {
+      setSelectedChannelId(channelParam)
     }
   }, [searchParams])
 
@@ -132,6 +156,49 @@ export default function CommunityDetail() {
   }, [activeTab, events, quests])
 
   useEffect(() => {
+    if (selectedChannelId) {
+      fetchChannelMessages(selectedChannelId)
+      // リアルタイムでメッセージを監視
+      const channel = supabase
+        .channel(`channel-messages:${selectedChannelId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'community_room_messages',
+            filter: `room_id=eq.${selectedChannelId}`
+          },
+          (payload) => {
+            const newMsg = payload.new as any
+            // 送信者情報を取得
+            supabase
+              .from('profiles')
+              .select('id, name, icon_url, account_type, verification_status, organization_name, is_operator')
+              .eq('id', newMsg.sender_id)
+              .single()
+              .then(({ data: sender }) => {
+                setChannelMessages((prev) => {
+                  if (prev.some(m => m.id === newMsg.id)) return prev
+                  return [...prev, { ...newMsg, sender }]
+                })
+                scrollToBottom()
+              })
+          }
+        )
+        .subscribe()
+
+      return () => {
+        supabase.removeChannel(channel)
+      }
+    }
+  }, [selectedChannelId])
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [channelMessages])
+
+  useEffect(() => {
     if (community && isMember) {
       switch (activeTab) {
         case 'timeline':
@@ -146,7 +213,13 @@ export default function CommunityDetail() {
         case 'quests':
           fetchQuests()
           break
+        case 'channels':
+          fetchChannels()
+          break
       }
+    } else if (community && activeTab === 'channels') {
+      // メンバーでなくてもチャンネル一覧は表示可能（閲覧のみ）
+      fetchChannels()
     }
   }, [activeTab, community, isMember])
 
@@ -267,6 +340,38 @@ export default function CommunityDetail() {
       const data = await getQuests(communityId, user?.id)
       setQuests(data || [])
       
+      // クエストに紐づく投稿数を取得
+      if (data && data.length > 0) {
+        const counts = await getQuestPostCounts(data.map(q => q.id))
+        setQuestPostCounts(counts)
+        
+        // 各クエストの回答者の情報を取得
+        const authorsMap: Record<string, Array<{ id: string; name: string; icon_url?: string }>> = {}
+        for (const quest of data) {
+          try {
+            const posts = await getQuestPosts(quest.id)
+            // 重複を除去して回答者の情報を取得
+            const uniqueAuthors = new Map<string, { id: string; name: string; icon_url?: string }>()
+            posts.forEach(post => {
+              if (post.author_id && post.author) {
+                if (!uniqueAuthors.has(post.author_id)) {
+                  uniqueAuthors.set(post.author_id, {
+                    id: post.author_id,
+                    name: post.author.name || '不明',
+                    icon_url: post.author.icon_url
+                  })
+                }
+              }
+            })
+            authorsMap[quest.id] = Array.from(uniqueAuthors.values())
+          } catch (error) {
+            console.error(`Error fetching authors for quest ${quest.id}:`, error)
+            authorsMap[quest.id] = []
+          }
+        }
+        setQuestPostAuthors(authorsMap)
+      }
+      
       // クエスト作成者の場合、各クエストの完了申請を取得
       if (isOwner && user && data) {
         const completionsMap: Record<string, QuestCompletion[]> = {}
@@ -288,6 +393,19 @@ export default function CommunityDetail() {
       setQuests([])
     } finally {
       setQuestsLoading(false)
+    }
+  }
+
+  const fetchChannels = async () => {
+    try {
+      setChannelsLoading(true)
+      const data = await getCommunityChannels(communityId, user?.id)
+      setChannels(data || [])
+    } catch (error: any) {
+      console.error('Error fetching channels:', error)
+      setError(error.message || 'チャンネルの取得に失敗しました')
+    } finally {
+      setChannelsLoading(false)
     }
   }
 
@@ -529,11 +647,15 @@ export default function CommunityDetail() {
     }
 
     try {
+      setError('')
       await deleteQuest(questId)
       await fetchQuests()
       await fetchPosts() // タイムラインも更新
+      // 成功メッセージを表示（オプション）
     } catch (error: any) {
+      console.error('Error deleting quest:', error)
       setError(error.message || 'クエストの削除に失敗しました')
+      alert(error.message || 'クエストの削除に失敗しました')
     }
   }
 
@@ -667,6 +789,42 @@ export default function CommunityDetail() {
     }
   }
 
+  const handleArchiveCommunity = async () => {
+    if (!isOwner) return
+    if (!confirm('このコミュニティをアーカイブしますか？アーカイブされたコミュニティは検索結果に表示されなくなりますが、既存のメンバーは引き続きアクセスできます。')) {
+      return
+    }
+
+    try {
+      setError('')
+      await updateCommunity(communityId, {
+        is_archived: true
+      })
+      await fetchCommunity()
+      alert('コミュニティをアーカイブしました')
+    } catch (error: any) {
+      setError(error.message || 'アーカイブに失敗しました')
+    }
+  }
+
+  const handleUnarchiveCommunity = async () => {
+    if (!isOwner) return
+    if (!confirm('このコミュニティのアーカイブを解除しますか？')) {
+      return
+    }
+
+    try {
+      setError('')
+      await updateCommunity(communityId, {
+        is_archived: false
+      })
+      await fetchCommunity()
+      alert('アーカイブを解除しました')
+    } catch (error: any) {
+      setError(error.message || 'アーカイブ解除に失敗しました')
+    }
+  }
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return date.toLocaleDateString('ja-JP', {
@@ -685,6 +843,141 @@ export default function CommunityDetail() {
       hour: '2-digit',
       minute: '2-digit'
     })
+  }
+
+  const fetchChannelMessages = async (channelId: string) => {
+    try {
+      setChannelMessagesLoading(true)
+      const data = await getChannelMessages(channelId, 100)
+      setChannelMessages(data || [])
+      scrollToBottom()
+    } catch (error: any) {
+      console.error('Error fetching channel messages:', error)
+      setError(error.message || 'メッセージの取得に失敗しました')
+    } finally {
+      setChannelMessagesLoading(false)
+    }
+  }
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, 100)
+  }
+
+  const handleCreateChannel = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user || !isMember) {
+      setError('コミュニティメンバーのみチャンネルを作成できます')
+      return
+    }
+
+    try {
+      await createChannel(
+        communityId,
+        channelForm.name,
+        channelForm.description || undefined,
+        channelForm.member_permission
+      )
+      setChannelForm({ name: '', description: '', member_permission: 'auto' })
+      setShowCreateChannel(false)
+      await fetchChannels()
+    } catch (error: any) {
+      setError(error.message || 'チャンネルの作成に失敗しました')
+    }
+  }
+
+  const handleDeleteChannel = async (channelId: string) => {
+    if (!confirm('本当にこのチャンネルを削除しますか？この操作は取り消せません。')) {
+      return
+    }
+
+    try {
+      await deleteChannel(channelId)
+      await fetchChannels()
+      if (selectedChannelId === channelId) {
+        setSelectedChannelId(null)
+        setChannelMessages([])
+      }
+    } catch (error: any) {
+      setError(error.message || 'チャンネルの削除に失敗しました')
+    }
+  }
+
+  const handleChannelMessageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    setChannelMessageFiles(prev => [...prev, ...files])
+  }
+
+  const handleRemoveChannelMessageFile = (index: number) => {
+    setChannelMessageFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleSendChannelMessage = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user || !selectedChannelId || sendingMessage) return
+    if (!newChannelMessage.trim() && channelMessageFiles.length === 0) return
+
+    setSendingMessage(true)
+    setChannelMessageFilesUploading(true)
+    setError('') // エラーをクリア
+    try {
+      // ファイルをアップロード
+      let attachments: Array<{ url: string; filename: string; type: string }> = []
+      if (channelMessageFiles.length > 0) {
+        console.log('ファイルアップロード開始:', channelMessageFiles.map(f => ({ name: f.name, type: f.type, size: f.size })))
+        
+        // ファイルタイプとサイズを検証
+        for (const file of channelMessageFiles) {
+          console.log(`ファイル検証: ${file.name}, タイプ: ${file.type}, サイズ: ${(file.size / 1024 / 1024).toFixed(2)}MB`)
+          
+          if (!validateFileType(file, FILE_TYPES.EVENT_ATTACHMENTS)) {
+            const errorMsg = `${file.name}はサポートされていないファイル形式です（タイプ: ${file.type}）`
+            console.error(errorMsg)
+            throw new Error(errorMsg)
+          }
+          if (!validateFileSize(file, 10)) { // 10MB制限
+            const errorMsg = `${file.name}は10MB以下である必要があります（現在: ${(file.size / 1024 / 1024).toFixed(2)}MB）`
+            console.error(errorMsg)
+            throw new Error(errorMsg)
+          }
+        }
+        
+        console.log('バケット: channel-attachments にアップロード開始')
+        attachments = await uploadFiles(channelMessageFiles, 'channel-attachments', `channel-${selectedChannelId}`)
+        console.log('ファイルアップロード成功:', attachments)
+      }
+
+      const message = await sendChannelMessage(
+        selectedChannelId, 
+        newChannelMessage.trim(),
+        attachments.length > 0 ? attachments : undefined
+      )
+      setChannelMessages((prev) => [...prev, message])
+      setNewChannelMessage('')
+      setChannelMessageFiles([])
+      scrollToBottom()
+    } catch (error: any) {
+      console.error('メッセージ送信エラー:', error)
+      const errorMessage = error.message || 'メッセージの送信に失敗しました'
+      setError(errorMessage)
+      // エラーメッセージを3秒後に自動で消す
+      setTimeout(() => setError(''), 5000)
+    } finally {
+      setSendingMessage(false)
+      setChannelMessageFilesUploading(false)
+    }
+  }
+
+  const formatMessageTime = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
+    
+    if (diffInMinutes < 1) return 'たった今'
+    if (diffInMinutes < 60) return `${diffInMinutes}分前`
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}時間前`
+    return date.toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
   }
 
   if (loading) {
@@ -738,20 +1031,35 @@ export default function CommunityDetail() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center space-x-4">
             <button
-              onClick={() => router.back()}
+              onClick={() => router.push('/communities')}
               className="flex items-center text-gray-600 hover:text-primary-600 transition-colors"
             >
               <ArrowLeft className="h-5 w-5 mr-2" />
               戻る
             </button>
             <div>
+              <div className="flex items-center space-x-2">
               <h1 className="text-3xl font-bold text-gray-900">{community.name}</h1>
+                {community.is_archived && (
+                  <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
+                    アーカイブ済み
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-gray-500 mt-1">
                 {isGuild ? 'サークル' : '公式コミュニティ'} • {formatDate(community.created_at)}
               </p>
             </div>
           </div>
         </div>
+
+        {community.is_archived && (
+          <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg mb-4">
+            <p className="text-sm">
+              このコミュニティはアーカイブされています。検索結果には表示されませんが、既存のメンバーは引き続きアクセスできます。
+            </p>
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
@@ -897,6 +1205,7 @@ export default function CommunityDetail() {
                         <AccountBadge
                           accountType={community.owner.account_type}
                           verificationStatus={community.owner.verification_status}
+                          isOperator={community.owner.is_operator}
                         />
                       )}
                     </div>
@@ -977,6 +1286,21 @@ export default function CommunityDetail() {
                 >
                   <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 inline mr-1.5 sm:mr-2" />
                   タイムライン
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab('channels')
+                    setSelectedChannelId(null)
+                    router.push(`/communities/${communityId}?tab=channels`, { scroll: false })
+                  }}
+                  className={`px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
+                    activeTab === 'channels'
+                      ? 'text-primary-600 border-b-2 border-primary-600'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <Hash className="h-3 w-3 sm:h-4 sm:w-4 inline mr-1.5 sm:mr-2" />
+                  チャンネル
                 </button>
                 <button
                   onClick={() => setActiveTab('members')}
@@ -1217,9 +1541,11 @@ export default function CommunityDetail() {
                       {pendingMembers.map((member) => (
                         <div key={member.id} className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                           <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-                              <Users className="h-5 w-5 text-primary-600" />
-                            </div>
+                            <UserAvatar
+                              iconUrl={member.user?.icon_url}
+                              name={member.user?.name}
+                              size="md"
+                            />
                             <div>
                               <p className="font-medium text-gray-900">{member.user?.name || '不明'}</p>
                               <p className="text-xs text-gray-500">申請日: {formatDate(member.created_at)}</p>
@@ -1263,9 +1589,11 @@ export default function CommunityDetail() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {members.map((member) => (
                       <div key={member.id} className="flex items-center space-x-3 p-3 border border-gray-200 rounded-lg">
-                        <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-                          <Users className="h-5 w-5 text-primary-600" />
-                        </div>
+                        <UserAvatar
+                          iconUrl={member.user?.icon_url}
+                          name={member.user?.name}
+                          size="md"
+                        />
                         <div className="flex-1">
                           <p className="font-medium text-gray-900">{member.user?.name || '不明'}</p>
                           <p className="text-xs text-gray-500">
@@ -1913,7 +2241,12 @@ export default function CommunityDetail() {
                             <div className="flex items-start justify-between mb-2 gap-2">
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-start justify-between mb-1 gap-2">
-                                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 break-words flex-1 min-w-0">{quest.title}</h3>
+                                  <Link
+                                    href={`/communities/${communityId}/quests/${quest.id}`}
+                                    className="text-base sm:text-lg font-semibold text-gray-900 break-words flex-1 min-w-0 hover:text-primary-600 transition-colors"
+                                  >
+                                    {quest.title}
+                                  </Link>
                                   {quest.created_by === user?.id && (
                                     <div className="flex items-center space-x-2 flex-shrink-0">
                                       <button
@@ -1931,8 +2264,12 @@ export default function CommunityDetail() {
                                         <Edit className="h-4 w-4" />
                                       </button>
                                       <button
-                                        onClick={() => handleDeleteQuest(quest.id)}
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleDeleteQuest(quest.id)
+                                        }}
                                         className="p-1 text-gray-600 hover:text-red-600"
+                                        title="クエストを削除"
                                       >
                                         <Trash2 className="h-4 w-4" />
                                       </button>
@@ -1945,10 +2282,17 @@ export default function CommunityDetail() {
                             <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 space-y-1 sm:space-y-0 text-xs text-gray-500">
                               <span className="truncate">作成者: {quest.creator?.name || '不明'}</span>
                               <span className="whitespace-nowrap">{formatDate(quest.created_at)}</span>
+                              <span className="flex items-center space-x-1 whitespace-nowrap">
+                                <MessageSquare className="h-3 w-3 flex-shrink-0" />
+                                <span>回答: {questPostCounts.get(quest.id) || 0}件</span>
+                              </span>
                               {quest.deadline && (
-                                <span className="flex items-center space-x-1">
+                                <span className={`flex items-center space-x-1 ${quest.status === 'completed' || (quest.deadline && new Date(quest.deadline) < new Date()) ? 'text-red-600 font-semibold' : ''}`}>
                                   <Clock className="h-3 w-3 flex-shrink-0" />
-                                  <span className="break-words">期限: {formatDateTime(quest.deadline)}</span>
+                                  <span className="break-words">
+                                    期限: {formatDateTime(quest.deadline)}
+                                    {(quest.status === 'completed' || (quest.deadline && new Date(quest.deadline) < new Date())) && ' (締切済み)'}
+                                  </span>
                                 </span>
                               )}
                               {quest.reward_amount && (
@@ -1959,7 +2303,12 @@ export default function CommunityDetail() {
                               )}
                             </div>
                           </div>
-                          <div className="flex-shrink-0">
+                          <div className="flex-shrink-0 flex flex-col items-end gap-1">
+                            {(quest.status === 'completed' || (quest.deadline && new Date(quest.deadline) < new Date())) && (
+                              <span className="px-2 py-1 bg-gray-200 text-gray-700 rounded text-xs font-medium whitespace-nowrap">
+                                締切済み
+                              </span>
+                            )}
                             {quest.user_completion_status === 'approved' && (
                               <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium whitespace-nowrap">
                                 完了済み
@@ -1973,54 +2322,22 @@ export default function CommunityDetail() {
                           </div>
                         </div>
 
-                        {/* クエスト完了申請 */}
-                        {isMember && !quest.user_completion_status && (
-                          <div className="mt-3">
-                            {showCompletionForm === quest.id ? (
-                              <div className="p-3 bg-gray-50 rounded border border-gray-200">
-                                <h4 className="text-sm font-medium text-gray-900 mb-2">完了申請</h4>
-                                <div className="space-y-2 mb-2">
-                                  <input
-                                    type="text"
-                                    value={completionForm.proof_text}
-                                    onChange={(e) => setCompletionForm(prev => ({ ...prev, proof_text: e.target.value }))}
-                                    placeholder="完了証明（テキスト）"
-                                    className="input-field text-sm"
-                                  />
-                                  <input
-                                    type="url"
-                                    value={completionForm.proof_url}
-                                    onChange={(e) => setCompletionForm(prev => ({ ...prev, proof_url: e.target.value }))}
-                                    placeholder="完了証明（URL）"
-                                    className="input-field text-sm"
-                                  />
+                        {/* 回答するボタン（締切済みでない場合のみ） */}
+                        {isMember && quest.status !== 'completed' && (!quest.deadline || new Date(quest.deadline) >= new Date()) && (
+                          <div className="mt-3 flex items-center space-x-2">
+                            <Link
+                              href={`/posts/new?quest_id=${quest.id}&community_id=${communityId}`}
+                              className="btn-primary text-sm inline-flex items-center"
+                            >
+                              <MessageSquare className="h-4 w-4 mr-1" />
+                              回答する
+                            </Link>
                                 </div>
-                                <div className="flex space-x-2">
-                                  <button
-                                    onClick={() => handleRequestCompletion(quest.id)}
-                                    className="btn-primary text-sm"
-                                  >
-                                    申請する
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setShowCompletionForm(null)
-                                      setCompletionForm({ proof_text: '', proof_url: '' })
-                                    }}
-                                    className="btn-secondary text-sm"
-                                  >
-                                    キャンセル
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => setShowCompletionForm(quest.id)}
-                                className="btn-secondary text-sm"
-                              >
-                                完了を申請
-                              </button>
-                            )}
+                        )}
+                        {/* 締切済みの場合のメッセージ */}
+                        {isMember && (quest.status === 'completed' || (quest.deadline && new Date(quest.deadline) < new Date())) && (
+                          <div className="mt-3 p-2 bg-gray-100 border border-gray-300 rounded text-sm text-gray-600">
+                            このクエストは締め切られています
                           </div>
                         )}
 
@@ -2086,15 +2403,349 @@ export default function CommunityDetail() {
                             </div>
                           </div>
                         )}
-                        {isOwner && quest.created_by === user?.id && (!questCompletions[quest.id] || questCompletions[quest.id].length === 0) && (
+                        {isOwner && quest.created_by === user?.id && (
                           <div className="mt-3 pt-3 border-t border-gray-200">
-                            <p className="text-xs text-gray-500">完了申請はまだありません</p>
+                            <div className="flex items-center space-x-2 flex-wrap">
+                              <span className="text-sm font-medium text-gray-900">
+                                回答が{questPostCounts.get(quest.id) || 0}件あります。
+                              </span>
+                              {questPostAuthors[quest.id] && questPostAuthors[quest.id].length > 0 && (
+                                <div className="flex -space-x-2">
+                                  {questPostAuthors[quest.id].slice(0, 10).map((author) => (
+                                    <div
+                                      key={author.id}
+                                      className="relative"
+                                      title={author.name}
+                                    >
+                                      <UserAvatar
+                                        iconUrl={author.icon_url}
+                                        name={author.name}
+                                        size="sm"
+                                      />
+                                    </div>
+                                  ))}
+                                  {questPostAuthors[quest.id].length > 10 && (
+                                    <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-xs font-medium text-gray-700 border-2 border-white">
+                                      +{questPostAuthors[quest.id].length - 10}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                           </>
                         )}
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* チャンネル */}
+            {activeTab === 'channels' && (
+              <div className="card">
+                {!selectedChannelId ? (
+                  <>
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-xl font-semibold text-gray-900">チャンネル</h2>
+                      {isMember && (
+                        <button
+                          onClick={() => setShowCreateChannel(true)}
+                          className="btn-primary flex items-center"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          チャンネルを作成
+                        </button>
+                      )}
+                    </div>
+
+                    {/* チャンネル作成フォーム */}
+                    {showCreateChannel && isMember && (
+                      <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-4">新しいチャンネル</h3>
+                        <form onSubmit={handleCreateChannel} className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              チャンネル名 <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={channelForm.name}
+                              onChange={(e) => setChannelForm(prev => ({ ...prev, name: e.target.value }))}
+                              required
+                              className="input-field"
+                              placeholder="例: 雑談、質問、イベントなど"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              説明（任意）
+                            </label>
+                            <textarea
+                              value={channelForm.description}
+                              onChange={(e) => setChannelForm(prev => ({ ...prev, description: e.target.value }))}
+                              rows={2}
+                              className="input-field"
+                              placeholder="チャンネルの説明を入力"
+                            />
+                          </div>
+                          <div className="flex space-x-2">
+                            <button type="submit" className="btn-primary">
+                              作成
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowCreateChannel(false)
+                                setChannelForm({ name: '', description: '', member_permission: 'auto' })
+                              }}
+                              className="btn-secondary"
+                            >
+                              キャンセル
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    )}
+
+                    {/* チャンネル一覧 */}
+                    {channelsLoading ? (
+                      <div className="animate-pulse space-y-4">
+                        {[...Array(3)].map((_, i) => (
+                          <div key={i} className="h-16 bg-gray-200 rounded"></div>
+                        ))}
+                      </div>
+                    ) : channels.length === 0 ? (
+                      <div className="text-center py-12">
+                        <Hash className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-gray-500">チャンネルがありません</p>
+                        {isMember ? (
+                          <button
+                            onClick={() => setShowCreateChannel(true)}
+                            className="mt-4 btn-primary inline-flex items-center"
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            チャンネルを作成
+                          </button>
+                        ) : (
+                          <p className="text-sm text-gray-400 mt-2">コミュニティに参加してチャンネルを作成しましょう</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {channels.map((channel) => (
+                          <div
+                            key={channel.id}
+                            onClick={() => {
+                              setSelectedChannelId(channel.id)
+                            }}
+                            className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                          >
+                            <div className="flex items-center space-x-3 flex-1 min-w-0">
+                              <Hash className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-gray-900 truncate">{channel.name}</h3>
+                                {channel.description && (
+                                  <p className="text-sm text-gray-500 truncate">{channel.description}</p>
+                                )}
+                                <div className="flex items-center space-x-4 text-xs text-gray-400 mt-1">
+                                  <span>{channel.message_count || 0}件のメッセージ</span>
+                                  {channel.creator && (
+                                    <span>作成者: {channel.creator.name}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            {isOwner && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleDeleteChannel(channel.id)
+                                }}
+                                className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                                title="チャンネルを削除"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+              </div>
+            )}
+          </>
+                ) : (
+                  <div className="flex flex-col h-[600px]">
+                    {/* チャンネルヘッダー */}
+                    <div className="flex items-center justify-between pb-4 border-b border-gray-200 mb-4">
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => {
+                            setSelectedChannelId(null)
+                          }}
+                          className="p-1 text-gray-600 hover:text-primary-600 transition-colors"
+                        >
+                          <ArrowLeft className="h-5 w-5" />
+                        </button>
+                        <Hash className="h-5 w-5 text-gray-400" />
+                        <h2 className="text-xl font-semibold text-gray-900">
+                          {channels.find(c => c.id === selectedChannelId)?.name || 'チャンネル'}
+                        </h2>
+                      </div>
+                    </div>
+
+                    {/* メッセージ一覧 */}
+                    <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
+                      {channelMessagesLoading ? (
+                        <div className="text-center py-8">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+                          <p className="text-sm text-gray-600 mt-2">読み込み中...</p>
+                        </div>
+                      ) : channelMessages.length === 0 ? (
+                        <div className="text-center py-12">
+                          <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                          <p className="text-gray-500">メッセージがありません</p>
+                          <p className="text-sm text-gray-400 mt-2">最初のメッセージを送信してみましょう</p>
+                        </div>
+                      ) : (
+                        <>
+                          {channelMessages.map((message) => (
+                            <div key={message.id} className="flex items-start space-x-3">
+                              <UserAvatar
+                                iconUrl={message.sender?.icon_url}
+                                name={message.sender?.name}
+                                size="sm"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center space-x-2 mb-1">
+                                  <span className="font-semibold text-gray-900 text-sm">
+                                    {message.sender?.name || '不明'}
+                                  </span>
+                                  {message.sender && (
+                                    <AccountBadge
+                                      accountType={message.sender.account_type}
+                                      verificationStatus={message.sender.verification_status}
+                                      isOperator={message.sender.is_operator}
+                                      size="sm"
+                                    />
+                                  )}
+                                  <span className="text-xs text-gray-400">
+                                    {formatMessageTime(message.created_at)}
+                                  </span>
+                                </div>
+                                {message.content && (
+                                  <p className="text-sm text-gray-700 whitespace-pre-wrap break-words mb-2">
+                                    {message.content}
+                                  </p>
+                                )}
+                                {/* 添付ファイル表示 */}
+                                {message.attachments && Array.isArray(message.attachments) && message.attachments.length > 0 && (
+                                  <div className="space-y-2 mt-2">
+                                    {message.attachments.map((attachment: any, index: number) => (
+                                      <div key={index}>
+                                        {isImageFile({ type: attachment.type } as File) ? (
+                                          <div className="mt-2">
+                                            <img
+                                              src={attachment.url}
+                                              alt={attachment.filename}
+                                              className="max-w-full max-h-64 rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
+                                              onClick={() => window.open(attachment.url, '_blank')}
+                                            />
+                                          </div>
+                                        ) : (
+                                          <a
+                                            href={attachment.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center space-x-2 p-2 bg-gray-50 rounded border border-gray-200 hover:bg-gray-100 transition-colors"
+                                          >
+                                            <span className="text-lg">{getFileIcon(attachment.type)}</span>
+                                            <span className="text-sm text-gray-700 flex-1 truncate">{attachment.filename}</span>
+                                            <File className="h-4 w-4 text-gray-400" />
+                                          </a>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          <div ref={messagesEndRef} />
+                        </>
+                      )}
+                    </div>
+
+                    {/* メッセージ送信フォーム */}
+                    {isMember && (
+                      <form onSubmit={handleSendChannelMessage} className="border-t border-gray-200 pt-4">
+                        {/* エラーメッセージ表示 */}
+                        {error && (
+                          <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg">
+                            <p className="text-sm font-medium">{error}</p>
+                          </div>
+                        )}
+                        {/* 選択されたファイル一覧 */}
+                        {channelMessageFiles.length > 0 && (
+                          <div className="mb-3 space-y-2">
+                            {channelMessageFiles.map((file, index) => (
+                              <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded border border-gray-200">
+                                <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                  <span className="text-lg">{getFileIcon(file.type)}</span>
+                                  <span className="text-sm text-gray-700 truncate flex-1">{file.name}</span>
+                                  <span className="text-xs text-gray-500">
+                                    ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveChannelMessageFile(index)}
+                                  className="ml-2 p-1 text-red-600 hover:text-red-800"
+                                >
+                                  <X className="h-4 w-4" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex items-center space-x-2">
+                          <label className="p-2 text-gray-600 hover:text-primary-600 cursor-pointer transition-colors">
+                            <Upload className="h-5 w-5" />
+                            <input
+                              type="file"
+                              multiple
+                              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,image/*"
+                              onChange={handleChannelMessageFileChange}
+                              className="hidden"
+                              disabled={sendingMessage || channelMessageFilesUploading}
+                            />
+                          </label>
+                          <input
+                            type="text"
+                            value={newChannelMessage}
+                            onChange={(e) => setNewChannelMessage(e.target.value)}
+                            placeholder="メッセージを入力..."
+                            className="input-field flex-1"
+                            disabled={sendingMessage || channelMessageFilesUploading}
+                          />
+                          <button
+                            type="submit"
+                            disabled={sendingMessage || channelMessageFilesUploading || (!newChannelMessage.trim() && channelMessageFiles.length === 0)}
+                            className="btn-primary flex items-center disabled:opacity-50"
+                          >
+                            {channelMessageFilesUploading ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            ) : (
+                              <Send className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                          対応形式: PDF, Word, Excel, PowerPoint, 画像（各ファイル10MB以下）
+                        </p>
+                      </form>
+                    )}
                   </div>
                 )}
               </div>
