@@ -1,16 +1,14 @@
 import { NextResponse } from "next/server";
 import { findRelevantPostsForQuery } from "@/lib/searchPosts";
 import { findSimilarUsers } from "@/lib/searchUsers";
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// OpenAI APIクライアントの初期化（遅延初期化）
-function getOpenAIClient() {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not set");
+// Gemini APIクライアントの初期化（遅延初期化）
+function getGeminiClient() {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not set");
   }
-  return new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
+  return new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 }
 
 /**
@@ -34,9 +32,9 @@ export async function POST(req: Request) {
       );
     }
 
-    // OpenAI APIキーの確認
-    if (!process.env.OPENAI_API_KEY) {
-      console.error("OPENAI_API_KEY is not set");
+    // Gemini APIキーの確認
+    if (!process.env.GEMINI_API_KEY) {
+      console.error("GEMINI_API_KEY is not set");
       return NextResponse.json(
         { error: "AI機能の設定が完了していません" },
         { status: 500 }
@@ -79,7 +77,7 @@ export async function POST(req: Request) {
     const mode = hasReferences ? "grounded" : "reasoning";
 
     // 5. AI回答を生成
-    const systemPrompt = mode === "grounded"
+    const systemInstruction = mode === "grounded"
       ? `あなたは留学支援コミュニティ「RyugakuTalk」のAIコンシェルジュです。
 ユーザーの質問に対して、提供された過去の投稿や外部情報を根拠として、親切で正確な回答を提供してください。
 
@@ -87,7 +85,8 @@ export async function POST(req: Request) {
 - 過去の投稿の内容を引用する場合は、「投稿: [タイトル]（投稿者: [名前]）」のように明記してください
 - 外部のウェブページの情報を参考にする場合は、「参考: [情報源]」のように出典を明記してください
 - 回答は日本語で、わかりやすく、親切に書いてください
-- 提供された情報に基づいて回答し、推測は最小限にしてください`
+- 提供された情報に基づいて回答し、推測は最小限にしてください
+- 回答はMarkdown形式で記述してください（見出し、リスト、太字などが使用可能です）`
       : `あなたは留学支援コミュニティ「RyugakuTalk」のAIコンシェルジュです。
 ユーザーの質問に対して、一般的な留学経験・制度・合理的推論に基づいて回答してください。
 
@@ -95,7 +94,8 @@ export async function POST(req: Request) {
 - 回答は日本語で、わかりやすく、親切に書いてください
 - これは一般的な推論に基づく回答であることを明記してください
 - 不確実な情報は推測であることを明示してください
-- 具体的な情報が必要な場合は、過去の投稿を参照するか、公式サイトを確認することを推奨してください`;
+- 具体的な情報が必要な場合は、過去の投稿を参照するか、公式サイトを確認することを推奨してください
+- 回答はMarkdown形式で記述してください（見出し、リスト、太字などが使用可能です）`;
 
     let userPrompt = `以下の質問に回答してください。\n\n質問: ${question_text}\n\n`;
 
@@ -125,18 +125,16 @@ export async function POST(req: Request) {
       userPrompt += `一般的な留学経験・制度・合理的推論に基づいて回答してください。これは推論に基づく回答であることを明記してください。`;
     }
 
-    const openai = getOpenAIClient();
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.7,
-      max_tokens: 1500,
+    const genAI = getGeminiClient();
+    // gemini-3-flash-preview: 最新の軽量で高速なモデル
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-3-flash-preview",
+      systemInstruction: systemInstruction,
     });
-
-    const answer_text = completion.choices[0]?.message?.content || "回答を生成できませんでした。";
+    
+    const result = await model.generateContent(userPrompt);
+    const response = await result.response;
+    const answer_text = response.text() || "回答を生成できませんでした。";
 
     // 引用情報を整形
     const citations = [
@@ -166,18 +164,29 @@ export async function POST(req: Request) {
   } catch (error: any) {
     console.error("Error in AI ask API:", error);
     
-    // OpenAI APIのエラーハンドリング
-    if (error?.status === 401) {
+    // Gemini APIのエラーハンドリング
+    if (error?.message?.includes("API key")) {
       return NextResponse.json(
-        { error: "OpenAI APIキーが無効です" },
+        { error: "Gemini APIキーが無効です" },
         { status: 500 }
       );
     }
     
-    if (error?.status === 429) {
+    if (error?.message?.includes("quota") || error?.message?.includes("rate limit")) {
       return NextResponse.json(
         { error: "APIの利用制限に達しました。しばらく待ってから再度お試しください。" },
         { status: 429 }
+      );
+    }
+
+    // モデルが見つからない場合のエラー（支払い登録が必要な可能性）
+    if (error?.message?.includes("404") || error?.message?.includes("not found")) {
+      return NextResponse.json(
+        { 
+          error: "指定されたモデルが見つかりません。APIキーの設定、支払い情報の登録、または利用可能なモデル名をご確認ください。",
+          details: error?.message || "モデルが見つかりません"
+        },
+        { status: 500 }
       );
     }
 
