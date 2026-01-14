@@ -2,12 +2,20 @@
 
 import { useRouter } from 'next/navigation'
 import { Sparkles } from 'lucide-react'
+import { useAuth } from './Providers'
 
 export function AIConciergeButton() {
   const router = useRouter()
+  const { user } = useAuth()
 
   const handleClick = () => {
-    router.push('/ai')
+    if (!user) {
+      // ログインしていない場合はログイン画面に遷移
+      router.push('/auth/signin')
+    } else {
+      // ログインしている場合はAIコンシェルジュページに遷移
+      router.push('/ai')
+    }
   }
 
   return (
