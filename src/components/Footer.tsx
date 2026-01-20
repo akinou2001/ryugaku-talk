@@ -36,7 +36,7 @@ export function Footer() {
               </li>
               <li>
                 <Link href="/map" className="text-gray-600 hover:text-primary-600 transition-colors">
-                  眺める
+                  マップ
                 </Link>
               </li>
               <li>

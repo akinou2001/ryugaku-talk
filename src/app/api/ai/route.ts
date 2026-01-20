@@ -2,6 +2,20 @@ import { NextResponse } from "next/server";
 import { findRelevantPostsForQuery } from "@/lib/searchPosts";
 import { findSimilarUsers } from "@/lib/searchUsers";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { createClient } from '@supabase/supabase-js';
+
+// サーバーサイド用のSupabaseクライアントを作成
+function getSupabaseServerClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  });
+}
 
 // Gemini APIクライアントの初期化（遅延初期化）
 function getGeminiClient() {
@@ -23,6 +37,27 @@ function getGeminiClient() {
  */
 export async function POST(req: Request) {
   try {
+    // 認証チェック
+    const authHeader = req.headers.get('authorization');
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json(
+        { error: "認証が必要です。ログインしてください。" },
+        { status: 401 }
+      );
+    }
+
+    const token = authHeader.substring(7);
+    const supabase = getSupabaseServerClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: "認証が必要です。ログインしてください。" },
+        { status: 401 }
+      );
+    }
+
     const { question_text, context } = await req.json();
 
     if (!question_text || typeof question_text !== 'string' || !question_text.trim()) {

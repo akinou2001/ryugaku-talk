@@ -49,7 +49,11 @@ export default function SettingsPage() {
   })
 
   // 退会
-  const [deleteConfirm, setDeleteConfirm] = useState('')
+  const [deleteConfirm, setDeleteConfirm] = useState({
+    understand: false,
+    dataLoss: false,
+    permanent: false
+  })
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [ownedCommunities, setOwnedCommunities] = useState<any[]>([])
   const [checkingCommunities, setCheckingCommunities] = useState(false)
@@ -413,8 +417,8 @@ export default function SettingsPage() {
 
   const handleDeleteAccount = async () => {
     if (!user) return
-    if (deleteConfirm !== '退会') {
-      setError('「退会」と入力してください')
+    if (!deleteConfirm.understand || !deleteConfirm.dataLoss || !deleteConfirm.permanent) {
+      setError('すべての確認項目にチェックを入れてください')
       return
     }
 
@@ -429,21 +433,43 @@ export default function SettingsPage() {
     setError('')
 
     try {
-      // プロフィールを削除（CASCADEで関連データも削除される）
+      // セッショントークンを取得
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setError('セッションが取得できませんでした。再度ログインしてください。')
+        setLoading(false)
+        return
+      }
+
+      // サーバーサイドAPI経由で認証ユーザーを削除
+      const deleteUserResponse = await fetch('/api/auth/delete-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ userId: user.id })
+      })
+
+      const deleteUserData = await deleteUserResponse.json()
+
+      if (!deleteUserResponse.ok) {
+        // 認証ユーザーの削除に失敗した場合は、エラーを表示して処理を中断
+        setError(deleteUserData.error || '認証ユーザーの削除に失敗しました。')
+        setLoading(false)
+        return
+      }
+
+      // 認証ユーザーの削除が成功したら、プロフィールも削除
+      // （CASCADEで自動削除される可能性があるが、念のため明示的に削除）
       const { error: deleteError } = await supabase
         .from('profiles')
         .delete()
         .eq('id', user.id)
 
-      if (deleteError) throw deleteError
-
-      // 認証ユーザーを削除
-      const { error: authDeleteError } = await supabase.auth.admin.deleteUser(user.id)
-      
-      // admin APIが使えない場合は、ユーザーにログアウトしてもらう
-      if (authDeleteError) {
-        console.error('Auth user deletion error:', authDeleteError)
-        // プロフィールは削除されたので、ログアウトしてから手動で削除してもらう
+      if (deleteError) {
+        // プロフィールの削除に失敗しても、認証ユーザーは削除されているので続行
+        console.error('Profile deletion error (ignored):', deleteError)
       }
 
       // ログアウト
@@ -1120,16 +1146,45 @@ export default function SettingsPage() {
             <p className="text-gray-600 mb-4">
               この操作は取り消せません。アカウントとすべてのデータが永久に削除されます。
             </p>
-            <p className="text-sm text-gray-600 mb-4">
-              退会を確認するには、「<strong>退会</strong>」と入力してください。
-            </p>
-            <input
-              type="text"
-              value={deleteConfirm}
-              onChange={(e) => setDeleteConfirm(e.target.value)}
-              placeholder="退会"
-              className="input-field mb-4"
-            />
+            
+            <div className="space-y-3 mb-4">
+              <label className="flex items-start space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={deleteConfirm.understand}
+                  onChange={(e) => setDeleteConfirm(prev => ({ ...prev, understand: e.target.checked }))}
+                  className="mt-1 h-4 w-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                />
+                <span className="text-sm text-gray-700">
+                  退会すると、すべての投稿、コメント、メッセージなどのデータが削除されることを理解しました
+                </span>
+              </label>
+              
+              <label className="flex items-start space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={deleteConfirm.dataLoss}
+                  onChange={(e) => setDeleteConfirm(prev => ({ ...prev, dataLoss: e.target.checked }))}
+                  className="mt-1 h-4 w-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                />
+                <span className="text-sm text-gray-700">
+                  データの損失は取り戻せないことを理解しました
+                </span>
+              </label>
+              
+              <label className="flex items-start space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={deleteConfirm.permanent}
+                  onChange={(e) => setDeleteConfirm(prev => ({ ...prev, permanent: e.target.checked }))}
+                  className="mt-1 h-4 w-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
+                />
+                <span className="text-sm text-gray-700">
+                  この操作が永久的で取り消せないことを理解しました
+                </span>
+              </label>
+            </div>
+            
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4 text-sm">
                 {error}
@@ -1139,7 +1194,11 @@ export default function SettingsPage() {
               <button
                 onClick={() => {
                   setShowDeleteModal(false)
-                  setDeleteConfirm('')
+                  setDeleteConfirm({
+                    understand: false,
+                    dataLoss: false,
+                    permanent: false
+                  })
                   setError('')
                 }}
                 className="btn-secondary flex-1"
@@ -1148,8 +1207,8 @@ export default function SettingsPage() {
               </button>
               <button
                 onClick={handleDeleteAccount}
-                disabled={loading || deleteConfirm !== '退会'}
-                className="btn-primary bg-red-600 hover:bg-red-700 text-white flex-1 disabled:opacity-50"
+                disabled={loading || !deleteConfirm.understand || !deleteConfirm.dataLoss || !deleteConfirm.permanent}
+                className="btn-primary bg-red-600 hover:bg-red-700 text-white flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? '退会処理中...' : '退会する'}
               </button>

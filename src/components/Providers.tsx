@@ -69,6 +69,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
           // プロフィールが存在しない場合は作成
           // 注意: 常にindividualとして作成（組織アカウントは認証申請後に昇格）
           if (!existingProfile && profileCheckError?.code === 'PGRST116') {
+            // プロフィールが存在しない場合、新規ユーザーとしてプロフィールを作成
+            // ただし、退会済みユーザーが再度ログインしようとした場合は、プロフィールを作成しない
+            // （退会済みユーザーは認証ユーザーも削除されているはずなので、このケースは通常発生しない）
+            
             console.log('Creating profile for user:', session.user.id)
             console.log('User email:', session.user.email)
             console.log('Auth UID:', session.user.id)
@@ -96,6 +100,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
             } else {
               console.log('Profile created successfully')
             }
+          } else if (!existingProfile && !profileCheckError) {
+            // プロフィールが存在しないが、エラーもない場合（退会済みの可能性）
+            // この場合はログアウトして、プロフィール作成を促す
+            console.warn('Profile not found for user:', session.user.id)
+            await supabase.auth.signOut()
+            setUser(null)
+            setLoading(false)
+            return
           }
 
           await fetchUserProfile(session.user.id)
@@ -372,21 +384,31 @@ export function Providers({ children }: { children: React.ReactNode }) {
         appUrl = process.env.NEXT_PUBLIC_APP_URL
       }
       
-      // デバッグ用（本番環境では削除してもOK）
+      // リダイレクトURLを構築（絶対URLである必要がある）
+      const redirectUrl = `${appUrl}/auth/callback`
+      
+      // デバッグ用（本番環境でも確認できるように残す）
       if (typeof window !== 'undefined') {
-        console.log('OAuth redirect URL:', `${appUrl}/auth/callback`)
+        console.log('Current origin:', window.location.origin)
+        console.log('OAuth redirect URL:', redirectUrl)
+        console.log('Environment NEXT_PUBLIC_APP_URL:', process.env.NEXT_PUBLIC_APP_URL)
       }
       
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${appUrl}/auth/callback`,
+          redirectTo: redirectUrl,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
           },
         },
       })
+      
+      // エラーがない場合でも、dataにURLが含まれている可能性がある
+      if (data?.url) {
+        console.log('Supabase OAuth URL:', data.url)
+      }
       if (error) {
         console.error('Google sign in error:', error)
         // エラーメッセージをユーザーフレンドリーに変換

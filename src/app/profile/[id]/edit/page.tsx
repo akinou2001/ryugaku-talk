@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import type { User } from '@/lib/supabase'
-import { ArrowLeft, Save, X, User as UserIcon, Search, Briefcase, Home, GraduationCap as LearnIcon, GraduationCap, Image as ImageIcon } from 'lucide-react'
+import { ArrowLeft, Save, X, User as UserIcon, Search, Briefcase, Home, GraduationCap as LearnIcon, GraduationCap, Image as ImageIcon, Twitter, Instagram, Facebook, Linkedin, Link as LinkIcon } from 'lucide-react'
 import { uploadFile, validateFileType, validateFileSize, FILE_TYPES } from '@/lib/storage'
 import { searchUniversities, findUniversityByAlias, type University } from '@/lib/universities'
 
@@ -33,7 +33,13 @@ export default function EditProfile() {
     study_details: [] as ('regular-study' | 'language-study' | 'exchange' | 'research' | 'working-holiday' | 'residence' | 'local-hire' | 'volunteer' | 'internship' | 'nomad' | 'high-school' | 'summer-school')[],
     student_status: '' as '' | 'current' | 'experienced' | 'applicant' | 'overseas_work' | 'domestic_supporter',
     bio: '',
-    languages: [] as string[]
+    languages: [] as string[],
+    sns_x: '',
+    sns_tiktok: '',
+    sns_instagram: '',
+    sns_facebook: '',
+    sns_linkedin: '',
+    sns_url: ''
   })
   
   // 所属大学検索用
@@ -290,7 +296,13 @@ export default function EditProfile() {
         study_details: detailTags,
         student_status: studentStatus,
         bio: data.bio || '',
-        languages: regularLanguages
+        languages: regularLanguages,
+        sns_x: data.sns_x || '',
+        sns_tiktok: data.sns_tiktok || '',
+        sns_instagram: data.sns_instagram || '',
+        sns_facebook: data.sns_facebook || '',
+        sns_linkedin: data.sns_linkedin || '',
+        sns_url: data.sns_url || ''
       })
       
       if (university) {
@@ -404,6 +416,44 @@ export default function EditProfile() {
         ? (selectedUniversity.name_ja || selectedUniversity.name_en)
         : (formData.university || null)
       
+      // URLバリデーション関数
+      const validateUrl = (url: string, platform?: string): string | null => {
+        if (!url.trim()) return null
+        const trimmedUrl = url.trim()
+        
+        // @で始まる場合は、プラットフォームに応じたURLに変換
+        if (trimmedUrl.startsWith('@')) {
+          const username = trimmedUrl.substring(1)
+          switch (platform) {
+            case 'x':
+              return `https://x.com/${username}`
+            case 'tiktok':
+              return `https://www.tiktok.com/@${username}`
+            case 'instagram':
+              return `https://www.instagram.com/${username}`
+            case 'facebook':
+              return `https://www.facebook.com/${username}`
+            case 'linkedin':
+              return `https://www.linkedin.com/in/${username}`
+            default:
+              return `https://${username}`
+          }
+        }
+        
+        // http://またはhttps://で始まらない場合は追加
+        if (!trimmedUrl.startsWith('http://') && !trimmedUrl.startsWith('https://')) {
+          return `https://${trimmedUrl}`
+        }
+        
+        // 基本的なURL形式チェック
+        try {
+          new URL(trimmedUrl)
+          return trimmedUrl
+        } catch {
+          return null
+        }
+      }
+
       const updateData: any = {
         name: formData.name,
         university_id: selectedUniversity?.id || formData.university_id || null,
@@ -412,6 +462,12 @@ export default function EditProfile() {
         study_abroad_destination: studyAbroadDestination,
         bio: formData.bio || null,
         languages: languagesWithAttributes,
+        sns_x: validateUrl(formData.sns_x, 'x'),
+        sns_tiktok: validateUrl(formData.sns_tiktok, 'tiktok'),
+        sns_instagram: validateUrl(formData.sns_instagram, 'instagram'),
+        sns_facebook: validateUrl(formData.sns_facebook, 'facebook'),
+        sns_linkedin: validateUrl(formData.sns_linkedin, 'linkedin'),
+        sns_url: validateUrl(formData.sns_url),
         updated_at: new Date().toISOString()
       }
       
@@ -1190,6 +1246,131 @@ export default function EditProfile() {
                 className="input-field"
               />
             </div>
+          </div>
+
+          {/* SNSリンク */}
+          <div className="card">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">SNSリンク</h2>
+            
+            <div className="space-y-4">
+              {/* X（旧Twitter） */}
+              <div>
+                <label htmlFor="sns_x" className="block text-sm font-medium text-gray-700 mb-2">
+                  <div className="flex items-center space-x-2">
+                    <Twitter className="h-4 w-4 text-gray-600" />
+                    <span>X（旧Twitter）</span>
+                  </div>
+                </label>
+                <input
+                  type="text"
+                  id="sns_x"
+                  name="sns_x"
+                  value={formData.sns_x}
+                  onChange={handleChange}
+                  placeholder="https://x.com/username または @username"
+                  className="input-field"
+                />
+              </div>
+
+              {/* TikTok */}
+              <div>
+                <label htmlFor="sns_tiktok" className="block text-sm font-medium text-gray-700 mb-2">
+                  <div className="flex items-center space-x-2">
+                    <span className="text-lg">🎵</span>
+                    <span>TikTok</span>
+                  </div>
+                </label>
+                <input
+                  type="text"
+                  id="sns_tiktok"
+                  name="sns_tiktok"
+                  value={formData.sns_tiktok}
+                  onChange={handleChange}
+                  placeholder="https://www.tiktok.com/@username または @username"
+                  className="input-field"
+                />
+              </div>
+
+              {/* Instagram */}
+              <div>
+                <label htmlFor="sns_instagram" className="block text-sm font-medium text-gray-700 mb-2">
+                  <div className="flex items-center space-x-2">
+                    <Instagram className="h-4 w-4 text-gray-600" />
+                    <span>Instagram</span>
+                  </div>
+                </label>
+                <input
+                  type="text"
+                  id="sns_instagram"
+                  name="sns_instagram"
+                  value={formData.sns_instagram}
+                  onChange={handleChange}
+                  placeholder="https://www.instagram.com/username または @username"
+                  className="input-field"
+                />
+              </div>
+
+              {/* Facebook */}
+              <div>
+                <label htmlFor="sns_facebook" className="block text-sm font-medium text-gray-700 mb-2">
+                  <div className="flex items-center space-x-2">
+                    <Facebook className="h-4 w-4 text-gray-600" />
+                    <span>Facebook</span>
+                  </div>
+                </label>
+                <input
+                  type="text"
+                  id="sns_facebook"
+                  name="sns_facebook"
+                  value={formData.sns_facebook}
+                  onChange={handleChange}
+                  placeholder="https://www.facebook.com/username または username"
+                  className="input-field"
+                />
+              </div>
+
+              {/* LinkedIn */}
+              <div>
+                <label htmlFor="sns_linkedin" className="block text-sm font-medium text-gray-700 mb-2">
+                  <div className="flex items-center space-x-2">
+                    <Linkedin className="h-4 w-4 text-gray-600" />
+                    <span>LinkedIn</span>
+                  </div>
+                </label>
+                <input
+                  type="text"
+                  id="sns_linkedin"
+                  name="sns_linkedin"
+                  value={formData.sns_linkedin}
+                  onChange={handleChange}
+                  placeholder="https://www.linkedin.com/in/username または username"
+                  className="input-field"
+                />
+              </div>
+
+              {/* その他のURL */}
+              <div>
+                <label htmlFor="sns_url" className="block text-sm font-medium text-gray-700 mb-2">
+                  <div className="flex items-center space-x-2">
+                    <LinkIcon className="h-4 w-4 text-gray-600" />
+                    <span>その他のURL</span>
+                  </div>
+                </label>
+                <input
+                  type="text"
+                  id="sns_url"
+                  name="sns_url"
+                  value={formData.sns_url}
+                  onChange={handleChange}
+                  placeholder="https://example.com"
+                  className="input-field"
+                />
+              </div>
+            </div>
+            
+            <p className="text-xs text-gray-500 mt-4">
+              URLまたはユーザー名を入力してください。URLで始まらない場合は自動的にhttps://が追加されます。
+            </p>
           </div>
 
           {/* 使用言語 */}

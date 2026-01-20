@@ -238,13 +238,18 @@ export default function TermsPage() {
                 11. お問い合わせ
               </h2>
               <p className="text-gray-700 leading-relaxed mb-4">
-                本規約に関するご質問やご意見がございましたら、以下の連絡先までお問い合わせください。
+                本規約に関するご質問やご意見がございましたら、お問い合わせフォームからご連絡ください。
               </p>
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-gray-700">
-                  <strong>メールアドレス:</strong> legal@ryugakutalk.com
-                </p>
-              </div>
+              {process.env.NEXT_PUBLIC_CONTACT_FORM_URL && (
+                <a
+                  href={process.env.NEXT_PUBLIC_CONTACT_FORM_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary inline-block"
+                >
+                  お問い合わせフォーム
+                </a>
+              )}
             </section>
           </div>
         </div>

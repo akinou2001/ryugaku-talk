@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { Home, Eye, Users, ShieldCheck } from 'lucide-react'
+import { Home, Map, Users, ShieldCheck } from 'lucide-react'
 import { useAuth } from './Providers'
 
 export function TopTabNavigation() {
@@ -20,8 +20,8 @@ export function TopTabNavigation() {
     },
     {
       id: 'map',
-      label: '眺める',
-      icon: Eye,
+      label: 'マップ',
+      icon: Map,
       path: '/map'
     },
     {

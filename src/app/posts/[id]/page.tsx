@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
-import type { Post, Comment } from '@/lib/supabase'
+import type { Post, Comment, User } from '@/lib/supabase'
 import { notifyComment } from '@/lib/notifications'
 import { Heart, MessageSquare, Share, Flag, Clock, MapPin, GraduationCap, Edit, Trash2, HelpCircle, BookOpen, MessageCircle, CheckCircle2, X as XIcon, Link as LinkIcon, Copy, Check, ArrowLeft, Award } from 'lucide-react'
 import Link from 'next/link'
@@ -85,6 +85,62 @@ export default function PostDetail() {
       setLiked(false)
     }
   }, [user, postId])
+
+  // コメントのリアルタイム更新
+  useEffect(() => {
+    if (!postId) return
+
+    const channel = supabase
+      .channel(`post-comments:${postId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'comments',
+          filter: `post_id=eq.${postId}`
+        },
+        async (payload) => {
+          const newComment = payload.new as any
+          // 送信者情報を取得
+          const { data: author } = await supabase
+            .from('profiles')
+            .select('id, name, icon_url, account_type, verification_status, organization_name, is_operator')
+            .eq('id', newComment.author_id)
+            .single()
+
+          if (author) {
+            setComments((prev) => {
+              // 既に存在する場合は追加しない
+              if (prev.some(c => c.id === newComment.id)) return prev
+              return [...prev, { ...newComment, author: author as User } as Comment]
+            })
+            // コメント数を更新
+            setPost(prev => prev ? { ...prev, comments_count: (prev.comments_count || 0) + 1 } : null)
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'comments',
+          filter: `post_id=eq.${postId}`
+        },
+        (payload) => {
+          const deletedComment = payload.old as any
+          setComments((prev) => prev.filter(c => c.id !== deletedComment.id))
+          // コメント数を更新
+          setPost(prev => prev ? { ...prev, comments_count: Math.max(0, (prev.comments_count || 0) - 1) } : null)
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [postId])
 
   const checkLikedStatus = async () => {
     if (!user) {
@@ -253,6 +309,17 @@ export default function PostDetail() {
 
     if (!post) return
 
+    const currentLikesCount = post.likes_count || 0
+    const newLiked = !liked
+
+    // 楽観的更新：即座にUIを更新
+    const optimisticLikesCount = newLiked 
+      ? currentLikesCount + 1
+      : Math.max(0, currentLikesCount - 1)
+
+    setLiked(newLiked)
+    setPost(prev => prev ? { ...prev, likes_count: optimisticLikesCount } : null)
+
     try {
       if (liked) {
         // いいねを削除
@@ -264,13 +331,12 @@ export default function PostDetail() {
 
         if (error) {
           console.error('Error removing like:', error)
+          // エラー時は元の状態に戻す
+          setLiked(true)
+          setPost(prev => prev ? { ...prev, likes_count: currentLikesCount } : null)
           setError('いいねの削除に失敗しました')
           return
         }
-        
-        setLiked(false)
-        // トリガーで自動更新されるが、即座にUIを更新
-        setPost(prev => prev ? { ...prev, likes_count: Math.max(0, (prev.likes_count || 0) - 1) } : null)
       } else {
         // いいねを追加
         const { error } = await supabase
@@ -287,17 +353,19 @@ export default function PostDetail() {
             setLiked(true)
             await checkLikedStatus()
           } else {
+            // エラー時は元の状態に戻す
+            setLiked(false)
+            setPost(prev => prev ? { ...prev, likes_count: currentLikesCount } : null)
             setError('いいねの追加に失敗しました')
           }
           return
         }
-        
-        setLiked(true)
-        // トリガーで自動更新されるが、即座にUIを更新
-        setPost(prev => prev ? { ...prev, likes_count: (prev.likes_count || 0) + 1 } : null)
       }
     } catch (error: any) {
       console.error('Error toggling like:', error)
+      // エラー時は元の状態に戻す
+      setLiked(!newLiked)
+      setPost(prev => prev ? { ...prev, likes_count: currentLikesCount } : null)
       setError('いいねの処理に失敗しました')
     }
   }
@@ -311,17 +379,56 @@ export default function PostDetail() {
 
     if (!newComment.trim()) return
 
+    const commentContent = newComment.trim()
     setCommentLoading(true)
+    
+    // 楽観的更新：即座にUIに反映
+    const optimisticComment: Comment = {
+      id: `temp-${Date.now()}`,
+      post_id: postId,
+      author_id: user.id,
+      content: commentContent,
+      likes_count: 0,
+      is_solution: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      author: {
+        id: user.id,
+        name: user.name || '匿名',
+        icon_url: user.icon_url || undefined,
+        account_type: user.account_type || 'individual',
+        verification_status: user.verification_status || 'unverified',
+        organization_name: user.organization_name || undefined,
+        is_operator: user.is_operator || false
+      } as User
+    }
+    
+    setComments(prev => [...prev, optimisticComment])
+    setPost(prev => prev ? { ...prev, comments_count: (prev.comments_count || 0) + 1 } : null)
+    setNewComment('')
+
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('comments')
         .insert({
           post_id: postId,
           author_id: user.id,
-          content: newComment.trim()
+          content: commentContent
         })
+        .select(`
+          *,
+          author:profiles(id, name, icon_url, account_type, verification_status, organization_name, is_operator)
+        `)
+        .single()
 
       if (error) throw error
+
+      // 楽観的更新を実際のデータに置き換え
+      if (data) {
+        setComments(prev => prev.map(c => 
+          c.id === optimisticComment.id ? data : c
+        ))
+      }
 
       const { data: profileData } = await supabase
         .from('profiles')
@@ -347,11 +454,13 @@ export default function PostDetail() {
           postId
         )
       }
-
-      setNewComment('')
-      fetchComments()
     } catch (error: any) {
       console.error('Error adding comment:', error)
+      // エラー時は楽観的更新を元に戻す
+      setComments(prev => prev.filter(c => c.id !== optimisticComment.id))
+      setPost(prev => prev ? { ...prev, comments_count: Math.max(0, (prev.comments_count || 0) - 1) } : null)
+      setNewComment(commentContent)
+      setError('コメントの投稿に失敗しました')
     } finally {
       setCommentLoading(false)
     }

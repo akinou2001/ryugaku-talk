@@ -220,7 +220,18 @@ export default function HelpPage() {
                   Q. 不適切な投稿を見つけました
                 </h3>
                 <p className="text-gray-700">
-                  A. 投稿の報告機能を使用するか、管理者に直接お問い合わせください。適切に対応いたします。
+                  A. 投稿の報告機能を使用するか、{process.env.NEXT_PUBLIC_CONTACT_FORM_URL ? (
+                    <a
+                      href={process.env.NEXT_PUBLIC_CONTACT_FORM_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary-600 hover:text-primary-800 underline"
+                    >
+                      お問い合わせフォーム
+                    </a>
+                  ) : (
+                    '管理者に直接お問い合わせ'
+                  )}ください。適切に対応いたします。
                 </p>
               </div>
 
@@ -289,12 +300,16 @@ export default function HelpPage() {
                 <p className="text-gray-700 mb-4">
                   上記の情報で解決しない場合は、お気軽にお問い合わせください。
                 </p>
-                <a
-                  href="mailto:support@ryugakutalk.com"
-                  className="btn-primary inline-block"
-                >
-                  お問い合わせ
-                </a>
+                {process.env.NEXT_PUBLIC_CONTACT_FORM_URL && (
+                  <a
+                    href={process.env.NEXT_PUBLIC_CONTACT_FORM_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary inline-block"
+                  >
+                    お問い合わせフォーム
+                  </a>
+                )}
               </div>
             </div>
           </section>

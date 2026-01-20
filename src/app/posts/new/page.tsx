@@ -30,7 +30,7 @@ function NewPostInner() {
     is_official: false,
     official_category: '',
     community_id: '' as string | undefined,
-    urgency_level: 'normal' as 'low' | 'normal' | 'high' | 'urgent'
+    urgency_level: 'normal' as 'normal' | 'urgent'
   })
   
   // 大学検索用
@@ -513,7 +513,7 @@ function NewPostInner() {
         author_id: user.id,
         is_official: isVerifiedOrganization && formData.is_official,
         official_category: isVerifiedOrganization && formData.is_official ? formData.official_category : null,
-        community_id: formData.community_id || null,
+        community_id: formData.community_id && formData.community_id !== '' ? formData.community_id : null,
         post_type: postType,
         quest_id: questIdToUse || null,
         images: images.length > 0 ? images : null, // 複数画像
@@ -522,6 +522,9 @@ function NewPostInner() {
         urgency_level: category === 'question' ? formData.urgency_level : null
       }
 
+      // デバッグ用: 投稿データをログ出力
+      console.log('投稿データ:', postData)
+
       const { data, error } = await supabase
         .from('posts')
         .insert(postData)
@@ -529,6 +532,7 @@ function NewPostInner() {
         .single()
 
       if (error) {
+        console.error('投稿エラー:', error)
         throw error
       }
 
@@ -571,7 +575,17 @@ function NewPostInner() {
       
       router.push(redirectPath)
     } catch (error: any) {
-      setError(error.message || '投稿の作成に失敗しました')
+      console.error('投稿処理エラー:', error)
+      // エラーメッセージを詳細に表示
+      let errorMessage = '投稿の作成に失敗しました'
+      if (error?.message) {
+        errorMessage = error.message
+      } else if (error?.details) {
+        errorMessage = error.details
+      } else if (error?.hint) {
+        errorMessage = `${errorMessage}: ${error.hint}`
+      }
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -731,12 +745,10 @@ function NewPostInner() {
                 id="urgency_level"
                 name="urgency_level"
                 value={formData.urgency_level}
-                onChange={(e) => setFormData(prev => ({ ...prev, urgency_level: e.target.value as 'low' | 'normal' | 'high' | 'urgent' }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, urgency_level: e.target.value as 'normal' | 'urgent' }))}
                 className="input-field"
               >
-                <option value="low">低</option>
                 <option value="normal">通常</option>
-                <option value="high">高</option>
                 <option value="urgent">緊急</option>
               </select>
               <p className="text-xs text-gray-500 mt-1">

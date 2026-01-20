@@ -54,7 +54,7 @@ export default function Diary() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, university, study_abroad_destination, icon_url, account_type, verification_status, organization_name)
+          author:profiles(name, university, study_abroad_destination, study_abroad_university_id, icon_url, account_type, verification_status, organization_name)
         `)
         .is('community_id', null) // コミュニティ限定投稿は除外
         .eq('category', 'diary')
@@ -63,8 +63,38 @@ export default function Diary() {
         query = query.eq('study_abroad_destination', selectedCountry)
       }
 
+      // 大学フィルター - ユーザーの留学先大学でフィルタリング
       if (selectedUniversityId) {
-        query = query.eq('university_id', selectedUniversityId)
+        try {
+          // 選択された大学に留学しているユーザーのIDを取得
+          const { data: profilesData, error: profilesError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('study_abroad_university_id', selectedUniversityId)
+            .not('study_abroad_university_id', 'is', null)
+          
+          if (profilesError) {
+            console.error('Error fetching profiles by university:', profilesError)
+            // エラーが発生した場合はフィルターを適用しない
+          } else {
+            const userIdsByUniversity = (profilesData || []).map((p: any) => p.id)
+            
+            console.log('[Diary] University filter - selectedUniversityId:', selectedUniversityId)
+            console.log('[Diary] University filter - profilesData:', profilesData)
+            console.log('[Diary] University filter - found users:', userIdsByUniversity.length, userIdsByUniversity)
+            
+            // 該当するユーザーの投稿のみを取得
+            if (userIdsByUniversity.length > 0) {
+              query = query.in('author_id', userIdsByUniversity)
+            } else {
+              // 該当するユーザーがいない場合は、空の結果を返すために存在しないIDを設定
+              query = query.eq('author_id', '00000000-0000-0000-0000-000000000000')
+            }
+          }
+        } catch (error) {
+          console.error('Error in university filter:', error)
+          // エラーが発生した場合はフィルターを適用しない
+        }
       }
 
       if (searchTerm) {
