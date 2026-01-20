@@ -11,17 +11,32 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        // URLからcodeとerrorパラメータを取得
+        // URLからcodeとerrorパラメータを取得（クエリパラメータ）
         const code = searchParams.get('code')
         const error = searchParams.get('error')
         const errorDescription = searchParams.get('error_description')
 
-        if (error) {
-          console.error('OAuth error:', error, errorDescription)
-          router.push(`/auth/signin?error=${encodeURIComponent(errorDescription || error)}`)
+        // ハッシュフラグメント（#access_token=...）を処理
+        let hashParams: { [key: string]: string } = {}
+        if (typeof window !== 'undefined' && window.location.hash) {
+          const hash = window.location.hash.substring(1) // #を削除
+          hash.split('&').forEach(param => {
+            const [key, value] = param.split('=')
+            if (key && value) {
+              hashParams[key] = decodeURIComponent(value)
+            }
+          })
+        }
+
+        // エラーチェック（クエリパラメータまたはハッシュフラグメント）
+        const hashError = hashParams.error || hashParams.error_description
+        if (error || hashError) {
+          console.error('OAuth error:', error || hashError, errorDescription || hashParams.error_description)
+          router.push(`/auth/signin?error=${encodeURIComponent(errorDescription || hashError || error || '認証に失敗しました')}`)
           return
         }
 
+        // PKCEフロー: codeパラメータがある場合
         if (code) {
           // OAuthコードをセッションに交換
           const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
@@ -46,8 +61,36 @@ export default function AuthCallback() {
               }
             }, 1000)
           }
-        } else {
-          // codeパラメータがない場合、既存のセッションを確認
+        } 
+        // 暗黙的フロー: ハッシュフラグメントにaccess_tokenがある場合
+        else if (hashParams.access_token) {
+          // ハッシュフラグメントからセッションを設定
+          // Supabaseは自動的にハッシュフラグメントを処理するため、セッションを確認する
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+          
+          if (sessionError) {
+            console.error('Session error:', sessionError)
+            router.push(`/auth/signin?error=${encodeURIComponent('認証に失敗しました')}`)
+            return
+          }
+
+          if (session) {
+            // 認証成功 - タイムラインにリダイレクト
+            router.push('/timeline')
+          } else {
+            // セッションが取得できない場合、少し待ってから再試行
+            setTimeout(async () => {
+              const { data: { session: retrySession } } = await supabase.auth.getSession()
+              if (retrySession) {
+                router.push('/timeline')
+              } else {
+                router.push('/auth/signin?error=' + encodeURIComponent('認証に失敗しました。もう一度お試しください。'))
+              }
+            }, 1000)
+          }
+        } 
+        // どちらもない場合、既存のセッションを確認
+        else {
           const { data: { session } } = await supabase.auth.getSession()
           if (session) {
             router.push('/timeline')
