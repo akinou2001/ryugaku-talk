@@ -27,6 +27,7 @@
     "reset-japanese-names": "tsx scripts/reset-japanese-names.ts"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.21.0",
     "@react-three/drei": "^9.88.13",
     "@react-three/fiber": "^8.15.11",
     "@supabase/auth-helpers-nextjs": "^0.8.7",
