@@ -360,14 +360,31 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = async () => {
     try {
-      // 環境変数からアプリのURLを取得（開発環境: localhost:3000、本番環境: Vercel URL）
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 
-                     (typeof window !== 'undefined' ? `${window.location.origin}` : 'http://localhost:3000')
+      // アプリのURLを取得（優先順位: window.location.origin > 環境変数 > localhost）
+      // window.location.originを使用することで、現在のドメイン（本番環境ではryugakutalk.com）を自動的に使用
+      let appUrl = 'http://localhost:3000' // デフォルト値（サーバーサイド用）
+      
+      if (typeof window !== 'undefined') {
+        // クライアントサイドでは、現在のドメインを使用（最も確実）
+        appUrl = window.location.origin
+      } else if (process.env.NEXT_PUBLIC_APP_URL) {
+        // サーバーサイドでは環境変数を使用
+        appUrl = process.env.NEXT_PUBLIC_APP_URL
+      }
+      
+      // デバッグ用（本番環境では削除してもOK）
+      if (typeof window !== 'undefined') {
+        console.log('OAuth redirect URL:', `${appUrl}/auth/callback`)
+      }
       
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: `${appUrl}/auth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         },
       })
       if (error) {
