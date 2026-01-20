@@ -291,6 +291,57 @@ export async function updateCommunity(
 }
 
 /**
+ * コミュニティを削除（所有者または管理者のみ）
+ */
+export async function deleteCommunity(communityId: string) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // コミュニティ情報を取得
+  const { data: community } = await supabase
+    .from('communities')
+    .select('owner_id')
+    .eq('id', communityId)
+    .single()
+
+  if (!community) {
+    throw new Error('コミュニティが見つかりません')
+  }
+
+  // 所有者か管理者かを確認
+  const isOwner = community.owner_id === user.id
+  
+  // 管理者かどうかを確認
+  let isAdmin = false
+  if (!isOwner) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', user.id)
+      .single()
+    
+    isAdmin = profile?.is_admin === true
+  }
+
+  if (!isOwner && !isAdmin) {
+    throw new Error('コミュニティの所有者または管理者のみ削除できます')
+  }
+
+  // コミュニティを削除（CASCADEで関連データも削除される）
+  const { error } = await supabase
+    .from('communities')
+    .delete()
+    .eq('id', communityId)
+
+  if (error) {
+    console.error('Error deleting community:', error)
+    throw error
+  }
+}
+
+/**
  * コミュニティに加入申請
  */
 export async function requestCommunityMembership(communityId: string) {

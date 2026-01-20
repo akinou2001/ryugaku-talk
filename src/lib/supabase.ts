@@ -57,6 +57,13 @@ export interface User {
   suspension_reason?: string
   // アイコン画像
   icon_url?: string
+  // SNSリンク
+  sns_x?: string | null
+  sns_tiktok?: string | null
+  sns_instagram?: string | null
+  sns_facebook?: string | null
+  sns_linkedin?: string | null
+  sns_url?: string | null
   created_at: string
   updated_at: string
 }
@@ -111,7 +118,7 @@ export interface Post {
   images?: string[] // 複数の画像URL（pro投稿用、JSONB形式）
   cover_image_url?: string // カバー写真のURL（pro投稿用）
   is_pro?: boolean // pro投稿かどうか（日記のみ）
-  urgency_level?: 'low' | 'normal' | 'high' | 'urgent' // 質問の緊急度
+  urgency_level?: 'normal' | 'urgent' // 質問の緊急度
   created_at: string
   updated_at: string
 }

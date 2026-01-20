@@ -6,7 +6,7 @@ import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import type { User, Post, UserScore } from '@/lib/supabase'
 import { getUserScore } from '@/lib/quest'
-import { User as UserIcon, MapPin, GraduationCap, Calendar, MessageSquare, Edit, Settings, Send, Building2, Heart, HelpCircle, BookOpen, MessageCircle, Mail } from 'lucide-react'
+import { User as UserIcon, MapPin, GraduationCap, Calendar, MessageSquare, Edit, Settings, Send, Building2, Heart, HelpCircle, BookOpen, MessageCircle, Mail, Twitter, Instagram, Facebook, Linkedin, Link as LinkIcon } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
@@ -504,6 +504,81 @@ export default function Profile() {
             <div className="mb-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">自己紹介</h3>
               <p className="text-gray-700 whitespace-pre-wrap">{profile.bio}</p>
+            </div>
+          )}
+
+          {/* SNSリンク */}
+          {(profile.sns_x || profile.sns_tiktok || profile.sns_instagram || profile.sns_facebook || profile.sns_linkedin || profile.sns_url) && (
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">SNSリンク</h3>
+              <div className="flex flex-wrap gap-3">
+                {profile.sns_x && (
+                  <a
+                    href={profile.sns_x.startsWith('http') ? profile.sns_x : `https://${profile.sns_x}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
+                    <Twitter className="h-5 w-5 text-gray-700" />
+                    <span className="text-sm font-medium text-gray-700">X</span>
+                  </a>
+                )}
+                {profile.sns_tiktok && (
+                  <a
+                    href={profile.sns_tiktok.startsWith('http') ? profile.sns_tiktok : `https://${profile.sns_tiktok}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
+                    <span className="text-lg">🎵</span>
+                    <span className="text-sm font-medium text-gray-700">TikTok</span>
+                  </a>
+                )}
+                {profile.sns_instagram && (
+                  <a
+                    href={profile.sns_instagram.startsWith('http') ? profile.sns_instagram : `https://${profile.sns_instagram}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
+                    <Instagram className="h-5 w-5 text-gray-700" />
+                    <span className="text-sm font-medium text-gray-700">Instagram</span>
+                  </a>
+                )}
+                {profile.sns_facebook && (
+                  <a
+                    href={profile.sns_facebook.startsWith('http') ? profile.sns_facebook : `https://${profile.sns_facebook}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
+                    <Facebook className="h-5 w-5 text-gray-700" />
+                    <span className="text-sm font-medium text-gray-700">Facebook</span>
+                  </a>
+                )}
+                {profile.sns_linkedin && (
+                  <a
+                    href={profile.sns_linkedin.startsWith('http') ? profile.sns_linkedin : `https://${profile.sns_linkedin}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
+                    <Linkedin className="h-5 w-5 text-gray-700" />
+                    <span className="text-sm font-medium text-gray-700">LinkedIn</span>
+                  </a>
+                )}
+                {profile.sns_url && (
+                  <a
+                    href={profile.sns_url.startsWith('http') ? profile.sns_url : `https://${profile.sns_url}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center space-x-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                  >
+                    <LinkIcon className="h-5 w-5 text-gray-700" />
+                    <span className="text-sm font-medium text-gray-700">その他</span>
+                  </a>
+                )}
+              </div>
             </div>
           )}
 

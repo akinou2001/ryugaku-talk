@@ -179,18 +179,7 @@ export default function PrivacyPage() {
                 <li>アカウントの削除を請求する権利</li>
               </ul>
               <p className="text-gray-700 leading-relaxed mt-4">
-                これらの権利を行使したい場合は、設定ページから操作するか、{process.env.NEXT_PUBLIC_CONTACT_FORM_URL ? (
-                  <a
-                    href={process.env.NEXT_PUBLIC_CONTACT_FORM_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary-600 hover:text-primary-800 underline"
-                  >
-                    お問い合わせフォーム
-                  </a>
-                ) : (
-                  'お問い合わせフォーム'
-                )}からご連絡ください。
+                これらの権利を行使したい場合は、設定ページから操作するか、お問い合わせフォームからご連絡ください。
               </p>
             </section>
 
@@ -236,19 +225,14 @@ export default function PrivacyPage() {
                 プライバシーポリシーに関するご質問やご意見がございましたら、お問い合わせフォームからご連絡ください。
               </p>
               {process.env.NEXT_PUBLIC_CONTACT_FORM_URL && (
-                <div className="p-4 bg-primary-50 border border-primary-200 rounded-lg">
-                  <a
-                    href={process.env.NEXT_PUBLIC_CONTACT_FORM_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center space-x-2 text-primary-700 hover:text-primary-800 font-semibold transition-colors"
-                  >
-                    <span>お問い合わせフォームを開く</span>
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                  </a>
-                </div>
+                <a
+                  href={process.env.NEXT_PUBLIC_CONTACT_FORM_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn-primary inline-block"
+                >
+                  お問い合わせフォーム
+                </a>
               )}
             </section>
           </div>

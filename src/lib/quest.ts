@@ -99,7 +99,7 @@ export async function getQuests(communityId: string, userId?: string, includeCom
 }
 
 /**
- * クエストを作成
+ * クエストを作成（コミュニティ管理者のみ）
  */
 export async function createQuest(
   communityId: string,
@@ -111,6 +111,21 @@ export async function createQuest(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     throw new Error('ログインが必要です')
+  }
+
+  // コミュニティの所有者か確認
+  const { data: community } = await supabase
+    .from('communities')
+    .select('owner_id')
+    .eq('id', communityId)
+    .single()
+
+  if (!community) {
+    throw new Error('コミュニティが見つかりません')
+  }
+
+  if (community.owner_id !== user.id) {
+    throw new Error('コミュニティの管理者のみクエストを作成できます')
   }
 
   // 作成者のプロフィール情報を取得（スナップショット）

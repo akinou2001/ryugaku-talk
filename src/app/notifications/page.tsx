@@ -147,20 +147,43 @@ export default function NotificationsPage() {
   }
 
   const deleteNotification = async (notificationId: string) => {
+    if (!user) return
+
     try {
+      // まず状態から削除（即座にUIから消えるように）
+      const notificationToDelete = notifications.find(n => n.id === notificationId)
+      setNotifications(prev => prev.filter(n => n.id !== notificationId))
+      
+      // 未読カウントを更新
+      if (notificationToDelete && !notificationToDelete.is_read) {
+        setUnreadCount(prev => Math.max(0, prev - 1))
+      }
+
+      // データベースから削除
       const { error } = await supabase
         .from('notifications')
         .delete()
         .eq('id', notificationId)
+        .eq('user_id', user.id) // セキュリティ: 自分の通知のみ削除可能
 
-      if (error) throw error
-
-      setNotifications(prev => prev.filter(n => n.id !== notificationId))
-      if (!notifications.find(n => n.id === notificationId)?.is_read) {
-        setUnreadCount(prev => Math.max(0, prev - 1))
+      if (error) {
+        // エラーが発生した場合は状態を元に戻す
+        setNotifications(prev => {
+          if (notificationToDelete && !prev.find(n => n.id === notificationId)) {
+            return [...prev, notificationToDelete].sort((a, b) => 
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            )
+          }
+          return prev
+        })
+        if (notificationToDelete && !notificationToDelete.is_read) {
+          setUnreadCount(prev => prev + 1)
+        }
+        throw error
       }
     } catch (error) {
       console.error('Error deleting notification:', error)
+      // エラーをユーザーに表示（オプション）
     }
   }
 

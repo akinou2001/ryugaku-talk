@@ -902,6 +902,27 @@ export default function Timeline() {
     }
 
     const isLiked = likedPosts.has(postId)
+    const currentPost = posts.find(p => p.id === postId)
+    if (!currentPost) return
+
+    // 楽観的更新：即座にUIを更新
+    const optimisticLikesCount = isLiked 
+      ? Math.max(0, (currentPost.likes_count || 0) - 1)
+      : (currentPost.likes_count || 0) + 1
+
+    setLikedPosts(prev => {
+      const newSet = new Set(prev)
+      if (isLiked) {
+        newSet.delete(postId)
+      } else {
+        newSet.add(postId)
+      }
+      return newSet
+    })
+    
+    setPosts(prev => prev.map(p => 
+      p.id === postId ? { ...p, likes_count: optimisticLikesCount } : p
+    ))
 
     try {
       if (isLiked) {
@@ -913,16 +934,6 @@ export default function Timeline() {
           .eq('user_id', user.id)
 
         if (error) throw error
-        
-        setLikedPosts(prev => {
-          const newSet = new Set(prev)
-          newSet.delete(postId)
-          return newSet
-        })
-        
-        setPosts(prev => prev.map(p => 
-          p.id === postId ? { ...p, likes_count: Math.max(0, p.likes_count - 1) } : p
-        ))
       } else {
         // いいねを追加
         const { error } = await supabase
@@ -932,16 +943,30 @@ export default function Timeline() {
             user_id: user.id
           })
 
-        if (error) throw error
-        
-        setLikedPosts(prev => new Set(prev).add(postId))
-        
-        setPosts(prev => prev.map(p => 
-          p.id === postId ? { ...p, likes_count: p.likes_count + 1 } : p
-        ))
+        if (error) {
+          // 重複エラーの場合は既にいいね済みとして扱う
+          if (error.code === '23505') {
+            setLikedPosts(prev => new Set(prev).add(postId))
+            return
+          }
+          throw error
+        }
       }
     } catch (error: any) {
       console.error('Error toggling like:', error)
+      // エラー時は元の状態に戻す
+      setLikedPosts(prev => {
+        const newSet = new Set(prev)
+        if (isLiked) {
+          newSet.add(postId)
+        } else {
+          newSet.delete(postId)
+        }
+        return newSet
+      })
+      setPosts(prev => prev.map(p => 
+        p.id === postId ? { ...p, likes_count: currentPost.likes_count || 0 } : p
+      ))
     }
   }
 

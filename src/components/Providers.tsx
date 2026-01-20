@@ -69,6 +69,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
           // プロフィールが存在しない場合は作成
           // 注意: 常にindividualとして作成（組織アカウントは認証申請後に昇格）
           if (!existingProfile && profileCheckError?.code === 'PGRST116') {
+            // プロフィールが存在しない場合、新規ユーザーとしてプロフィールを作成
+            // ただし、退会済みユーザーが再度ログインしようとした場合は、プロフィールを作成しない
+            // （退会済みユーザーは認証ユーザーも削除されているはずなので、このケースは通常発生しない）
+            
             console.log('Creating profile for user:', session.user.id)
             console.log('User email:', session.user.email)
             console.log('Auth UID:', session.user.id)
@@ -96,6 +100,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
             } else {
               console.log('Profile created successfully')
             }
+          } else if (!existingProfile && !profileCheckError) {
+            // プロフィールが存在しないが、エラーもない場合（退会済みの可能性）
+            // この場合はログアウトして、プロフィール作成を促す
+            console.warn('Profile not found for user:', session.user.id)
+            await supabase.auth.signOut()
+            setUser(null)
+            setLoading(false)
+            return
           }
 
           await fetchUserProfile(session.user.id)

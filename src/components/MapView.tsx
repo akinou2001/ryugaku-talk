@@ -66,16 +66,8 @@ function getCategoryStyle(category: string, urgencyLevel?: string, isResolved?: 
         ringColor = '#EF4444' // 赤
         ringWidth = 4
         break
-      case 'high':
-        ringColor = '#F59E0B' // オレンジ
-        ringWidth = 3
-        break
       case 'normal':
         ringColor = '#3B82F6' // 青
-        ringWidth = 2
-        break
-      case 'low':
-        ringColor = '#9CA3AF' // グレー
         ringWidth = 2
         break
     }
@@ -448,7 +440,7 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
                 font-weight: 600;
                 margin-bottom: 8px;
               ">
-                ${displayPost.urgency_level === 'urgent' ? '緊急' : displayPost.urgency_level === 'high' ? '高' : displayPost.urgency_level === 'normal' ? '通常' : '低'}
+                ${displayPost.urgency_level === 'urgent' ? '緊急' : '通常'}
               </div>
             ` : ''}
             <p style="font-size: 12px; color: #666; margin: 8px 0; line-height: 1.4;">

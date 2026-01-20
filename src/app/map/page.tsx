@@ -44,7 +44,7 @@ export default function MapPage() {
   const [allPosts, setAllPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'question' | 'diary' | 'chat'>('all')
-  const [selectedUrgency, setSelectedUrgency] = useState<'all' | 'low' | 'normal' | 'high' | 'urgent'>('all')
+  const [selectedUrgency, setSelectedUrgency] = useState<'all' | 'normal' | 'urgent'>('all')
   const [selectedCountry, setSelectedCountry] = useState<string>('all')
   const [selectedCommunity, setSelectedCommunity] = useState<string>('all')
   const [selectedUser, setSelectedUser] = useState<UserPostData | null>(null)
@@ -241,9 +241,7 @@ export default function MapPage() {
 
     // 未解決の質問: 優先度 100 + 緊急度
     if (category === 'question' && !post.is_resolved) {
-      const urgencyScore = post.urgency_level === 'urgent' ? 4 :
-                          post.urgency_level === 'high' ? 3 :
-                          post.urgency_level === 'normal' ? 2 : 1
+      const urgencyScore = post.urgency_level === 'urgent' ? 2 : 1
       return 100 + urgencyScore
     }
 
@@ -345,9 +343,7 @@ export default function MapPage() {
   const getUrgencyColor = (urgency?: string) => {
     switch (urgency) {
       case 'urgent': return 'bg-red-500'
-      case 'high': return 'bg-orange-500'
       case 'normal': return 'bg-blue-500'
-      case 'low': return 'bg-gray-400'
       default: return 'bg-gray-400'
     }
   }
@@ -355,9 +351,7 @@ export default function MapPage() {
   const getUrgencyLabel = (urgency?: string) => {
     switch (urgency) {
       case 'urgent': return '緊急'
-      case 'high': return '高'
       case 'normal': return '通常'
-      case 'low': return '低'
       default: return '未設定'
     }
   }
@@ -372,7 +366,7 @@ export default function MapPage() {
               <h1 className="text-2xl font-bold text-gray-900 mb-1 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
                 マップ
               </h1>
-              <p className="text-sm text-gray-600">世界で挑戦している留学生の「今」をチェックしよう</p>
+              <p className="text-sm text-gray-600">世界で挑戦している現役留学生の「今」をチェックしよう</p>
             </div>
             {/* 2D/3D切り替えボタン */}
             <div className="flex items-center space-x-2 bg-white rounded-xl p-1 shadow-md border border-gray-200">
@@ -488,10 +482,8 @@ export default function MapPage() {
                     className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   >
                     <option value="all">すべて</option>
-                    <option value="urgent">緊急</option>
-                    <option value="high">高</option>
                     <option value="normal">通常</option>
-                    <option value="low">低</option>
+                    <option value="urgent">緊急</option>
                   </select>
                 </div>
               )}
@@ -558,7 +550,7 @@ export default function MapPage() {
             )}
             {selectedUrgency !== 'all' && (
               <span className="px-4 py-2 bg-gradient-to-r from-primary-100 to-primary-200 text-primary-700 rounded-full text-xs font-semibold border border-primary-300">
-                緊急度: {selectedUrgency === 'urgent' ? '緊急' : selectedUrgency === 'high' ? '高' : selectedUrgency === 'normal' ? '通常' : '低'}
+                緊急度: {selectedUrgency === 'urgent' ? '緊急' : '通常'}
               </span>
             )}
             {selectedCountry !== 'all' && (

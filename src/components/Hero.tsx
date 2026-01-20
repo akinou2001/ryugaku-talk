@@ -92,26 +92,6 @@ export function Hero() {
               </div>
             </Link>
 
-            {/* マップ */}
-            <Link 
-              href="/map"
-              className="group relative bg-white/10 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 text-center hover:bg-white/20 transition-all duration-500 border border-white/20 hover:border-white/40 hover:scale-105 transform shadow-xl hover:shadow-2xl cursor-pointer"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-red-500/20 to-rose-500/20 rounded-2xl sm:rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-              <div className="relative">
-                <div className="relative inline-block mb-4 sm:mb-6">
-                  <div className="absolute inset-0 bg-gradient-to-r from-red-400 to-rose-400 rounded-full blur-lg opacity-50 group-hover:opacity-75 transition-opacity"></div>
-                  <div className="relative w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-red-500 via-rose-500 to-red-600 rounded-full flex items-center justify-center shadow-lg">
-                    <Map className="h-8 w-8 sm:h-10 sm:w-10 text-white" strokeWidth={2.5} />
-                  </div>
-                </div>
-                <h3 className="text-base sm:text-lg md:text-xl font-bold text-white mb-2 sm:mb-3">マップ</h3>
-                <p className="text-xs sm:text-sm text-white/90 leading-relaxed">
-                  みんなの活動を<br />マップで眺める
-                </p>
-              </div>
-            </Link>
-
             {/* クエスト */}
             <Link 
               href="/auth/signin"
@@ -128,6 +108,26 @@ export function Hero() {
                 <h3 className="text-base sm:text-lg md:text-xl font-bold text-white mb-2 sm:mb-3">クエスト</h3>
                 <p className="text-xs sm:text-sm text-white/90 leading-relaxed">
                   ミッションを達成して<br />スコア獲得
+                </p>
+              </div>
+            </Link>
+
+            {/* マップ */}
+            <Link 
+              href="/map"
+              className="group relative bg-white/10 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 text-center hover:bg-white/20 transition-all duration-500 border border-white/20 hover:border-white/40 hover:scale-105 transform shadow-xl hover:shadow-2xl cursor-pointer"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-red-500/20 to-rose-500/20 rounded-2xl sm:rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+              <div className="relative">
+                <div className="relative inline-block mb-4 sm:mb-6">
+                  <div className="absolute inset-0 bg-gradient-to-r from-red-400 to-rose-400 rounded-full blur-lg opacity-50 group-hover:opacity-75 transition-opacity"></div>
+                  <div className="relative w-16 h-16 sm:w-20 sm:h-20 bg-gradient-to-br from-red-500 via-rose-500 to-red-600 rounded-full flex items-center justify-center shadow-lg">
+                    <Map className="h-8 w-8 sm:h-10 sm:w-10 text-white" strokeWidth={2.5} />
+                  </div>
+                </div>
+                <h3 className="text-base sm:text-lg md:text-xl font-bold text-white mb-2 sm:mb-3">マップ</h3>
+                <p className="text-xs sm:text-sm text-white/90 leading-relaxed">
+                  みんなの活動を<br />マップで眺める
                 </p>
               </div>
             </Link>

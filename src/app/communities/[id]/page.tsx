@@ -4,14 +4,15 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
-import { getCommunityById, getCommunityStats, getCommunityMembers, getCommunityPosts, getCommunityEvents, requestCommunityMembership, updateMembershipStatus, createEvent, registerEvent, cancelEventRegistration, getEventParticipants, updateEvent, deleteEvent, updateCommunity, getCommunityChannels, createChannel, deleteChannel, getChannelMessages, sendChannelMessage } from '@/lib/community'
+import { getCommunityById, getCommunityStats, getCommunityMembers, getCommunityPosts, getCommunityEvents, requestCommunityMembership, updateMembershipStatus, createEvent, registerEvent, cancelEventRegistration, getEventParticipants, updateEvent, deleteEvent, updateCommunity, getCommunityChannels, createChannel, deleteChannel, getChannelMessages, sendChannelMessage, deleteCommunity } from '@/lib/community'
 import { uploadFiles, uploadFile, validateFileType, validateFileSize, FILE_TYPES, getFileIcon, isImageFile } from '@/lib/storage'
 import { getQuests, createQuest, requestQuestCompletion, updateQuestCompletionStatus, getQuestCompletions, updateQuest, deleteQuest, getQuestPostCounts, getQuestPosts } from '@/lib/quest'
-import type { Community, Quest, QuestCompletion, Post, Event, CommunityMember } from '@/lib/supabase'
+import type { Community, Quest, QuestCompletion, Post, Event, CommunityMember, User, CommunityRoomMessage } from '@/lib/supabase'
 import { ArrowLeft, Plus, Users, Building2, CheckCircle, X, Clock, MessageSquare, Calendar, UserPlus, Settings, MapPin, Upload, File, Image as ImageIcon, Edit, Trash2, Award, Heart, Archive, ArchiveRestore, Hash, Send } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
+import { isAdmin } from '@/lib/admin'
 
 type TabType = 'timeline' | 'members' | 'events' | 'quests' | 'channels'
 
@@ -31,7 +32,12 @@ export default function CommunityDetail() {
   // メンバーシップ状態
   const [isMember, setIsMember] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
+  const [isAdminUser, setIsAdminUser] = useState(false)
   const [membershipStatus, setMembershipStatus] = useState<'none' | 'pending' | 'approved'>('none')
+  
+  // 削除確認モーダル
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   // タイムライン
   const [posts, setPosts] = useState<Post[]>([])
@@ -103,7 +109,7 @@ export default function CommunityDetail() {
     member_permission: 'auto' as 'auto' | 'request'
   })
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null)
-  const [channelMessages, setChannelMessages] = useState<any[]>([])
+  const [channelMessages, setChannelMessages] = useState<CommunityRoomMessage[]>([])
   const [channelMessagesLoading, setChannelMessagesLoading] = useState(false)
   const [newChannelMessage, setNewChannelMessage] = useState('')
   const [sendingMessage, setSendingMessage] = useState(false)
@@ -178,11 +184,13 @@ export default function CommunityDetail() {
               .eq('id', newMsg.sender_id)
               .single()
               .then(({ data: sender }) => {
-                setChannelMessages((prev) => {
-                  if (prev.some(m => m.id === newMsg.id)) return prev
-                  return [...prev, { ...newMsg, sender }]
-                })
-                scrollToBottom()
+                if (sender) {
+                  setChannelMessages((prev) => {
+                    if (prev.some(m => m.id === newMsg.id)) return prev
+                    return [...prev, { ...newMsg, sender: sender as User } as CommunityRoomMessage]
+                  })
+                  scrollToBottom()
+                }
               })
           }
         )
@@ -230,6 +238,12 @@ export default function CommunityDetail() {
       setCommunity(data as Community)
       const owner = user?.id === data?.owner_id
       setIsOwner(owner)
+      
+      // 管理者かどうかを確認
+      if (user) {
+        const admin = await isAdmin(user.id)
+        setIsAdminUser(admin)
+      }
       
       // メンバーシップ状態を確認
       if (owner) {
@@ -445,8 +459,8 @@ export default function CommunityDetail() {
 
   const handleCreateQuest = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user || !isMember) {
-      setError('コミュニティメンバーのみクエストを作成できます')
+    if (!user || !isOwner) {
+      setError('コミュニティの管理者のみクエストを作成できます')
       return
     }
 
@@ -904,6 +918,21 @@ export default function CommunityDetail() {
     }
   }
 
+  const handleDeleteCommunity = async () => {
+    if (!community) return
+
+    setDeleting(true)
+    setError('')
+
+    try {
+      await deleteCommunity(communityId)
+      router.push('/communities')
+    } catch (error: any) {
+      setError(error.message || 'コミュニティの削除に失敗しました')
+      setDeleting(false)
+    }
+  }
+
   const handleChannelMessageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     setChannelMessageFiles(prev => [...prev, ...files])
@@ -948,14 +977,42 @@ export default function CommunityDetail() {
         console.log('ファイルアップロード成功:', attachments)
       }
 
-      const message = await sendChannelMessage(
-        selectedChannelId, 
-        newChannelMessage.trim(),
-        attachments.length > 0 ? attachments : undefined
-      )
-      setChannelMessages((prev) => [...prev, message])
+      // 楽観的更新：即座にUIに反映
+      const optimisticMessage: CommunityRoomMessage = {
+        id: `temp-${Date.now()}`,
+        room_id: selectedChannelId,
+        sender_id: user.id,
+        content: newChannelMessage.trim(),
+        attachments: attachments.length > 0 ? attachments : undefined,
+        created_at: new Date().toISOString(),
+        sender: {
+          id: user.id,
+          name: user.name || '匿名',
+          icon_url: user.icon_url || undefined,
+          account_type: user.account_type || 'individual',
+          verification_status: user.verification_status || 'unverified',
+          organization_name: user.organization_name || undefined,
+          is_operator: user.is_operator || false
+        } as User
+      }
+      
+      setChannelMessages((prev) => [...prev, optimisticMessage])
+      const messageContent = newChannelMessage.trim()
+      const messageAttachments = attachments.length > 0 ? attachments : undefined
       setNewChannelMessage('')
       setChannelMessageFiles([])
+      scrollToBottom()
+
+      const message = await sendChannelMessage(
+        selectedChannelId, 
+        messageContent,
+        messageAttachments
+      )
+      
+      // 楽観的更新を実際のデータに置き換え
+      setChannelMessages((prev) => prev.map(m => 
+        m.id === optimisticMessage.id ? message : m
+      ))
       scrollToBottom()
     } catch (error: any) {
       console.error('メッセージ送信エラー:', error)
@@ -1175,6 +1232,26 @@ export default function CommunityDetail() {
                   キャンセル
                 </button>
               </div>
+              
+              {/* コミュニティ削除セクション */}
+              {(isOwner || isAdminUser) && (
+                <div className="mt-8 pt-6 border-t border-gray-200">
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <h3 className="text-sm font-semibold text-red-900 mb-2">危険な操作</h3>
+                    <p className="text-sm text-red-700 mb-4">
+                      コミュニティを削除すると、すべての関連データ（投稿、イベント、クエスト、メンバー情報など）が永久に削除されます。この操作は取り消せません。
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteModal(true)}
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors flex items-center space-x-2"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span>コミュニティを削除</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </form>
           ) : (
             <>
@@ -1229,6 +1306,7 @@ export default function CommunityDetail() {
                   <button
                     onClick={() => setIsEditingCommunity(true)}
                     className="p-2 text-gray-600 hover:text-primary-600 transition-colors"
+                    title="コミュニティを編集"
                   >
                     <Settings className="h-5 w-5" />
                   </button>
@@ -2063,7 +2141,7 @@ export default function CommunityDetail() {
                 )}
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold text-gray-900">クエスト</h2>
-                  {isMember && (
+                  {isOwner && (
                     <button
                       onClick={() => setShowCreateQuest(!showCreateQuest)}
                       className="px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center"
@@ -2075,7 +2153,7 @@ export default function CommunityDetail() {
                 </div>
 
                 {/* クエスト作成フォーム */}
-                {showCreateQuest && isMember && (
+                {showCreateQuest && isOwner && (
                   <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">新しいクエスト</h3>
                     <form onSubmit={handleCreateQuest} className="space-y-4">
@@ -2159,7 +2237,7 @@ export default function CommunityDetail() {
                   <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
                     <Award className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                     <p className="text-gray-500 text-lg font-medium mb-2">クエストがありません</p>
-                    {isMember && (
+                    {isOwner && (
                       <p className="text-sm text-gray-400">最初のクエストを作成してみましょう</p>
                     )}
                   </div>
@@ -2751,6 +2829,42 @@ export default function CommunityDetail() {
               </div>
             )}
           </>
+        )}
+
+        {/* コミュニティ削除確認モーダル */}
+        {showDeleteModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg max-w-md w-full p-6">
+              <h3 className="text-xl font-bold text-gray-900 mb-4">コミュニティを削除</h3>
+              <p className="text-gray-600 mb-4">
+                この操作は取り消せません。コミュニティとすべての関連データ（投稿、イベント、クエスト、メンバー情報など）が永久に削除されます。
+              </p>
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4 text-sm">
+                  {error}
+                </div>
+              )}
+              <div className="flex space-x-4">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false)
+                    setError('')
+                  }}
+                  className="btn-secondary flex-1"
+                  disabled={deleting}
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={handleDeleteCommunity}
+                  disabled={deleting}
+                  className="btn-primary bg-red-600 hover:bg-red-700 text-white flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {deleting ? '削除中...' : '削除する'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
