@@ -23,6 +23,7 @@ export default function Profile() {
   const [userScore, setUserScore] = useState<UserScore | null>(null)
   const [verificationRequest, setVerificationRequest] = useState<any>(null)
   const [university, setUniversity] = useState<University | null>(null)
+  const [studyAbroadUniversity, setStudyAbroadUniversity] = useState<University | null>(null)
   const [loading, setLoading] = useState(true)
   const [postsLoading, setPostsLoading] = useState(true)
   const [error, setError] = useState('')
@@ -50,7 +51,7 @@ export default function Profile() {
 
       setProfile(data)
       
-      // 大学情報を取得
+      // 所属大学情報を取得
       if (data.university_id) {
         const { data: uniData } = await getUniversityById(data.university_id)
         if (uniData) {
@@ -69,6 +70,14 @@ export default function Profile() {
           .single()
         if (uniData) {
           setUniversity(uniData as University)
+        }
+      }
+      
+      // 留学先大学情報を取得
+      if (data.study_abroad_university_id) {
+        const { data: uniData } = await getUniversityById(data.study_abroad_university_id)
+        if (uniData) {
+          setStudyAbroadUniversity(uniData)
         }
       }
     } catch (error: any) {
@@ -443,6 +452,34 @@ export default function Profile() {
                           )}
                         </div>
                       )}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {studyAbroadUniversity && (
+                <div className="flex items-start space-x-2">
+                  <GraduationCap className="h-5 w-5 text-primary-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center flex-wrap gap-2">
+                      <span className="text-gray-600 whitespace-nowrap">留学先大学:</span>
+                      <span className="font-medium text-gray-900">
+                        {studyAbroadUniversity.name_ja || studyAbroadUniversity.name_en}
+                      </span>
+                      {studyAbroadUniversity.name_ja && studyAbroadUniversity.name_en && (
+                        <span className="text-sm text-gray-500 whitespace-nowrap">
+                          ({studyAbroadUniversity.name_en})
+                        </span>
+                      )}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-2 py-0.5 bg-primary-100 text-primary-800 rounded-full text-xs font-medium whitespace-nowrap">
+                          {studyAbroadUniversity.country_code}
+                        </span>
+                        {studyAbroadUniversity.continent && (
+                          <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded-full text-xs font-medium whitespace-nowrap">
+                            {studyAbroadUniversity.continent.name_ja}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>

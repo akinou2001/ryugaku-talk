@@ -16,12 +16,17 @@ export function Footer() {
               みんなの留学体験が紡ぐ、次世代の留学コミュニティプラットフォーム
             </p>
             <div className="flex space-x-4">
-              <a href="mailto:contact@ryugakutalk.com" className="text-gray-400 hover:text-primary-600 transition-colors">
-                <Mail className="h-5 w-5" />
-              </a>
-              <a href="https://twitter.com" className="text-gray-400 hover:text-primary-600 transition-colors">
-                <Twitter className="h-5 w-5" />
-              </a>
+              {process.env.NEXT_PUBLIC_CONTACT_FORM_URL && (
+                <a 
+                  href={process.env.NEXT_PUBLIC_CONTACT_FORM_URL} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-primary-600 transition-colors"
+                  title="お問い合わせ"
+                >
+                  <Mail className="h-5 w-5" />
+                </a>
+              )}
             </div>
           </div>
 
@@ -36,7 +41,7 @@ export function Footer() {
               </li>
               <li>
                 <Link href="/map" className="text-gray-600 hover:text-primary-600 transition-colors">
-                  眺める
+                  マップ
                 </Link>
               </li>
               <li>
@@ -56,6 +61,19 @@ export function Footer() {
                   ヘルプ
                 </Link>
               </li>
+              {process.env.NEXT_PUBLIC_CONTACT_FORM_URL && (
+                <li>
+                  <a
+                    href={process.env.NEXT_PUBLIC_CONTACT_FORM_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-gray-600 hover:text-primary-600 transition-colors inline-flex items-center space-x-1"
+                  >
+                    <span>お問い合わせ</span>
+                    <Mail className="h-3 w-3" />
+                  </a>
+                </li>
+              )}
               <li>
                 <Link href="/privacy" className="text-gray-600 hover:text-primary-600 transition-colors">
                   プライバシーポリシー

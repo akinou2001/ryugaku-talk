@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from './Providers'
-import { Menu, X, User, LogOut, Settings, MessageCircle, Shield, Users, Building2, Bell, ShieldCheck, Home, Eye, AlertCircle, X as XIcon } from 'lucide-react'
+import { Menu, X, User, LogOut, Settings, MessageCircle, Shield, Users, Building2, Bell, ShieldCheck, Home, Map, AlertCircle, X as XIcon } from 'lucide-react'
 import { isAdmin } from '@/lib/admin'
 import { UserAvatar } from './UserAvatar'
 import { usePathname } from 'next/navigation'
@@ -279,8 +279,8 @@ export function Header() {
                 },
                 {
                   id: 'map',
-                  label: '眺める',
-                  icon: Eye,
+                  label: 'マップ',
+                  icon: Map,
                   path: '/map'
                 },
                 ...(user ? [{
@@ -375,8 +375,8 @@ export function Header() {
                         }}
                         className="flex items-center w-full px-4 py-2 text-gray-700 hover:bg-gray-50"
                       >
-                        <Eye className="h-4 w-4 mr-2" />
-                        眺める
+                        <Map className="h-4 w-4 mr-2" />
+                        マップ
                       </button>
                       {user && (
                         <button

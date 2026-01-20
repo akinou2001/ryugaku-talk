@@ -24,7 +24,7 @@ export function Features() {
     {
       icon: Users,
       title: 'コミュニティ',
-      description: '個人はサークル、組織は公式コミュニティを作成可能。メンバーと情報を共有し、イベントやクエストを開催できます。',
+      description: '組織は公式コミュニティを作成可能。メンバーと情報を共有し、イベントやクエストを開催できます。',
       color: 'from-green-500 to-green-600',
       bgColor: 'bg-green-50',
       iconBg: 'bg-green-100',

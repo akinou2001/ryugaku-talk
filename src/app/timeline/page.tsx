@@ -599,7 +599,7 @@ export default function Timeline() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, account_type, verification_status, organization_name, study_abroad_destination, icon_url, languages, is_operator)
+          author:profiles(name, account_type, verification_status, organization_name, study_abroad_destination, study_abroad_university_id, icon_url, languages, is_operator)
         `)
 
       // コミュニティ限定投稿は除外（通常のタイムラインでは表示しない）
@@ -680,9 +680,58 @@ export default function Timeline() {
         query = query.in('study_abroad_destination', selectedLocations)
       }
 
-      // 大学フィルター（複数選択対応）
+      // 大学フィルター（複数選択対応）- ユーザーの留学先大学でフィルタリング
+      let userIdsByUniversity: string[] = []
       if (selectedUniversities.length > 0) {
-        query = query.in('university_id', selectedUniversities)
+        try {
+          console.log('[Timeline] University filter - selectedUniversities:', selectedUniversities)
+          
+          // 選択された大学に留学しているユーザーのIDを取得
+          // まず、その大学IDが実際に存在するか確認
+          const { data: universityCheck, error: universityCheckError } = await supabase
+            .from('universities')
+            .select('id')
+            .in('id', selectedUniversities)
+          
+          console.log('[Timeline] University check - universityCheck:', universityCheck)
+          console.log('[Timeline] University check - universityCheckError:', universityCheckError)
+          
+          if (!universityCheckError && universityCheck && universityCheck.length > 0) {
+            // 選択された大学に留学しているユーザーのIDを取得
+            const { data: profilesData, error: profilesError } = await supabase
+              .from('profiles')
+              .select('id, study_abroad_university_id')
+              .in('study_abroad_university_id', selectedUniversities)
+              .not('study_abroad_university_id', 'is', null)
+            
+            console.log('[Timeline] University filter - profilesError:', profilesError)
+            console.log('[Timeline] University filter - profilesData:', profilesData)
+            
+            if (profilesError) {
+              console.error('Error fetching profiles by universities:', profilesError)
+              // エラーが発生した場合はフィルターを適用しない
+            } else {
+              userIdsByUniversity = (profilesData || []).map((p: any) => p.id)
+              
+              console.log('[Timeline] University filter - found users:', userIdsByUniversity.length, userIdsByUniversity)
+              
+              // 該当するユーザーの投稿のみを取得
+              if (userIdsByUniversity.length > 0) {
+                query = query.in('author_id', userIdsByUniversity)
+              } else {
+                // 該当するユーザーがいない場合は、空の結果を返すために存在しないIDを設定
+                query = query.eq('author_id', '00000000-0000-0000-0000-000000000000')
+              }
+            }
+          } else {
+            console.warn('[Timeline] University filter - Selected universities do not exist in database')
+            // 大学が存在しない場合は、空の結果を返す
+            query = query.eq('author_id', '00000000-0000-0000-0000-000000000000')
+          }
+        } catch (error) {
+          console.error('Error in university filter:', error)
+          // エラーが発生した場合はフィルターを適用しない
+        }
       }
 
       // 検索
@@ -1590,9 +1639,9 @@ export default function Timeline() {
                 <div className="mt-3 px-3 py-2 bg-primary-50 rounded-lg border border-primary-200">
                   <p className="text-sm text-gray-600 mb-2">選択中:</p>
                   <div className="flex flex-wrap gap-2">
-                    {selectedUniversitiesData.map((uni) => (
+                    {selectedUniversitiesData.map((uni, index) => (
                       <span
-                        key={uni.id}
+                        key={`selected-uni-${uni.id}-${index}`}
                         className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-white rounded-full text-xs font-semibold text-primary-700 border border-primary-300"
                       >
                         <GraduationCap className="h-3 w-3" />

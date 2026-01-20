@@ -2,7 +2,7 @@ import { Hero } from '@/components/Hero'
 import { RecentPosts } from '@/components/RecentPosts'
 import { Features } from '@/components/Features'
 import Link from 'next/link'
-import { ArrowRight, Users, MessageSquare, Building2, Sparkles, Globe } from 'lucide-react'
+import { ArrowRight, Users, MessageSquare, Building2, Sparkles, Globe, Mail } from 'lucide-react'
 
 export default function Home() {
   return (
@@ -67,6 +67,34 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* カスタマーサポートセクション */}
+      {process.env.NEXT_PUBLIC_CONTACT_FORM_URL && (
+        <section className="py-12 sm:py-16 bg-gray-50">
+          <div className="container mx-auto px-3 sm:px-4 w-full max-w-full">
+            <div className="max-w-3xl mx-auto text-center px-2">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-4 sm:mb-6">
+                お問い合わせ・サポート
+              </h2>
+              <p className="text-base sm:text-lg text-gray-600 mb-8">
+                ご質問やお困りのことがございましたら、お気軽にお問い合わせください。
+                <br className="hidden sm:block" />
+                <span className="sm:hidden"> </span>
+                カスタマーサポートが対応いたします。
+              </p>
+              <a
+                href={process.env.NEXT_PUBLIC_CONTACT_FORM_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center space-x-2 bg-primary-600 hover:bg-primary-700 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl font-semibold text-base sm:text-lg transition-all duration-200 shadow-lg hover:shadow-xl"
+              >
+                <Mail className="h-5 w-5" />
+                <span>お問い合わせフォーム</span>
+              </a>
+            </div>
+          </div>
+        </section>
+      )}
     </div>
   )
 }

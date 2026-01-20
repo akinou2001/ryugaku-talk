@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Sparkles, Link as LinkIcon } from "lucide-react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
+import { useAuth } from "@/components/Providers";
+import { supabase } from "@/lib/supabase";
 
 interface RelevantPost {
   post_id: string;
@@ -36,6 +39,8 @@ interface Citation {
 }
 
 export default function AiConciergePage() {
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [answer, setAnswer] = useState("");
@@ -45,6 +50,30 @@ export default function AiConciergePage() {
   const [citations, setCitations] = useState<Citation[]>([]);
   const [mode, setMode] = useState<'grounded' | 'reasoning'>('grounded');
   const [confidenceLevel, setConfidenceLevel] = useState<'high' | 'medium' | 'low'>('medium');
+
+  // ログインチェック
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/auth/signin');
+    }
+  }, [user, authLoading, router]);
+
+  // ログイン中または認証確認中の場合は何も表示しない
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mb-4"></div>
+          <p className="text-gray-600">読み込み中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ログインしていない場合は何も表示しない（リダイレクト中）
+  if (!user) {
+    return null;
+  }
 
   async function aiSearch() {
     if (!query.trim()) return;
@@ -57,9 +86,20 @@ export default function AiConciergePage() {
     setCitations([]);
 
     try {
+      // セッションからアクセストークンを取得
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setError("ログインが必要です");
+        router.push('/auth/signin');
+        return;
+      }
+
       const res = await fetch("/api/ai", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`
+        },
         body: JSON.stringify({ question_text: query }),
       });
 

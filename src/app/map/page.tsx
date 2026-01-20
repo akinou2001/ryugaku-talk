@@ -370,7 +370,7 @@ export default function MapPage() {
           <div className="flex items-center justify-between mb-2">
             <div>
               <h1 className="text-2xl font-bold text-gray-900 mb-1 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
-                眺める
+                マップ
               </h1>
               <p className="text-sm text-gray-600">世界で挑戦している留学生の「今」をチェックしよう</p>
             </div>
