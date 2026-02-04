@@ -64,7 +64,7 @@ export const EARTH_BUTTON_STYLES = {
     borderColor: 'rgba(0, 0, 0, 0.1)',
     textColor: 'gray-900',
   },
-  // サイズ設定
+  // サイズの設定
   sizes: {
     sm: {
       padding: 'px-4 sm:px-6 py-2 sm:py-3',
