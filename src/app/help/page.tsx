@@ -1,10 +1,11 @@
 import type { Metadata } from 'next'
 import { HelpCircle, MessageCircle, BookOpen, Users, Shield, Mail } from 'lucide-react'
 import Link from 'next/link'
+import { APP_NAME } from '@/config/app-config'
 
 export const metadata: Metadata = {
-  title: 'ヘルプ - RyugakuTalk',
-  description: 'RyugakuTalkの使い方やよくある質問',
+  title: 'ヘルプ',
+  description: `${APP_NAME}の使い方やよくある質問`,
 }
 
 export default function HelpPage() {
@@ -17,7 +18,7 @@ export default function HelpPage() {
             <HelpCircle className="h-16 w-16 text-primary-600 mx-auto mb-4" />
             <h1 className="text-4xl font-bold text-gray-900 mb-4">ヘルプセンター</h1>
             <p className="text-lg text-gray-600">
-              RyugakuTalkの使い方やよくある質問をご確認ください
+              {APP_NAME}の使い方やよくある質問をご確認ください
             </p>
           </div>
 
@@ -48,7 +49,7 @@ export default function HelpPage() {
               <div>
                 <h3 className="text-xl font-semibold text-gray-900 mb-3">1. アカウント作成</h3>
                 <p className="text-gray-700 mb-2">
-                  RyugakuTalkを利用するには、まずアカウントを作成する必要があります。
+                  {APP_NAME}を利用するには、まずアカウントを作成する必要があります。
                 </p>
                 <ol className="list-decimal list-inside space-y-2 text-gray-700 ml-4">
                   <li>右上の「新規登録」ボタンをクリック</li>

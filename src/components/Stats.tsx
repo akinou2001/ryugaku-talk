@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Users, MessageSquare, Building2, Globe } from 'lucide-react'
+import { APP_NAME } from '@/config/app-config'
 
 interface StatsData {
   users: number
@@ -134,7 +135,7 @@ export function Stats() {
       <div className="container mx-auto px-4">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-            RyugakuTalkの実績
+            {APP_NAME}の実績
           </h2>
           <p className="text-lg text-gray-600">
             多くのユーザーが参加する、活発な留学コミュニティ

@@ -568,7 +568,7 @@ export default function ChatList() {
               <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center">
                 <MessageCircle className="h-6 w-6 text-white" />
               </div>
-              <h1 className="text-2xl font-bold text-gray-900">メッセージ</h1>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">メッセージ</h1>
             </div>
           </div>
 
@@ -757,7 +757,7 @@ export default function ChatList() {
                                         }}
                                         className={`px-4 py-2.5 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap flex items-center space-x-2 flex-shrink-0 ${
                                           isSelected
-                                            ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg transform scale-105'
+                                            ? 'bg-gray-900 text-white shadow-lg transform scale-105'
                                             : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 hover:scale-105'
                                         }`}
                                       >

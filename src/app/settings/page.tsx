@@ -493,9 +493,9 @@ export default function SettingsPage() {
           <div className="mb-8">
             <div className="flex items-center space-x-3 mb-4">
               <Settings className="h-8 w-8 text-primary-600" />
-              <h1 className="text-3xl font-bold text-gray-900">設定</h1>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">設定</h1>
             </div>
-            <p className="text-gray-600">アカウント設定とプライバシー設定を管理できます</p>
+            <p className="text-sm text-gray-600">アカウント設定とプライバシー設定を管理できます</p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

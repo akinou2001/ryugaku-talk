@@ -8,6 +8,7 @@ import type { User } from '@/lib/supabase'
 import { ArrowLeft, Save, X, User as UserIcon, Search, Briefcase, Home, GraduationCap as LearnIcon, GraduationCap, Image as ImageIcon, Twitter, Instagram, Facebook, Linkedin, Link as LinkIcon } from 'lucide-react'
 import { uploadFile, validateFileType, validateFileSize, FILE_TYPES } from '@/lib/storage'
 import { searchUniversities, findUniversityByAlias, type University } from '@/lib/universities'
+import type { UserUniversity, UserStudyAbroadUniversity } from '@/lib/supabase'
 
 export default function EditProfile() {
   const { user } = useAuth()
@@ -27,7 +28,11 @@ export default function EditProfile() {
     name: '',
     university_id: null as string | null,
     university: '' as string, // 後方互換性のため残す
+    university_start_date: '' as string,
+    university_end_date: '' as string,
     study_abroad_university_id: null as string | null, // 留学先大学（正規留学の場合は1つだけ）
+    study_abroad_start_date: '' as string,
+    study_abroad_end_date: '' as string,
     study_abroad_destinations: [] as string[],
     study_purposes: [] as ('learn' | 'work' | 'live')[],
     study_details: [] as ('regular-study' | 'language-study' | 'exchange' | 'research' | 'working-holiday' | 'residence' | 'local-hire' | 'volunteer' | 'internship' | 'nomad' | 'high-school' | 'summer-school')[],
@@ -42,17 +47,23 @@ export default function EditProfile() {
     sns_url: ''
   })
   
-  // 所属大学検索用
+  // 所属大学（複数登録対応）
+  const [userUniversities, setUserUniversities] = useState<UserUniversity[]>([])
   const [universitySearchQuery, setUniversitySearchQuery] = useState('')
   const [universitySearchResults, setUniversitySearchResults] = useState<University[]>([])
-  const [selectedUniversity, setSelectedUniversity] = useState<University | null>(null)
   const [showUniversityDropdown, setShowUniversityDropdown] = useState(false)
+  const [editingUniversityIndex, setEditingUniversityIndex] = useState<number | null>(null)
   
-  // 留学先大学検索用
+  // 留学先大学（複数登録対応）
+  const [userStudyAbroadUniversities, setUserStudyAbroadUniversities] = useState<UserStudyAbroadUniversity[]>([])
   const [studyAbroadUniversitySearchQuery, setStudyAbroadUniversitySearchQuery] = useState('')
   const [studyAbroadUniversitySearchResults, setStudyAbroadUniversitySearchResults] = useState<University[]>([])
-  const [selectedStudyAbroadUniversity, setSelectedStudyAbroadUniversity] = useState<University | null>(null)
   const [showStudyAbroadUniversityDropdown, setShowStudyAbroadUniversityDropdown] = useState(false)
+  const [editingStudyAbroadUniversityIndex, setEditingStudyAbroadUniversityIndex] = useState<number | null>(null)
+  
+  // 表示組織選択用（組織アカウントの場合）
+  const [displayOrganizationId, setDisplayOrganizationId] = useState<string | null>(null)
+  const [userOrganizations, setUserOrganizations] = useState<any[]>([])
 
   const [newLanguage, setNewLanguage] = useState('')
   const [countrySearch, setCountrySearch] = useState('')
@@ -290,7 +301,11 @@ export default function EditProfile() {
         name: data.name || '',
         university_id: data.university_id || null,
         university: data.university || '',
+        university_start_date: data.university_start_date || '',
+        university_end_date: data.university_end_date || '',
         study_abroad_university_id: data.study_abroad_university_id || null,
+        study_abroad_start_date: data.study_abroad_start_date || '',
+        study_abroad_end_date: data.study_abroad_end_date || '',
         study_abroad_destinations: destinations,
         study_purposes: purposeTags,
         study_details: detailTags,
@@ -305,22 +320,117 @@ export default function EditProfile() {
         sns_url: data.sns_url || ''
       })
       
-      if (university) {
-        setSelectedUniversity(university)
-      }
+      // 複数所属大学を取得
+      const { data: userUnisData } = await supabase
+        .from('user_universities')
+        .select(`
+          *,
+          university:universities(
+            id,
+            name_ja,
+            name_en,
+            country_code,
+            continent:continents(name_ja)
+          )
+        `)
+        .eq('user_id', userId)
+        .order('display_order', { ascending: true })
       
-      // 留学先大学情報を取得
-      if (data.study_abroad_university_id) {
-        const { data: studyAbroadUniData } = await supabase
-          .from('universities')
+      if (userUnisData) {
+        setUserUniversities(userUnisData as UserUniversity[])
+      } else if (university) {
+        // 後方互換性: 既存の単一大学データを移行
+        const { data: newUni } = await supabase
+          .from('user_universities')
+          .insert({
+            user_id: userId,
+            university_id: university.id,
+            start_date: data.university_start_date || null,
+            end_date: data.university_end_date || null,
+            display_order: 0
+          })
           .select(`
             *,
-            continent:continents(*)
+            university:universities(
+              id,
+              name_ja,
+              name_en,
+              country_code,
+              continent:continents(name_ja)
+            )
           `)
-          .eq('id', data.study_abroad_university_id)
           .single()
-        if (studyAbroadUniData) {
-          setSelectedStudyAbroadUniversity(studyAbroadUniData as University)
+        if (newUni) {
+          setUserUniversities([newUni as UserUniversity])
+        }
+      }
+      
+      // 複数留学先大学を取得
+      const { data: userStudyAbroadUnisData } = await supabase
+        .from('user_study_abroad_universities')
+        .select(`
+          *,
+          university:universities(
+            id,
+            name_ja,
+            name_en,
+            country_code,
+            continent:continents(name_ja)
+          )
+        `)
+        .eq('user_id', userId)
+        .order('display_order', { ascending: true })
+      
+      if (userStudyAbroadUnisData) {
+        setUserStudyAbroadUniversities(userStudyAbroadUnisData as UserStudyAbroadUniversity[])
+      } else if (data.study_abroad_university_id) {
+        // 後方互換性: 既存の単一留学先大学データを移行
+        const { data: newStudyAbroadUni } = await supabase
+          .from('user_study_abroad_universities')
+          .insert({
+            user_id: userId,
+            university_id: data.study_abroad_university_id,
+            start_date: data.study_abroad_start_date || null,
+            end_date: data.study_abroad_end_date || null,
+            display_order: 0
+          })
+          .select(`
+            *,
+            university:universities(
+              id,
+              name_ja,
+              name_en,
+              country_code,
+              continent:continents(name_ja)
+            )
+          `)
+          .single()
+        if (newStudyAbroadUni) {
+          setUserStudyAbroadUniversities([newStudyAbroadUni as UserStudyAbroadUniversity])
+        }
+      }
+      
+      // 表示組織を取得
+      setDisplayOrganizationId(data.display_organization_id || null)
+      
+      // ユーザーが所属している組織を取得（組織アカウントの場合）
+      if (data.account_type !== 'individual') {
+        const { data: orgsData } = await supabase
+          .from('organization_members')
+          .select(`
+            *,
+            organization:profiles!organization_members_organization_id_fkey(
+              id,
+              name,
+              organization_name,
+              verification_status
+            )
+          `)
+          .eq('member_id', userId)
+          .eq('status', 'accepted')
+        
+        if (orgsData) {
+          setUserOrganizations(orgsData)
         }
       }
       
@@ -411,9 +521,9 @@ export default function EditProfile() {
         ? formData.study_abroad_destinations.join(', ')
         : null
       
-      // 大学情報を設定
-      const universityName = selectedUniversity 
-        ? (selectedUniversity.name_ja || selectedUniversity.name_en)
+      // 大学情報を設定（後方互換性のため、最初の所属大学名を保存）
+      const universityName = userUniversities.length > 0 && userUniversities[0].university
+        ? (userUniversities[0].university.name_ja || userUniversities[0].university.name_en)
         : (formData.university || null)
       
       // URLバリデーション関数
@@ -456,9 +566,6 @@ export default function EditProfile() {
 
       const updateData: any = {
         name: formData.name,
-        university_id: selectedUniversity?.id || formData.university_id || null,
-        university: universityName, // 後方互換性のため残す
-        study_abroad_university_id: selectedStudyAbroadUniversity?.id || formData.study_abroad_university_id || null,
         study_abroad_destination: studyAbroadDestination,
         bio: formData.bio || null,
         languages: languagesWithAttributes,
@@ -468,6 +575,7 @@ export default function EditProfile() {
         sns_facebook: validateUrl(formData.sns_facebook, 'facebook'),
         sns_linkedin: validateUrl(formData.sns_linkedin, 'linkedin'),
         sns_url: validateUrl(formData.sns_url),
+        display_organization_id: displayOrganizationId,
         updated_at: new Date().toISOString()
       }
       
@@ -476,10 +584,67 @@ export default function EditProfile() {
         updateData.icon_url = iconUrl || null
       }
       
+      // プロフィールを更新
       const { error } = await supabase
         .from('profiles')
         .update(updateData)
         .eq('id', userId)
+      
+      if (error) {
+        throw error
+      }
+      
+      // 複数所属大学を保存
+      // 既存の大学を削除
+      await supabase
+        .from('user_universities')
+        .delete()
+        .eq('user_id', userId)
+      
+      // 新しい大学を追加
+      if (userUniversities.length > 0) {
+        const universitiesToInsert = userUniversities.map((uni, index) => ({
+          user_id: userId,
+          university_id: uni.university_id,
+          start_date: uni.start_date || null,
+          end_date: uni.end_date || null,
+          display_order: index
+        }))
+        
+        const { error: uniError } = await supabase
+          .from('user_universities')
+          .insert(universitiesToInsert)
+        
+        if (uniError) {
+          throw uniError
+        }
+      }
+      
+      // 複数留学先大学を保存
+      // 既存の留学先大学を削除
+      await supabase
+        .from('user_study_abroad_universities')
+        .delete()
+        .eq('user_id', userId)
+      
+      // 新しい留学先大学を追加
+      if (userStudyAbroadUniversities.length > 0) {
+        const studyAbroadUniversitiesToInsert = userStudyAbroadUniversities.map((uni, index) => ({
+          user_id: userId,
+          university_id: uni.university_id,
+          start_date: uni.start_date || null,
+          end_date: uni.end_date || null,
+          display_order: index
+        }))
+        
+        const { error: studyAbroadUniError } = await supabase
+          .from('user_study_abroad_universities')
+          .insert(studyAbroadUniversitiesToInsert)
+        
+        if (studyAbroadUniError) {
+          throw studyAbroadUniError
+        }
+      }
 
       if (error) {
         throw error
@@ -523,6 +688,92 @@ export default function EditProfile() {
       ...prev,
       languages: prev.languages.filter(l => l !== language)
     }))
+  }
+
+  // 所属大学を追加
+  const addUniversity = async (university: University, startDate?: string, endDate?: string) => {
+    // 既に同じ大学が登録されているかチェック
+    if (userUniversities.some(u => u.university_id === university.id)) {
+      setError('この大学は既に登録されています')
+      return
+    }
+
+    const newUniversity: UserUniversity = {
+      id: `temp-${Date.now()}`,
+      user_id: userId,
+      university_id: university.id,
+      university: {
+        id: university.id,
+        name_ja: university.name_ja || null,
+        name_en: university.name_en || null,
+        country_code: university.country_code || null,
+        continent: university.continent ? { name_ja: university.continent.name_ja || null } : null
+      },
+      start_date: startDate || null,
+      end_date: endDate || null,
+      display_order: userUniversities.length,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+
+    setUserUniversities([...userUniversities, newUniversity])
+    setUniversitySearchQuery('')
+    setShowUniversityDropdown(false)
+  }
+
+  // 所属大学を削除
+  const removeUniversity = (index: number) => {
+    setUserUniversities(userUniversities.filter((_, i) => i !== index))
+  }
+
+  // 所属大学を更新
+  const updateUniversity = (index: number, updates: Partial<UserUniversity>) => {
+    const updated = [...userUniversities]
+    updated[index] = { ...updated[index], ...updates }
+    setUserUniversities(updated)
+  }
+
+  // 留学先大学を追加
+  const addStudyAbroadUniversity = async (university: University, startDate?: string, endDate?: string) => {
+    // 既に同じ大学が登録されているかチェック
+    if (userStudyAbroadUniversities.some(u => u.university_id === university.id)) {
+      setError('この大学は既に登録されています')
+      return
+    }
+
+    const newUniversity: UserStudyAbroadUniversity = {
+      id: `temp-${Date.now()}`,
+      user_id: userId,
+      university_id: university.id,
+      university: {
+        id: university.id,
+        name_ja: university.name_ja || null,
+        name_en: university.name_en || null,
+        country_code: university.country_code || null,
+        continent: university.continent ? { name_ja: university.continent.name_ja || null } : null
+      },
+      start_date: startDate || null,
+      end_date: endDate || null,
+      display_order: userStudyAbroadUniversities.length,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+
+    setUserStudyAbroadUniversities([...userStudyAbroadUniversities, newUniversity])
+    setStudyAbroadUniversitySearchQuery('')
+    setShowStudyAbroadUniversityDropdown(false)
+  }
+
+  // 留学先大学を削除
+  const removeStudyAbroadUniversity = (index: number) => {
+    setUserStudyAbroadUniversities(userStudyAbroadUniversities.filter((_, i) => i !== index))
+  }
+
+  // 留学先大学を更新
+  const updateStudyAbroadUniversity = (index: number, updates: Partial<UserStudyAbroadUniversity>) => {
+    const updated = [...userStudyAbroadUniversities]
+    updated[index] = { ...updated[index], ...updates }
+    setUserStudyAbroadUniversities(updated)
   }
 
   if (loading) {
@@ -661,91 +912,113 @@ export default function EditProfile() {
                 />
               </div>
 
-              {/* 所属大学 */}
+              {/* 所属大学（複数登録対応） */}
               <div className="relative">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  所属大学
+                  所属大学（複数登録可能）
                 </label>
                 
-                {/* 選択された大学の表示 */}
-                {selectedUniversity && (
-                  <div className="mb-3">
-                    <div className="inline-flex items-center space-x-2 px-4 py-2 bg-primary-50 border border-primary-200 rounded-lg">
-                      <GraduationCap className="h-5 w-5 text-primary-600" />
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900">
-                          {selectedUniversity.name_ja || selectedUniversity.name_en}
-                        </div>
-                        {selectedUniversity.name_ja && selectedUniversity.name_en && (
-                          <div className="text-sm text-gray-500">{selectedUniversity.name_en}</div>
-                        )}
-                        {selectedUniversity.continent && (
-                          <div className="text-xs text-gray-400 mt-1">
-                            {selectedUniversity.country_code} ・ {selectedUniversity.continent.name_ja}
+                {/* 登録済み大学の一覧 */}
+                {userUniversities.length > 0 && (
+                  <div className="space-y-3 mb-4">
+                    {userUniversities.map((userUni, index) => (
+                      <div key={userUni.id} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-2 mb-1">
+                              <GraduationCap className="h-5 w-5 text-primary-600" />
+                              <div>
+                                <div className="font-medium text-gray-900">
+                                  {userUni.university?.name_ja || userUni.university?.name_en || '大学名不明'}
+                                </div>
+                                {userUni.university?.name_ja && userUni.university?.name_en && (
+                                  <div className="text-sm text-gray-500">{userUni.university.name_en}</div>
+                                )}
+                                {userUni.university?.country_code && (
+                                  <div className="text-xs text-gray-400 mt-1">
+                                    {userUni.university.country_code}
+                                    {userUni.university.continent?.name_ja && ` ・ ${userUni.university.continent.name_ja}`}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">開始日</label>
+                                <input
+                                  type="date"
+                                  value={userUni.start_date || ''}
+                                  onChange={(e) => updateUniversity(index, { start_date: e.target.value || null })}
+                                  className="input-field text-sm"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-600 mb-1">終了日（現在在籍中の場合は空欄）</label>
+                                <input
+                                  type="date"
+                                  value={userUni.end_date || ''}
+                                  onChange={(e) => updateUniversity(index, { end_date: e.target.value || null })}
+                                  className="input-field text-sm"
+                                />
+                              </div>
+                            </div>
                           </div>
-                        )}
+                          <button
+                            type="button"
+                            onClick={() => removeUniversity(index)}
+                            className="text-gray-400 hover:text-red-600 transition-colors ml-2"
+                          >
+                            <X className="h-5 w-5" />
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedUniversity(null)
-                          setUniversitySearchQuery('')
-                          setFormData({ ...formData, university_id: null, university: '' })
-                        }}
-                        className="text-gray-400 hover:text-red-600 transition-colors"
-                      >
-                        <X className="h-5 w-5" />
-                      </button>
-                    </div>
+                    ))}
                   </div>
                 )}
 
                 {/* 大学検索入力 */}
-                {!selectedUniversity && (
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Search className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      type="text"
-                      value={universitySearchQuery}
-                      onChange={async (e) => {
-                        const query = e.target.value
-                        setUniversitySearchQuery(query)
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    value={universitySearchQuery}
+                    onChange={async (e) => {
+                      const query = e.target.value
+                      setUniversitySearchQuery(query)
+                      setShowUniversityDropdown(true)
+                      
+                      if (query.length >= 2) {
+                        const { data } = await searchUniversities({ query, limit: 10 })
+                        setUniversitySearchResults(data || [])
+                      } else {
+                        setUniversitySearchResults([])
+                      }
+                    }}
+                    onFocus={() => {
+                      if (universitySearchQuery.length >= 2) {
                         setShowUniversityDropdown(true)
-                        
-                        if (query.length >= 2) {
-                          const { data } = await searchUniversities({ query, limit: 10 })
-                          setUniversitySearchResults(data || [])
-                        } else {
-                          setUniversitySearchResults([])
-                        }
-                      }}
-                      onFocus={() => {
-                        if (universitySearchQuery.length >= 2) {
-                          setShowUniversityDropdown(true)
-                        }
-                      }}
-                      onBlur={() => {
-                        // 少し遅延させてクリックイベントを処理
-                        setTimeout(() => setShowUniversityDropdown(false), 200)
-                      }}
-                      placeholder="大学名を検索（日本語・英語対応）..."
-                      className="input-field pl-10"
-                    />
-                    
-                    {/* 検索結果ドロップダウン */}
-                    {showUniversityDropdown && universitySearchResults.length > 0 && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        {universitySearchResults.map((uni) => (
+                      }
+                    }}
+                    onBlur={() => {
+                      setTimeout(() => setShowUniversityDropdown(false), 200)
+                    }}
+                    placeholder="大学名を検索して追加（日本語・英語対応）..."
+                    className="input-field pl-10"
+                  />
+                  
+                  {/* 検索結果ドロップダウン */}
+                  {showUniversityDropdown && universitySearchResults.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {universitySearchResults
+                        .filter(uni => !userUniversities.some(u => u.university_id === uni.id))
+                        .map((uni) => (
                           <button
                             key={uni.id}
                             type="button"
                             onClick={() => {
-                              setSelectedUniversity(uni)
-                              setUniversitySearchQuery('')
-                              setFormData({ ...formData, university_id: uni.id, university: uni.name_ja || uni.name_en })
-                              setShowUniversityDropdown(false)
+                              addUniversity(uni)
                             }}
                             className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
                           >
@@ -777,128 +1050,146 @@ export default function EditProfile() {
                             </div>
                           </button>
                         ))}
+                    </div>
+                  )}
+                  
+                  {/* 検索結果が空の場合 */}
+                  {showUniversityDropdown && universitySearchQuery.length >= 2 && universitySearchResults.filter(uni => !userUniversities.some(u => u.university_id === uni.id)).length === 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4">
+                      <div className="text-sm text-gray-500 text-center">
+                        該当する大学が見つかりませんでした
                       </div>
-                    )}
-                    
-                    {/* 検索結果が空の場合 */}
-                    {showUniversityDropdown && universitySearchQuery.length >= 2 && universitySearchResults.length === 0 && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4">
-                        <div className="text-sm text-gray-500 text-center">
-                          該当する大学が見つかりませんでした
-                        </div>
-                        <div className="text-xs text-gray-400 text-center mt-1">
-                          別のキーワードで検索するか、管理者にお問い合わせください
-                        </div>
+                      <div className="text-xs text-gray-400 text-center mt-1">
+                        別のキーワードで検索するか、管理者にお問い合わせください
                       </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
+                </div>
                 
                 <p className="text-xs text-gray-500 mt-1">
-                  {selectedUniversity 
-                    ? '選択した大学を変更する場合は、上記の×ボタンをクリックしてください。'
-                    : '大学名を入力して検索してください。日本語名・英語名の両方で検索できます。'}
+                  大学名を入力して検索してください。複数の大学を登録できます。
                 </p>
               </div>
 
-              {/* 留学先大学（正規留学以外の場合のみ） */}
+              {/* 留学先大学（複数登録対応） */}
               {!formData.study_details.includes('regular-study') && (
                 <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    留学先大学
+                    留学先大学（複数登録可能）
                   </label>
                   
-                  {/* 選択された留学先大学の表示 */}
-                  {selectedStudyAbroadUniversity && (
-                    <div className="mb-3">
-                      <div className="inline-flex items-center space-x-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
-                        <GraduationCap className="h-5 w-5 text-green-600" />
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900">
-                            {selectedStudyAbroadUniversity.name_ja || selectedStudyAbroadUniversity.name_en}
-                          </div>
-                          {selectedStudyAbroadUniversity.name_ja && selectedStudyAbroadUniversity.name_en && (
-                            <div className="text-sm text-gray-500">{selectedStudyAbroadUniversity.name_en}</div>
-                          )}
-                          {selectedStudyAbroadUniversity.continent && (
-                            <div className="text-xs text-gray-400 mt-1">
-                              {selectedStudyAbroadUniversity.country_code} ・ {selectedStudyAbroadUniversity.continent.name_ja}
+                  {/* 登録済み留学先大学の一覧 */}
+                  {userStudyAbroadUniversities.length > 0 && (
+                    <div className="space-y-3 mb-4">
+                      {userStudyAbroadUniversities.map((userUni, index) => (
+                        <div key={userUni.id} className="border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2 mb-1">
+                                <GraduationCap className="h-5 w-5 text-green-600" />
+                                <div>
+                                  <div className="font-medium text-gray-900">
+                                    {userUni.university?.name_ja || userUni.university?.name_en || '大学名不明'}
+                                  </div>
+                                  {userUni.university?.name_ja && userUni.university?.name_en && (
+                                    <div className="text-sm text-gray-500">{userUni.university.name_en}</div>
+                                  )}
+                                  {userUni.university?.country_code && (
+                                    <div className="text-xs text-gray-400 mt-1">
+                                      {userUni.university.country_code}
+                                      {userUni.university.continent?.name_ja && ` ・ ${userUni.university.continent.name_ja}`}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                                <div>
+                                  <label className="block text-xs text-gray-600 mb-1">開始日</label>
+                                  <input
+                                    type="date"
+                                    value={userUni.start_date || ''}
+                                    onChange={(e) => updateStudyAbroadUniversity(index, { start_date: e.target.value || null })}
+                                    className="input-field text-sm"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs text-gray-600 mb-1">終了日（現在滞在中の場合は空欄）</label>
+                                  <input
+                                    type="date"
+                                    value={userUni.end_date || ''}
+                                    onChange={(e) => updateStudyAbroadUniversity(index, { end_date: e.target.value || null })}
+                                    className="input-field text-sm"
+                                  />
+                                </div>
+                              </div>
                             </div>
-                          )}
+                            <button
+                              type="button"
+                              onClick={() => removeStudyAbroadUniversity(index)}
+                              className="text-gray-400 hover:text-red-600 transition-colors ml-2"
+                            >
+                              <X className="h-5 w-5" />
+                            </button>
+                          </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedStudyAbroadUniversity(null)
-                            setStudyAbroadUniversitySearchQuery('')
-                            setFormData({ ...formData, study_abroad_university_id: null })
-                          }}
-                          className="text-gray-400 hover:text-red-600 transition-colors"
-                        >
-                          <X className="h-5 w-5" />
-                        </button>
-                      </div>
+                      ))}
                     </div>
                   )}
 
                   {/* 留学先大学検索入力 */}
-                  {!selectedStudyAbroadUniversity && (
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Search className="h-5 w-5 text-gray-400" />
-                      </div>
-                      <input
-                        type="text"
-                        value={studyAbroadUniversitySearchQuery}
-                        onChange={async (e) => {
-                          const query = e.target.value
-                          setStudyAbroadUniversitySearchQuery(query)
-                          
-                          if (query.length >= 2) {
-                            setShowStudyAbroadUniversityDropdown(true)
-                            try {
-                              const { data, error } = await searchUniversities({ query, limit: 10 })
-                              if (error) {
-                                console.error('大学検索エラー:', error)
-                                setStudyAbroadUniversitySearchResults([])
-                              } else {
-                                console.log('検索結果:', data)
-                                setStudyAbroadUniversitySearchResults(data || [])
-                              }
-                            } catch (error) {
-                              console.error('大学検索例外:', error)
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Search className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      value={studyAbroadUniversitySearchQuery}
+                      onChange={async (e) => {
+                        const query = e.target.value
+                        setStudyAbroadUniversitySearchQuery(query)
+                        
+                        if (query.length >= 2) {
+                          setShowStudyAbroadUniversityDropdown(true)
+                          try {
+                            const { data, error } = await searchUniversities({ query, limit: 10 })
+                            if (error) {
+                              console.error('大学検索エラー:', error)
                               setStudyAbroadUniversitySearchResults([])
+                            } else {
+                              setStudyAbroadUniversitySearchResults(data || [])
                             }
-                          } else {
+                          } catch (error) {
+                            console.error('大学検索例外:', error)
                             setStudyAbroadUniversitySearchResults([])
-                            setShowStudyAbroadUniversityDropdown(false)
                           }
-                        }}
-                        onFocus={() => {
-                          if (studyAbroadUniversitySearchQuery.length >= 2) {
-                            setShowStudyAbroadUniversityDropdown(true)
-                          }
-                        }}
-                        onBlur={() => {
-                          // 少し遅延させてクリックイベントを処理
-                          setTimeout(() => setShowStudyAbroadUniversityDropdown(false), 200)
-                        }}
-                        placeholder="留学先大学名を検索（日本語・英語対応）..."
-                        className="input-field pl-10"
-                      />
-                      
-                      {/* 検索結果ドロップダウン */}
-                      {showStudyAbroadUniversityDropdown && studyAbroadUniversitySearchResults.length > 0 && (
-                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                          {studyAbroadUniversitySearchResults.map((uni) => (
+                        } else {
+                          setStudyAbroadUniversitySearchResults([])
+                          setShowStudyAbroadUniversityDropdown(false)
+                        }
+                      }}
+                      onFocus={() => {
+                        if (studyAbroadUniversitySearchQuery.length >= 2) {
+                          setShowStudyAbroadUniversityDropdown(true)
+                        }
+                      }}
+                      onBlur={() => {
+                        setTimeout(() => setShowStudyAbroadUniversityDropdown(false), 200)
+                      }}
+                      placeholder="留学先大学名を検索して追加（日本語・英語対応）..."
+                      className="input-field pl-10"
+                    />
+                    
+                    {/* 検索結果ドロップダウン */}
+                    {showStudyAbroadUniversityDropdown && studyAbroadUniversitySearchResults.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {studyAbroadUniversitySearchResults
+                          .filter(uni => !userStudyAbroadUniversities.some(u => u.university_id === uni.id))
+                          .map((uni) => (
                             <button
                               key={uni.id}
                               type="button"
                               onClick={() => {
-                                setSelectedStudyAbroadUniversity(uni)
-                                setStudyAbroadUniversitySearchQuery('')
-                                setFormData({ ...formData, study_abroad_university_id: uni.id })
-                                setShowStudyAbroadUniversityDropdown(false)
+                                addStudyAbroadUniversity(uni)
                               }}
                               className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition-colors"
                             >
@@ -930,27 +1221,24 @@ export default function EditProfile() {
                               </div>
                             </button>
                           ))}
+                      </div>
+                    )}
+                    
+                    {/* 検索結果が空の場合 */}
+                    {showStudyAbroadUniversityDropdown && studyAbroadUniversitySearchQuery.length >= 2 && studyAbroadUniversitySearchResults.filter(uni => !userStudyAbroadUniversities.some(u => u.university_id === uni.id)).length === 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4">
+                        <div className="text-sm text-gray-500 text-center">
+                          該当する大学が見つかりませんでした
                         </div>
-                      )}
-                      
-                      {/* 検索結果が空の場合 */}
-                      {showStudyAbroadUniversityDropdown && studyAbroadUniversitySearchQuery.length >= 2 && studyAbroadUniversitySearchResults.length === 0 && (
-                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg p-4">
-                          <div className="text-sm text-gray-500 text-center">
-                            該当する大学が見つかりませんでした
-                          </div>
-                          <div className="text-xs text-gray-400 text-center mt-1">
-                            別のキーワードで検索するか、管理者にお問い合わせください
-                          </div>
+                        <div className="text-xs text-gray-400 text-center mt-1">
+                          別のキーワードで検索するか、管理者にお問い合わせください
                         </div>
-                      )}
-                    </div>
-                  )}
+                      </div>
+                    )}
+                  </div>
                   
                   <p className="text-xs text-gray-500 mt-1">
-                    {selectedStudyAbroadUniversity 
-                      ? '選択した留学先大学を変更する場合は、上記の×ボタンをクリックしてください。'
-                      : '留学先大学を1つ選択できます。大学名を入力して検索してください。'}
+                    留学先大学名を入力して検索してください。複数の大学を登録できます。
                   </p>
                 </div>
               )}
@@ -1247,6 +1535,35 @@ export default function EditProfile() {
               />
             </div>
           </div>
+
+          {/* 表示組織選択（組織アカウントの場合） */}
+          {userOrganizations.length > 0 && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-6">表示組織の選択</h2>
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600 mb-4">
+                  プロフィールに表示する組織を選択できます。選択しない場合は、元の優先ロジックに従って表示されます。
+                </p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    表示する組織
+                  </label>
+                  <select
+                    value={displayOrganizationId || ''}
+                    onChange={(e) => setDisplayOrganizationId(e.target.value || null)}
+                    className="input-field"
+                  >
+                    <option value="">自動選択（優先ロジックに従う）</option>
+                    {userOrganizations.map((org) => (
+                      <option key={org.organization.id} value={org.organization.id}>
+                        {org.organization.organization_name || org.organization.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* SNSリンク */}
           <div className="card">

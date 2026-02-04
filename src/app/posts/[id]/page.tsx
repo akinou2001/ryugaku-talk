@@ -895,12 +895,12 @@ export default function PostDetail() {
                   {post.author_id ? (
                     <Link 
                       href={`/profile/${post.author_id}`}
-                      className="font-medium text-primary-600 hover:text-primary-800"
+                      className="text-gray-900 font-semibold"
                     >
                       {post.author?.name || '匿名'}
                     </Link>
                   ) : (
-                    <span className="font-medium">{post.author?.name || '匿名'}</span>
+                    <span className="text-gray-900 font-semibold">{post.author?.name || '匿名'}</span>
                   )}
                   {post.author && (
                     <>
@@ -1038,12 +1038,12 @@ export default function PostDetail() {
               {post.author_id ? (
                 <Link 
                   href={`/profile/${post.author_id}`}
-                  className="font-medium text-primary-600 hover:text-primary-800"
+                  className="text-gray-900 font-semibold"
                 >
                   {post.author?.name || '匿名'}
                 </Link>
               ) : (
-                <span className="font-medium">{post.author?.name || '匿名'}</span>
+                <span className="text-gray-900 font-semibold">{post.author?.name || '匿名'}</span>
               )}
               {post.author && (
                 <>
@@ -1278,11 +1278,6 @@ export default function PostDetail() {
                             alt={`投稿画像 ${index + 1}`}
                             className="w-full rounded-lg border border-gray-200"
                           />
-                          {post.cover_image_url === imageUrl && (
-                            <div className="absolute top-2 right-2 bg-primary-500 text-white px-3 py-1 rounded text-sm font-semibold">
-                              カバー写真
-                            </div>
-                          )}
                         </div>
                       ))}
                     </div>

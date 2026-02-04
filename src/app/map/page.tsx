@@ -361,36 +361,11 @@ export default function MapPage() {
       <div className="container mx-auto px-4 py-6">
         {/* ヘッダー */}
         <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
-                マップ
-              </h1>
-              <p className="text-sm text-gray-600">世界で挑戦している現役留学生の「今」をチェックしよう</p>
-            </div>
-            {/* 2D/3D切り替えボタン */}
-            <div className="flex items-center space-x-2 bg-white rounded-xl p-1 shadow-md border border-gray-200">
-              <button
-                onClick={() => setViewMode('2D')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  viewMode === '2D'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                2D
-              </button>
-              <button
-                onClick={() => setViewMode('3D')}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  viewMode === '3D'
-                    ? 'bg-primary-600 text-white'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                3D
-              </button>
-            </div>
+          <div className="mb-2">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              マップ
+            </h1>
+            <p className="text-sm text-gray-600">世界で挑戦している現役留学生の「今」をチェックしよう</p>
           </div>
         </div>
 
@@ -420,8 +395,8 @@ export default function MapPage() {
           </form>
         </div>
 
-        {/* フィルター表示/非表示ボタン */}
-        <div className="mb-4">
+        {/* フィルター表示/非表示ボタンと2D/3D切り替え */}
+        <div className="mb-4 flex items-center justify-between gap-3">
           <button
             onClick={() => setShowFilters(!showFilters)}
             className="flex items-center space-x-2 px-4 py-2.5 bg-white rounded-xl text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-all shadow-sm border border-gray-200"
@@ -447,6 +422,29 @@ export default function MapPage() {
               </>
             )}
           </button>
+          {/* 2D/3D切り替えボタン */}
+          <div className="flex items-center space-x-2 bg-white rounded-xl p-1 shadow-md border border-gray-200">
+            <button
+              onClick={() => setViewMode('2D')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                viewMode === '2D'
+                  ? 'bg-gray-900 text-white'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              2D
+            </button>
+            <button
+              onClick={() => setViewMode('3D')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                viewMode === '3D'
+                  ? 'bg-gray-900 text-white'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              3D
+            </button>
+          </div>
         </div>
 
         {/* 絞り込みフィルター */}

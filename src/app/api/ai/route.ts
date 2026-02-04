@@ -3,6 +3,7 @@ import { findRelevantPostsForQuery } from "@/lib/searchPosts";
 import { findSimilarUsers } from "@/lib/searchUsers";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from '@supabase/supabase-js';
+import { APP_NAME } from "@/config/app-config";
 
 // サーバーサイド用のSupabaseクライアントを作成
 function getSupabaseServerClient() {
@@ -113,7 +114,7 @@ export async function POST(req: Request) {
 
     // 5. AI回答を生成
     const systemInstruction = mode === "grounded"
-      ? `あなたは留学支援コミュニティ「RyugakuTalk」のAIコンシェルジュです。
+      ? `あなたは留学支援コミュニティ「${APP_NAME}」のAIコンシェルジュです。
 ユーザーの質問に対して、提供された過去の投稿や外部情報を根拠として、親切で正確な回答を提供してください。
 
 回答の際は以下の点に注意してください：
@@ -122,7 +123,7 @@ export async function POST(req: Request) {
 - 回答は日本語で、わかりやすく、親切に書いてください
 - 提供された情報に基づいて回答し、推測は最小限にしてください
 - 回答はMarkdown形式で記述してください（見出し、リスト、太字などが使用可能です）`
-      : `あなたは留学支援コミュニティ「RyugakuTalk」のAIコンシェルジュです。
+      : `あなたは留学支援コミュニティ「${APP_NAME}」のAIコンシェルジュです。
 ユーザーの質問に対して、一般的な留学経験・制度・合理的推論に基づいて回答してください。
 
 回答の際は以下の点に注意してください：

@@ -26,6 +26,48 @@ export const supabase = createClient(
 export type AccountType = 'individual' | 'educational' | 'company' | 'government'
 export type VerificationStatus = 'unverified' | 'pending' | 'verified' | 'rejected'
 
+// ユーザーの所属大学（複数登録可能）
+export interface UserUniversity {
+  id: string
+  user_id: string
+  university_id: string
+  university?: {
+    id: string
+    name_ja?: string | null
+    name_en?: string | null
+    country_code?: string | null
+    continent?: {
+      name_ja?: string | null
+    } | null
+  }
+  start_date?: string | null
+  end_date?: string | null
+  display_order: number
+  created_at: string
+  updated_at: string
+}
+
+// ユーザーの留学先大学（複数登録可能）
+export interface UserStudyAbroadUniversity {
+  id: string
+  user_id: string
+  university_id: string
+  university?: {
+    id: string
+    name_ja?: string | null
+    name_en?: string | null
+    country_code?: string | null
+    continent?: {
+      name_ja?: string | null
+    } | null
+  }
+  start_date?: string | null
+  end_date?: string | null
+  display_order: number
+  created_at: string
+  updated_at: string
+}
+
 export interface User {
   id: string
   email: string
@@ -33,7 +75,11 @@ export interface User {
   account_type: AccountType
   university_id?: string | null
   university?: string // 後方互換性のため残す
+  university_start_date?: string | null // 所属大学の在籍開始日（後方互換性のため残す）
+  university_end_date?: string | null // 所属大学の在籍終了日（後方互換性のため残す）
   study_abroad_university_id?: string | null
+  study_abroad_start_date?: string | null // 留学先大学の滞在開始日（後方互換性のため残す）
+  study_abroad_end_date?: string | null // 留学先大学の滞在終了日（後方互換性のため残す）
   study_abroad_destination?: string
   major?: string
   bio?: string
@@ -64,6 +110,8 @@ export interface User {
   sns_facebook?: string | null
   sns_linkedin?: string | null
   sns_url?: string | null
+  // 表示組織選択（組織アカウントの場合）
+  display_organization_id?: string | null
   created_at: string
   updated_at: string
 }

@@ -789,8 +789,8 @@ function NewPostInner() {
                 const reader = new FileReader()
                 reader.onloadend = () => {
                   setPostImagePreviews(prev => [...prev, reader.result as string])
-                  // 最初の画像を自動的にカバー写真に設定
-                  if (postImagePreviews.length === 0) {
+                  // 最初の画像を自動的にカバー写真に設定（つぶやき・質問以外）
+                  if (postImagePreviews.length === 0 && formData.category !== 'question' && formData.category !== 'chat') {
                     setCoverImageIndex(0)
                   }
                 }
@@ -856,23 +856,25 @@ function NewPostInner() {
                         alt={`画像 ${index + 1}`}
                         className="w-full h-48 object-cover rounded-lg border-2 border-gray-200"
                       />
-                      {coverImageIndex === index && (
+                      {coverImageIndex === index && formData.category !== 'question' && formData.category !== 'chat' && (
                         <div className="absolute top-2 left-2 bg-green-500 text-white px-2 py-1 rounded text-xs font-semibold">
                           カバー写真
                         </div>
                       )}
                       <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all rounded-lg flex items-center justify-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setCoverImageIndex(index)}
-                          className={`px-3 py-1 rounded text-sm font-semibold transition-all ${
-                            coverImageIndex === index
-                              ? 'bg-green-500 text-white'
-                              : 'bg-white text-gray-700 opacity-0 group-hover:opacity-100'
-                          }`}
-                        >
-                          {coverImageIndex === index ? 'カバー写真' : 'カバーに設定'}
-                        </button>
+                        {formData.category !== 'question' && formData.category !== 'chat' && (
+                          <button
+                            type="button"
+                            onClick={() => setCoverImageIndex(index)}
+                            className={`px-3 py-1 rounded text-sm font-semibold transition-all ${
+                              coverImageIndex === index
+                                ? 'bg-green-500 text-white'
+                                : 'bg-white text-gray-700 opacity-0 group-hover:opacity-100'
+                            }`}
+                          >
+                            {coverImageIndex === index ? 'カバー写真' : 'カバーに設定'}
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
@@ -923,8 +925,8 @@ function NewPostInner() {
                             const reader = new FileReader()
                             reader.onloadend = () => {
                               setPostImagePreviews(prev => [...prev, reader.result as string])
-                              // 最初の画像を自動的にカバー写真に設定
-                              if (postImagePreviews.length === 0) {
+                              // 最初の画像を自動的にカバー写真に設定（つぶやき・質問以外）
+                              if (postImagePreviews.length === 0 && formData.category !== 'question' && formData.category !== 'chat') {
                                 setCoverImageIndex(0)
                               }
                             }
@@ -937,7 +939,7 @@ function NewPostInner() {
                     </label>
                   )}
                 </div>
-                {postImagePreviews.length > 0 && coverImageIndex === null && (
+                {postImagePreviews.length > 0 && coverImageIndex === null && formData.category !== 'question' && formData.category !== 'chat' && (
                   <div className="text-sm text-amber-600 bg-amber-50 p-2 rounded">
                     カバー写真を選択してください。投稿一覧で目立つように表示されます。
                   </div>

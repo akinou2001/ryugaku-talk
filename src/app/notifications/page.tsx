@@ -262,7 +262,7 @@ export default function NotificationsPage() {
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-3">
               <Bell className="h-8 w-8 text-primary-600" />
-              <h1 className="text-3xl font-bold text-gray-900">通知</h1>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">通知</h1>
               {unreadCount > 0 && (
                 <span className="px-3 py-1 bg-red-500 text-white rounded-full text-sm font-bold">
                   {unreadCount}
@@ -341,7 +341,7 @@ export default function NotificationsPage() {
                     onClick={() => setTypeFilter(type)}
                     className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
                       typeFilter === type
-                        ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg transform scale-105'
+                        ? 'bg-gray-900 text-white shadow-lg transform scale-105'
                         : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 hover:scale-105'
                     }`}
                   >

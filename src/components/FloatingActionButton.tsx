@@ -51,15 +51,14 @@ export function FloatingActionButton() {
     <div className="fixed bottom-6 right-6 z-[9999]">
       {/* アクションボタン */}
       {isOpen && (
-        <div className="absolute bottom-16 right-0 flex flex-col items-end space-y-3 mb-2 z-[9999]">
-          {actions.map((action, index) => {
+        <div className="absolute bottom-16 right-0 flex flex-col items-end space-y-2 mb-2 z-[9999]">
+          {actions.map((action) => {
             const Icon = action.icon
             return (
               <button
                 key={action.id}
                 onClick={action.onClick}
-                className="flex items-center space-x-2 bg-white rounded-full shadow-lg px-3 sm:px-4 py-3 text-gray-700 hover:bg-gray-50 transition-all fab-action-button"
-                style={{ animationDelay: `${index * 50}ms` }}
+                className="flex items-center space-x-2 bg-white rounded-full shadow-lg px-3 sm:px-4 py-2.5 text-gray-700 hover:bg-gray-50 transition-opacity duration-200"
                 title={action.label}
               >
                 <Icon className="h-5 w-5 flex-shrink-0" />
@@ -73,16 +72,21 @@ export function FloatingActionButton() {
       {/* メインボタン */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all ${
+        className={`h-14 rounded-full shadow-lg flex items-center justify-center transition-all duration-200 ${
           isOpen
-            ? 'bg-gray-600 hover:bg-gray-700 rotate-45'
-            : 'bg-primary-600 hover:bg-primary-700 rotate-0'
+            ? 'bg-black hover:bg-gray-900 w-14 px-0'
+            : 'bg-black hover:bg-gray-900 w-14 lg:w-auto lg:px-6'
         }`}
       >
         {isOpen ? (
-          <X className="h-6 w-6 text-white" />
+          <X className="h-6 w-6 text-white flex-shrink-0" />
         ) : (
-          <Plus className="h-6 w-6 text-white" />
+          <>
+            <Plus className="h-6 w-6 text-white flex-shrink-0" />
+            <span className="hidden lg:inline-block ml-2 text-white font-semibold text-sm whitespace-nowrap">
+              投稿する
+            </span>
+          </>
         )}
       </button>
     </div>

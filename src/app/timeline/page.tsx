@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
-import { MessageCircle, MessageSquare, Clock, Search, MapPin, GraduationCap, Sparkles, Users, BookOpen, HelpCircle, Briefcase, Home, GraduationCap as LearnIcon, ChevronLeft, ChevronRight, Filter, X, Calendar, Award, TrendingUp, Heart, Eye, CheckCircle2, Loader2 } from 'lucide-react'
+import { MessageCircle, MessageSquare, Clock, Search, MapPin, GraduationCap, Sparkles, Users, BookOpen, HelpCircle, Briefcase, Home, GraduationCap as LearnIcon, ChevronLeft, ChevronRight, Filter, X, Calendar, Award, TrendingUp, Heart, Eye, CheckCircle, CheckCircle2, Loader2, Shield } from 'lucide-react'
 import { AccountBadge } from '@/components/AccountBadge'
 import { StudentStatusBadge } from '@/components/StudentStatusBadge'
 import { QuestBadge } from '@/components/QuestBadge'
@@ -367,7 +367,7 @@ export default function Timeline() {
           .select(`
             *,
             community:communities(id, name),
-            author:profiles(id, name, icon_url, account_type, verification_status, organization_name, languages, is_operator)
+            author:profiles(id, name, icon_url, account_type, verification_status, organization_name, languages, study_abroad_destination, university, university_id, is_operator)
           `)
           .in('community_id', ids)
           .order('created_at', { ascending: false }),
@@ -376,7 +376,7 @@ export default function Timeline() {
           .select(`
             *,
             community:communities(id, name),
-            creator:profiles(id, name, account_type, verification_status, organization_name, languages, is_operator)
+            creator:profiles(id, name, account_type, verification_status, organization_name, languages, study_abroad_destination, university, university_id, is_operator)
           `)
           .in('community_id', ids)
           .order('event_date', { ascending: false }),
@@ -385,7 +385,7 @@ export default function Timeline() {
           .select(`
             *,
             community:communities(id, name),
-            creator:profiles(id, name, account_type, verification_status, organization_name, languages, is_operator)
+            creator:profiles(id, name, account_type, verification_status, organization_name, languages, study_abroad_destination, university, university_id, is_operator)
           `)
           .in('community_id', ids)
           .eq('status', 'active')
@@ -593,13 +593,21 @@ export default function Timeline() {
     abortControllerRef.current = new AbortController()
     const currentController = abortControllerRef.current
 
+    // タイムアウトを設定（30秒）
+    const timeoutId = setTimeout(() => {
+      if (!currentController.signal.aborted) {
+        currentController.abort()
+        console.error('Fetch posts timeout after 30 seconds')
+      }
+    }, 30000)
+
     try {
       setLoading(true)
       let query = supabase
         .from('posts')
         .select(`
           *,
-          author:profiles(name, account_type, verification_status, organization_name, study_abroad_destination, study_abroad_university_id, icon_url, languages, is_operator)
+          author:profiles(name, account_type, verification_status, organization_name, study_abroad_destination, study_abroad_university_id, university, university_id, icon_url, languages, is_operator)
         `)
 
       // コミュニティ限定投稿は除外（通常のタイムラインでは表示しない）
@@ -748,6 +756,12 @@ export default function Timeline() {
 
       if (postsError) {
         console.error('Error fetching posts:', postsError)
+        // エラーが発生した場合でも、空の配列を設定してloadingをfalseにする
+        setPosts([])
+        setLikedPosts(new Set())
+        setLoading(false)
+        clearTimeout(timeoutId)
+        return
       }
 
       // ユーザーが参加しているコミュニティのイベントとクエストを取得
@@ -886,7 +900,12 @@ export default function Timeline() {
         console.error('Error fetching posts:', error)
       }
     } finally {
-      if (!currentController.signal.aborted) {
+      // タイムアウトをクリア
+      clearTimeout(timeoutId)
+      
+      // リクエストがキャンセルされていない場合、または新しいリクエストが開始されていない場合は、loadingをfalseにする
+      // 新しいリクエストが開始されている場合は、そのリクエストがloadingを管理する
+      if (abortControllerRef.current === currentController) {
         setLoading(false)
       }
     }
@@ -1130,43 +1149,41 @@ export default function Timeline() {
         <div className="container mx-auto px-4 py-3 max-w-4xl">
           {/* ヘッダー */}
           <div className="mb-3">
-            <h1 className="text-2xl font-bold text-gray-900 mb-1 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
               タイムライン
             </h1>
             <p className="text-sm text-gray-600">最新の投稿やイベントをチェック</p>
           </div>
 
           {/* セグメントコントロール */}
-          <div className="mb-3 px-2">
-            <div className="flex space-x-2 bg-white rounded-xl p-1 shadow-md border border-gray-200 overflow-hidden">
+          <div className="mb-3">
+            <div className="flex space-x-1.5 bg-white rounded-lg p-1 shadow-md border border-gray-200 overflow-hidden">
               <button
                 onClick={() => setView('latest')}
-                className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                className={`flex-1 py-1.5 px-3 rounded-md text-xs font-semibold transition-all duration-200 ${
                   view === 'latest'
-                    ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg transform scale-105'
+                    ? 'bg-gray-900 text-white shadow-sm'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
               >
                 <div className="flex items-center justify-center space-x-1">
-                  <Clock className="h-3.5 w-3.5" />
+                  <Clock className="h-3 w-3" />
                   <span>最新</span>
                 </div>
               </button>
-              {user && (
-                <button
-                  onClick={() => setView('community')}
-                  className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                    view === 'community'
-                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg transform scale-105'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-center space-x-1">
-                    <Users className="h-3.5 w-3.5" />
-                    <span>コミュニティ</span>
-                  </div>
-                </button>
-              )}
+              <button
+                onClick={() => setView('community')}
+                className={`flex-1 py-1.5 px-3 rounded-md text-xs font-semibold transition-all duration-200 ${
+                  view === 'community'
+                    ? 'bg-gray-900 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center justify-center space-x-1">
+                  <Users className="h-3 w-3" />
+                  <span>コミュニティ</span>
+                </div>
+              </button>
             </div>
           </div>
 
@@ -1271,7 +1288,7 @@ export default function Timeline() {
                   onClick={() => setSelectedCategory('all')}
                   className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
                     selectedCategory === 'all'
-                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg transform scale-105'
+                      ? 'bg-gray-900 text-white shadow-lg transform scale-105'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:scale-105'
                   }`}
                 >
@@ -1319,7 +1336,11 @@ export default function Timeline() {
               <div className="flex flex-wrap gap-2">
                 {mainCategories.map((cat) => {
                   const Icon = cat.icon
-                  const isSelected = selectedMainCategories.includes(cat.id)
+                  // 「すべて」は選択されていない時（selectedMainCategories.length === 0）が選択状態
+                  // それ以外はselectedMainCategoriesに含まれているかで判定
+                  const isSelected = cat.id === 'all' 
+                    ? selectedMainCategories.length === 0
+                    : selectedMainCategories.includes(cat.id)
                   return (
                     <button
                       key={cat.id}
@@ -1339,7 +1360,7 @@ export default function Timeline() {
                       }}
                       className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 flex items-center space-x-2 ${
                         isSelected
-                          ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg transform scale-105'
+                          ? 'bg-gray-900 text-white shadow-lg transform scale-105'
                           : 'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:scale-105'
                       }`}
                     >
@@ -1352,13 +1373,22 @@ export default function Timeline() {
             </div>
 
             {/* 詳細カテゴリフィルター */}
-            {selectedMainCategories.length > 0 && (
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">詳細カテゴリ</label>
-                <div className="flex flex-wrap gap-2">
-                  {selectedMainCategories.map(mainCat => {
-                    if (mainCat === 'all') return null
-                    return detailCategories[mainCat].map((detail) => {
+            {selectedMainCategories.length > 0 && (() => {
+              // 選択された大カテゴリに対応する詳細カテゴリを取得し、重複を排除
+              const allDetails = selectedMainCategories
+                .filter(mainCat => mainCat !== 'all')
+                .flatMap(mainCat => detailCategories[mainCat])
+              
+              // IDで重複を排除
+              const uniqueDetails = Array.from(
+                new Map(allDetails.map(detail => [detail.id, detail])).values()
+              )
+              
+              return (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">詳細カテゴリ</label>
+                  <div className="flex flex-wrap gap-2">
+                    {uniqueDetails.map((detail) => {
                       const isSelected = selectedDetailCategories.includes(detail.id)
                       return (
                         <button
@@ -1385,11 +1415,11 @@ export default function Timeline() {
                           {detail.label}
                         </button>
                       )
-                    })
-                  }).flat()}
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             {/* ロケーションチップ */}
             <div>
@@ -1478,7 +1508,7 @@ export default function Timeline() {
                                   }}
                                   className={`px-4 py-2.5 rounded-full text-sm font-medium transition-all duration-200 whitespace-nowrap flex items-center space-x-2 flex-shrink-0 ${
                                     isSelected
-                                      ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg transform scale-105'
+                                      ? 'bg-gray-900 text-white shadow-lg transform scale-105'
                                       : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 hover:scale-105'
                                   }`}
                                 >
@@ -1624,15 +1654,21 @@ export default function Timeline() {
                           key={uni.id}
                           type="button"
                           onClick={() => {
-                            setSelectedUniversities(prev => {
-                              if (prev.includes(uni.id)) {
-                                setSelectedUniversitiesData(prevData => prevData.filter(u => u.id !== uni.id))
-                                return prev.filter(id => id !== uni.id)
-                              } else {
-                                setSelectedUniversitiesData(prevData => [...prevData, uni])
+                            if (selectedUniversities.includes(uni.id)) {
+                              // 既に選択されている場合は削除
+                              setSelectedUniversities(prev => prev.filter(id => id !== uni.id))
+                              setSelectedUniversitiesData(prevData => prevData.filter(u => u.id !== uni.id))
+                            } else {
+                              // 新しく選択する場合は追加（重複チェック）
+                              setSelectedUniversities(prev => {
+                                if (prev.includes(uni.id)) return prev
                                 return [...prev, uni.id]
-                              }
-                            })
+                              })
+                              setSelectedUniversitiesData(prevData => {
+                                if (prevData.some(u => u.id === uni.id)) return prevData
+                                return [...prevData, uni]
+                              })
+                            }
                             setUniversitySearch('')
                             setShowUniversityDropdown(false)
                           }}
@@ -1660,29 +1696,31 @@ export default function Timeline() {
                   </div>
                 )}
               </div>
-              {selectedUniversitiesData.length > 0 && (
+              {selectedUniversitiesData.filter(uni => selectedUniversities.includes(uni.id)).length > 0 && (
                 <div className="mt-3 px-3 py-2 bg-primary-50 rounded-lg border border-primary-200">
                   <p className="text-sm text-gray-600 mb-2">選択中:</p>
                   <div className="flex flex-wrap gap-2">
-                    {selectedUniversitiesData.map((uni, index) => (
-                      <span
-                        key={`selected-uni-${uni.id}-${index}`}
-                        className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-white rounded-full text-xs font-semibold text-primary-700 border border-primary-300"
-                      >
-                        <GraduationCap className="h-3 w-3" />
-                        <span>{uni.name_ja || uni.name_en}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedUniversities(prev => prev.filter(id => id !== uni.id))
-                            setSelectedUniversitiesData(prev => prev.filter(u => u.id !== uni.id))
-                          }}
-                          className="ml-1 hover:text-red-600"
+                    {selectedUniversitiesData
+                      .filter(uni => selectedUniversities.includes(uni.id))
+                      .map((uni) => (
+                        <span
+                          key={`selected-uni-${uni.id}`}
+                          className="inline-flex items-center space-x-1.5 px-2.5 py-1 bg-white rounded-full text-xs font-semibold text-primary-700 border border-primary-300"
                         >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
+                          <GraduationCap className="h-3 w-3" />
+                          <span>{uni.name_ja || uni.name_en}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedUniversities(prev => prev.filter(id => id !== uni.id))
+                              setSelectedUniversitiesData(prev => prev.filter(u => u.id !== uni.id))
+                            }}
+                            className="ml-1 hover:text-red-600"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </span>
+                      ))}
                   </div>
                 </div>
               )}
@@ -1698,6 +1736,7 @@ export default function Timeline() {
                     setSelectedDetailCategories([])
                     setSelectedLocations([])
                     setSelectedUniversities([])
+                    setSelectedUniversitiesData([])
                   }}
                   className="text-sm text-primary-600 hover:text-primary-800 font-semibold transition-colors"
                 >
@@ -1772,7 +1811,13 @@ export default function Timeline() {
             {!user ? (
               <div className="text-center py-16 bg-white rounded-2xl shadow-lg border border-gray-200">
                 <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500 text-lg font-medium">ログインが必要です</p>
+                <p className="text-gray-500 text-lg font-medium mb-6">ログインが必要です</p>
+                <Link
+                  href="/auth/signin"
+                  className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+                >
+                  ログインする
+                </Link>
               </div>
             ) : loading && !isSearching ? (
               <div className="space-y-3">
@@ -1869,12 +1914,12 @@ export default function Timeline() {
                     </div>
                     
                     {post.type === 'post' && (post as any).category === 'chat' ? (
-                      <h2 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-primary-600 transition-colors leading-snug">
+                      <h2 className="text-lg font-bold text-gray-900 mb-2 leading-snug">
                         {post.content}
                       </h2>
                     ) : (
                       <>
-                        <h2 className="text-lg font-bold text-gray-900 mb-1.5 group-hover:text-primary-600 transition-colors leading-snug">
+                        <h2 className="text-lg font-bold text-gray-900 mb-1.5 leading-snug">
                           {post.title}
                         </h2>
                         {/* 日記の内容は非表示 */}
@@ -1916,21 +1961,38 @@ export default function Timeline() {
                       <div className="flex items-center space-x-1.5 flex-wrap gap-2">
                         {post.creator ? (
                           <>
-                            <span className="text-xs text-gray-600 font-medium">{post.creator.name}</span>
-                            {/* 投稿カテゴリがofficialの場合はAccountBadgeを非表示 */}
-                            {((post.creator.account_type && post.creator.account_type !== 'individual') || post.creator.is_operator) && (post as any).category !== 'official' && (
-                              <AccountBadge 
-                                accountType={post.creator.account_type as 'educational' | 'company' | 'government'} 
-                                verificationStatus={(post.creator.verification_status || 'unverified') as 'unverified' | 'pending' | 'verified' | 'rejected'}
-                                organizationName={post.creator.organization_name}
-                                isOperator={post.creator.is_operator}
-                                size="sm"
-                              />
-                            )}
-                            <StudentStatusBadge 
-                              languages={(post.creator as any).languages}
-                              size="sm"
-                            />
+                            <div className="flex flex-col">
+                              <div className="flex items-center space-x-1.5">
+                                <span className="text-xs text-gray-600 font-medium">{post.creator.name}</span>
+                                {post.creator.account_type && post.creator.account_type !== 'individual' && post.creator.verification_status === 'verified' && (
+                                  <CheckCircle className={`h-3 w-3 ${post.creator.is_operator ? 'text-purple-600' : 'text-[#B39855]'}`} />
+                                )}
+                              </div>
+                              {post.creator && (
+                                <>
+                                  {/* 組織アカウントの場合：組織名を表示 */}
+                                  {post.creator.account_type && post.creator.account_type !== 'individual' && post.creator.organization_name && (
+                                    <span className="text-xs text-gray-500 mt-0.5">
+                                      {post.creator.organization_name}
+                                    </span>
+                                  )}
+                                  {/* 個人アカウントの場合：留学先または所属大学を表示 */}
+                                  {(!post.creator.account_type || post.creator.account_type === 'individual') && (
+                                    <>
+                                      {(post.creator as any).study_abroad_destination ? (
+                                        <span className="text-xs text-gray-500 mt-0.5">
+                                          {(post.creator as any).study_abroad_destination}
+                                        </span>
+                                      ) : (post.creator as any).university ? (
+                                        <span className="text-xs text-gray-500 mt-0.5">
+                                          {(post.creator as any).university}
+                                        </span>
+                                      ) : null}
+                                    </>
+                                  )}
+                                </>
+                              )}
+                            </div>
                           </>
                         ) : (
                           <span className="text-xs text-gray-600 font-medium">コミュニティ</span>
@@ -2094,53 +2156,59 @@ export default function Timeline() {
                         {/* 下部：ユーザー情報（グラスモーフィズム） */}
                         <div className="absolute bottom-3 left-3 z-20 max-w-[calc(100%-120px)] sm:max-w-none">
                           <div className="backdrop-blur-xl bg-white/20 border border-white/30 rounded-xl p-2.5 shadow-2xl">
-                            {/* スマホサイズ：2行表示、デスクトップ：1行表示 */}
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2 gap-1.5 sm:gap-0">
-                              {/* 1行目：ユーザーアイコンと名前 */}
-                              <div className="flex items-center space-x-2 gap-1.5">
-                                <UserAvatar 
-                                  iconUrl={post.author?.icon_url} 
-                                  name={post.author?.name} 
-                                  size="sm"
-                                />
-                                {post.author_id ? (
-                                  <span
-                                    onClick={(e) => {
-                                      e.preventDefault()
-                                      e.stopPropagation()
-                                      router.push(`/profile/${post.author_id}`)
-                                    }}
-                                    className="text-white font-semibold text-xs drop-shadow-lg hover:text-primary-200 transition-colors cursor-pointer"
-                                  >
-                                    {post.author?.name || '匿名'}
-                                  </span>
-                                ) : (
-                                  <span className="text-white font-semibold text-xs drop-shadow-lg">{post.author?.name || '匿名'}</span>
+                            <div className="flex items-center space-x-2">
+                              <UserAvatar 
+                                iconUrl={post.author?.icon_url} 
+                                name={post.author?.name} 
+                                size="sm"
+                              />
+                              <div className="flex flex-col">
+                                <div className="flex items-center space-x-1.5">
+                                  {post.author_id ? (
+                                    <span
+                                      onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        router.push(`/profile/${post.author_id}`)
+                                      }}
+                                      className="text-white font-semibold text-xs cursor-pointer drop-shadow-lg"
+                                    >
+                                      {post.author?.name || '匿名'}
+                                    </span>
+                                  ) : (
+                                    <span className="text-white font-semibold text-xs drop-shadow-lg">
+                                      {post.author?.name || '匿名'}
+                                    </span>
+                                  )}
+                                  {post.author && post.author.account_type && post.author.account_type !== 'individual' && post.author.verification_status === 'verified' && (
+                                    <CheckCircle className={`h-3 w-3 drop-shadow-lg ${post.author.is_operator ? 'text-purple-300' : 'text-[#FFD700]'}`} />
+                                  )}
+                                </div>
+                                {post.author && (
+                                  <>
+                                    {/* 組織アカウントの場合：組織名を表示 */}
+                                    {post.author.account_type && post.author.account_type !== 'individual' && post.author.organization_name && (
+                                      <span className="text-white text-xs opacity-90 mt-0.5 drop-shadow-lg">
+                                        {post.author.organization_name}
+                                      </span>
+                                    )}
+                                    {/* 個人アカウントの場合：留学先または所属大学を表示 */}
+                                    {(!post.author.account_type || post.author.account_type === 'individual') && (
+                                      <>
+                                        {post.author.study_abroad_destination ? (
+                                          <span className="text-white text-xs opacity-90 mt-0.5 drop-shadow-lg">
+                                            {post.author.study_abroad_destination}
+                                          </span>
+                                        ) : post.author.university ? (
+                                          <span className="text-white text-xs opacity-90 mt-0.5 drop-shadow-lg">
+                                            {post.author.university}
+                                          </span>
+                                        ) : null}
+                                      </>
+                                    )}
+                                  </>
                                 )}
                               </div>
-                              {/* 2行目（スマホ）/ 1行目続き（デスクトップ）：バッジ */}
-                              {post.author && (
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  {/* 投稿カテゴリがofficialの場合はAccountBadgeを非表示 */}
-                                  {post.author.account_type && post.author.account_type !== 'individual' && (
-                                    <div className="drop-shadow-lg">
-                                      <AccountBadge 
-                                        accountType={post.author.account_type} 
-                                        verificationStatus={post.author.verification_status}
-                                        organizationName={post.author.organization_name}
-                                        isOperator={post.author.is_operator}
-                                        size="sm"
-                                      />
-                                    </div>
-                                  )}
-                                  <div className="drop-shadow-lg">
-                                    <StudentStatusBadge 
-                                      languages={post.author.languages}
-                                      size="sm"
-                                    />
-                                  </div>
-                                </div>
-                              )}
                             </div>
                           </div>
                         </div>
@@ -2172,7 +2240,7 @@ export default function Timeline() {
                         <div className="absolute top-2 left-0 right-0 p-4 z-20">
                           {/* タグチップ（一番上） */}
                           <div className="flex items-center gap-1.5 flex-wrap mb-3">
-                            {/* 日記タグ */}
+                            {/* 投稿種別ラベル */}
                             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-0.5 ${getCategoryColor(post.category)} drop-shadow-lg`}>
                               {(() => {
                                 const Icon = getCategoryIcon(post.category)
@@ -2180,39 +2248,29 @@ export default function Timeline() {
                               })()}
                               {getCategoryLabel(post.category)}
                             </span>
+                            {/* 国ラベル */}
                             {post.study_abroad_destination && (
                               <span className="px-2 py-0.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-medium hover:from-primary-100 hover:to-primary-200 transition-all border border-primary-200 drop-shadow-lg flex items-center gap-0.5">
                                 <MapPin className="h-2.5 w-2.5" />
                                 {post.study_abroad_destination}
                               </span>
                             )}
-                            {(post.university_id || post.university) && (
-                              <span className="px-2 py-0.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-medium hover:from-primary-100 hover:to-primary-200 transition-all border border-primary-200 drop-shadow-lg flex items-center gap-0.5">
-                                <GraduationCap className="h-2.5 w-2.5" />
-                                {post.university || '大学'}
-                              </span>
-                            )}
-                            {post.tags && post.tags.length > 0 && post.tags.slice(0, 2).map((tag, idx) => (
-                              <span key={idx} className="px-2 py-0.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-medium hover:from-primary-100 hover:to-primary-200 transition-all border border-primary-200 drop-shadow-lg">
-                                {tag}
-                              </span>
-                            ))}
                           </div>
                           
                           {/* タイトル（画像の上に重ねて表示） */}
-                          <h2 className="text-xl font-bold text-white leading-tight line-clamp-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] group-hover:text-primary-200 transition-colors">
+                          <h2 className="text-xl font-bold text-white leading-tight line-clamp-2 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
                             {post.title}
                           </h2>
                         </div>
                       </div>
                     </div>
                   ) : post.category === 'chat' ? (
-                    <h2 className="text-lg font-bold text-gray-900 mb-2 group-hover:text-primary-600 transition-colors leading-snug">
+                    <h2 className="text-lg font-bold text-gray-900 mb-2 leading-snug">
                       {post.content}
                     </h2>
                   ) : (
                     <>
-                      <h2 className="text-lg font-bold text-gray-900 mb-1.5 group-hover:text-primary-600 transition-colors leading-snug">
+                      <h2 className="text-lg font-bold text-gray-900 mb-1.5 leading-snug">
                         {post.title}
                       </h2>
                       {/* 日記の内容は非表示 */}
@@ -2253,45 +2311,33 @@ export default function Timeline() {
                           name={post.author?.name} 
                           size="sm"
                         />
-                        {post.author_id ? (
-                          <span
-                            onClick={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              router.push(`/profile/${post.author_id}`)
-                            }}
-                            className="text-primary-600 hover:text-primary-800 font-semibold transition-colors cursor-pointer"
-                          >
-                            {post.author?.name || '匿名'}
-                          </span>
-                        ) : (
-                          <span className="font-medium">{post.author?.name || '匿名'}</span>
-                        )}
-                      </div>
-                      {post.author && (
-                        <>
-                          {/* 投稿カテゴリがofficialの場合はAccountBadgeを非表示 */}
-                          {post.author.account_type && post.author.account_type !== 'individual' && post.category !== 'official' && (
-                            <AccountBadge 
-                              accountType={post.author.account_type} 
-                              verificationStatus={post.author.verification_status}
-                              organizationName={post.author.organization_name}
-                              isOperator={post.author.is_operator}
-                              size="sm"
-                            />
+                        <div className="flex flex-col">
+                          <div className="flex items-center space-x-1.5">
+                            {post.author_id ? (
+                              <span
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  router.push(`/profile/${post.author_id}`)
+                                }}
+                                className="text-gray-900 font-semibold cursor-pointer"
+                              >
+                                {post.author?.name || '匿名'}
+                              </span>
+                            ) : (
+                              <span className="text-gray-900 font-semibold">{post.author?.name || '匿名'}</span>
+                            )}
+                            {post.author && post.author.account_type && post.author.account_type !== 'individual' && post.author.verification_status === 'verified' && (
+                              <CheckCircle className={`h-3 w-3 ${post.author.is_operator ? 'text-purple-600' : 'text-[#B39855]'}`} />
+                            )}
+                          </div>
+                          {post.author && post.author.account_type && post.author.account_type !== 'individual' && post.author.organization_name && (
+                            <span className="text-xs text-gray-500 mt-0.5">
+                              {post.author.organization_name}
+                            </span>
                           )}
-                          <StudentStatusBadge 
-                            languages={post.author.languages}
-                            size="sm"
-                          />
-                        </>
-                      )}
-                      {(post.university_id || post.university) && (
-                        <span className="flex items-center text-gray-600">
-                          <GraduationCap className="h-3 w-3 mr-0.5" />
-                          <span className="font-medium text-xs">{post.university || '大学'}</span>
-                        </span>
-                      )}
+                        </div>
+                      </div>
                     </div>
                     
                     <div className="flex items-center space-x-3 text-xs text-gray-600">

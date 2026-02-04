@@ -1,5 +1,9 @@
 import Link from 'next/link'
 import { MessageCircle, Mail, Twitter } from 'lucide-react'
+import { APP_NAME } from '@/config/app-config'
+import { APP_DESCRIPTION_SHORT, COPYRIGHT_TEXT } from '@/config/app-config'
+import { CONTACT_EMAIL, SOCIAL_LINKS } from '@/config/social-config'
+import { EARTH_GRADIENT } from '@/config/theme-config'
 
 export function Footer() {
   return (
@@ -9,17 +13,26 @@ export function Footer() {
           {/* ロゴと説明 */}
           <div className="col-span-1 md:col-span-2">
             <div className="flex items-center space-x-2 mb-4">
-              <MessageCircle className="h-8 w-8 text-primary-600" />
-              <span className="text-xl font-bold text-gray-900">RyugakuTalk</span>
+              <div 
+                className="rounded-full flex items-center justify-center shadow-lg h-8 w-8 p-1.5"
+                style={{ background: EARTH_GRADIENT.css }}
+              >
+                <MessageCircle 
+                  className="h-full w-full text-white" 
+                  strokeWidth={2.5}
+                  style={{ filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2))' }}
+                />
+              </div>
+              <span className="text-xl font-bold text-gray-900">{APP_NAME}</span>
             </div>
             <p className="text-gray-600 mb-4">
-              みんなの留学体験が紡ぐ、次世代の留学コミュニティプラットフォーム
+              {APP_DESCRIPTION_SHORT}
             </p>
             <div className="flex space-x-4">
-              <a href="mailto:contact@ryugakutalk.com" className="text-gray-400 hover:text-primary-600 transition-colors">
+              <a href={`mailto:${CONTACT_EMAIL}`} className="text-gray-400 hover:text-primary-600 transition-colors">
                 <Mail className="h-5 w-5" />
               </a>
-              <a href="https://twitter.com" className="text-gray-400 hover:text-primary-600 transition-colors">
+              <a href={SOCIAL_LINKS.twitter} className="text-gray-400 hover:text-primary-600 transition-colors" target="_blank" rel="noopener noreferrer">
                 <Twitter className="h-5 w-5" />
               </a>
             </div>
@@ -71,7 +84,7 @@ export function Footer() {
         </div>
 
         <div className="border-t border-gray-200 mt-8 pt-8 text-center text-gray-600">
-          <p>&copy; 2026 RyugakuTalk. All rights reserved.</p>
+          <p>{COPYRIGHT_TEXT}</p>
         </div>
       </div>
     </footer>

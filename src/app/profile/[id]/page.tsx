@@ -1,17 +1,18 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import type { User, Post, UserScore } from '@/lib/supabase'
 import { getUserScore } from '@/lib/quest'
-import { User as UserIcon, MapPin, GraduationCap, Calendar, MessageSquare, Edit, Settings, Send, Building2, Heart, HelpCircle, BookOpen, MessageCircle, Mail, Twitter, Instagram, Facebook, Linkedin, Link as LinkIcon } from 'lucide-react'
+import { User as UserIcon, MapPin, GraduationCap, Calendar, MessageSquare, Edit, Settings, Send, Building2, Heart, HelpCircle, BookOpen, MessageCircle, Mail, Twitter, Instagram, Facebook, Linkedin, Link as LinkIcon, MoreVertical, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
 import { StudentStatusBadge } from '@/components/StudentStatusBadge'
 import { getUniversityById, type University } from '@/lib/universities'
+import type { UserUniversity, UserStudyAbroadUniversity } from '@/lib/supabase'
 
 export default function Profile() {
   const { user: currentUser } = useAuth()
@@ -22,11 +23,16 @@ export default function Profile() {
   const [posts, setPosts] = useState<Post[]>([])
   const [userScore, setUserScore] = useState<UserScore | null>(null)
   const [verificationRequest, setVerificationRequest] = useState<any>(null)
-  const [university, setUniversity] = useState<University | null>(null)
-  const [studyAbroadUniversity, setStudyAbroadUniversity] = useState<University | null>(null)
+  const [userUniversities, setUserUniversities] = useState<UserUniversity[]>([])
+  const [userStudyAbroadUniversities, setUserStudyAbroadUniversities] = useState<UserStudyAbroadUniversity[]>([])
+  const [displayOrganization, setDisplayOrganization] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [postsLoading, setPostsLoading] = useState(true)
   const [error, setError] = useState('')
+  
+  // ケバブメニュー
+  const [showKebabMenu, setShowKebabMenu] = useState(false)
+  const kebabMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (userId) {
@@ -51,33 +57,101 @@ export default function Profile() {
 
       setProfile(data)
       
-      // 所属大学情報を取得
+      // 複数所属大学を取得
+      const { data: userUnisData } = await supabase
+        .from('user_universities')
+        .select(`
+          *,
+          university:universities(
+            id,
+            name_ja,
+            name_en,
+            country_code,
+            continent:continents(name_ja)
+          )
+        `)
+        .eq('user_id', userId)
+        .order('display_order', { ascending: true })
+      
+      if (userUnisData && userUnisData.length > 0) {
+        setUserUniversities(userUnisData as UserUniversity[])
+      } else {
+        // 後方互換性: 既存の単一大学データを取得
       if (data.university_id) {
         const { data: uniData } = await getUniversityById(data.university_id)
         if (uniData) {
-          setUniversity(uniData)
-        }
-      } else if (data.university) {
-        // 既存のテキストから大学を検索（後方互換性）
-        const { data: uniData } = await supabase
-          .from('universities')
-          .select(`
-            *,
-            continent:continents(*)
-          `)
-          .or(`name_en.ilike.%${data.university}%,name_ja.ilike.%${data.university}%`)
-          .limit(1)
-          .single()
-        if (uniData) {
-          setUniversity(uniData as University)
+            setUserUniversities([{
+              id: 'legacy',
+              user_id: userId,
+              university_id: uniData.id,
+              university: {
+                id: uniData.id,
+                name_ja: uniData.name_ja || null,
+                name_en: uniData.name_en || null,
+                country_code: uniData.country_code || null,
+                continent: uniData.continent ? { name_ja: uniData.continent.name_ja || null } : null
+              },
+              start_date: data.university_start_date || null,
+              end_date: data.university_end_date || null,
+              display_order: 0,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }])
+          }
         }
       }
       
-      // 留学先大学情報を取得
-      if (data.study_abroad_university_id) {
+      // 複数留学先大学を取得
+      const { data: userStudyAbroadUnisData } = await supabase
+        .from('user_study_abroad_universities')
+          .select(`
+            *,
+          university:universities(
+            id,
+            name_ja,
+            name_en,
+            country_code,
+            continent:continents(name_ja)
+          )
+          `)
+        .eq('user_id', userId)
+        .order('display_order', { ascending: true })
+      
+      if (userStudyAbroadUnisData && userStudyAbroadUnisData.length > 0) {
+        setUserStudyAbroadUniversities(userStudyAbroadUnisData as UserStudyAbroadUniversity[])
+      } else if (data.study_abroad_university_id) {
+        // 後方互換性: 既存の単一留学先大学データを取得
         const { data: uniData } = await getUniversityById(data.study_abroad_university_id)
         if (uniData) {
-          setStudyAbroadUniversity(uniData)
+          setUserStudyAbroadUniversities([{
+            id: 'legacy',
+            user_id: userId,
+            university_id: uniData.id,
+            university: {
+              id: uniData.id,
+              name_ja: uniData.name_ja || null,
+              name_en: uniData.name_en || null,
+              country_code: uniData.country_code || null,
+              continent: uniData.continent ? { name_ja: uniData.continent.name_ja || null } : null
+            },
+            start_date: data.study_abroad_start_date || null,
+            end_date: data.study_abroad_end_date || null,
+            display_order: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }])
+        }
+      }
+      
+      // 表示組織を取得
+      if (data.display_organization_id) {
+        const { data: orgData } = await supabase
+          .from('profiles')
+          .select('id, name, organization_name, verification_status')
+          .eq('id', data.display_organization_id)
+          .single()
+        if (orgData) {
+          setDisplayOrganization(orgData)
         }
       }
     } catch (error: any) {
@@ -236,20 +310,22 @@ export default function Profile() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         {/* ページタイトル */}
-        <h1 className="text-4xl font-bold text-gray-900 mb-6 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">{pageTitle}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">{pageTitle}</h1>
         
         {/* プロフィールヘッダー */}
         <div className={`bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-8 ${isOrganizationAccount ? 'border-l-4 border-l-blue-500' : ''}`}>
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6">
-            <div className="flex items-center space-x-4 mb-4 md:mb-0">
+          <div className="relative mb-6">
+            <div className="flex items-center space-x-4">
               <UserAvatar 
                 iconUrl={profile.icon_url} 
                 name={profile.name} 
                 size="xl"
               />
-              <div>
+              <div className="flex-1">
                 <div className="flex items-center space-x-2 mb-1">
                   <h1 className="text-2xl font-bold text-gray-900">{profile.name}</h1>
+                  {/* 画面が大きい時：AccountBadgeを表示 */}
+                  <div className="hidden sm:block">
                   <AccountBadge 
                     accountType={profile.account_type} 
                     verificationStatus={profile.verification_status}
@@ -257,50 +333,98 @@ export default function Profile() {
                     isOperator={profile.is_operator}
                     size="md"
                   />
+                  </div>
+                  {/* 画面が小さい時：CheckCircleマークを表示（運営のみ） */}
+                  {profile.is_operator && profile.verification_status === 'verified' && (
+                    <CheckCircle className={`h-5 w-5 sm:hidden text-purple-600`} />
+                  )}
+                  {/* 画面が小さい時：CheckCircleマークを表示（組織アカウント） */}
+                  {!profile.is_operator && profile.account_type && profile.account_type !== 'individual' && profile.verification_status === 'verified' && (
+                    <CheckCircle className={`h-5 w-5 sm:hidden text-[#B39855]`} />
+                  )}
                 </div>
               </div>
             </div>
             
-            <div className="flex space-x-2 flex-wrap">
+            {/* ケバブメニュー（右上に固定） */}
+            <div className="absolute top-0 right-0" ref={kebabMenuRef}>
               {isOwnProfile ? (
                 <>
-                  <Link href={`/profile/${profile.id}/edit`} className="px-4 py-2.5 bg-white border-2 border-gray-200 text-gray-700 rounded-xl font-semibold flex items-center hover:bg-gray-50 hover:border-gray-300 transition-all duration-200">
-                    <Edit className="h-4 w-4 mr-2" />
-                    編集
+                  <button
+                    onClick={() => setShowKebabMenu(!showKebabMenu)}
+                    className="p-2 text-gray-600 hover:text-primary-600 transition-colors"
+                    title="メニュー"
+                  >
+                    <MoreVertical className="h-5 w-5" />
+                  </button>
+                  {showKebabMenu && (
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                      <div className="py-1">
+                        <Link
+                          href={`/profile/${profile.id}/edit`}
+                          onClick={() => setShowKebabMenu(false)}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                        >
+                          <Edit className="h-4 w-4" />
+                          <span>編集</span>
                   </Link>
                   {profile.account_type === 'individual' && (
                     <>
-                      <Link href="/verification/request" className="px-4 py-2.5 bg-white border-2 border-blue-200 text-blue-700 rounded-xl font-semibold flex items-center hover:bg-blue-50 hover:border-blue-300 transition-all duration-200">
-                        <Building2 className="h-4 w-4 mr-2" />
-                        組織認証申請
+                            <Link
+                              href="/verification/request"
+                              onClick={() => setShowKebabMenu(false)}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                            >
+                              <Building2 className="h-4 w-4" />
+                              <span>組織認証申請</span>
                       </Link>
-                      <Link href="/organization/invites" className="px-4 py-2.5 bg-white border-2 border-purple-200 text-purple-700 rounded-xl font-semibold flex items-center hover:bg-purple-50 hover:border-purple-300 transition-all duration-200">
-                        <Mail className="h-4 w-4 mr-2" />
-                        組織招待
+                            <Link
+                              href="/organization/invites"
+                              onClick={() => setShowKebabMenu(false)}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                            >
+                              <Mail className="h-4 w-4" />
+                              <span>組織招待</span>
                       </Link>
                     </>
                   )}
                   {profile.account_type !== 'individual' && profile.is_organization_owner && profile.verification_status === 'verified' && (
-                    <Link href="/organization/manage" className="px-4 py-2.5 bg-white border-2 border-green-200 text-green-700 rounded-xl font-semibold flex items-center hover:bg-green-50 hover:border-green-300 transition-all duration-200">
-                      <Building2 className="h-4 w-4 mr-2" />
-                      組織管理
+                          <Link
+                            href="/organization/manage"
+                            onClick={() => setShowKebabMenu(false)}
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                          >
+                            <Building2 className="h-4 w-4" />
+                            <span>組織管理</span>
                     </Link>
                   )}
                   {profile.account_type !== 'individual' && !profile.is_organization_owner && (
-                    <Link href="/organization/invites" className="px-4 py-2.5 bg-white border-2 border-purple-200 text-purple-700 rounded-xl font-semibold flex items-center hover:bg-purple-50 hover:border-purple-300 transition-all duration-200">
-                      <Mail className="h-4 w-4 mr-2" />
-                      組織招待
+                          <Link
+                            href="/organization/invites"
+                            onClick={() => setShowKebabMenu(false)}
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                          >
+                            <Mail className="h-4 w-4" />
+                            <span>組織招待</span>
                     </Link>
                   )}
-                  <Link href="/settings" className="px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center">
-                    <Settings className="h-4 w-4 mr-2" />
-                    設定
+                        <Link
+                          href="/settings"
+                          onClick={() => setShowKebabMenu(false)}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                        >
+                          <Settings className="h-4 w-4" />
+                          <span>設定</span>
                   </Link>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : currentUser && (
-                <Link href={`/chat/${profile.id}`} className="px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center">
+                <Link href={`/chat/${profile.id}`} className="px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center justify-center">
                   <Send className="h-4 w-4 mr-2" />
-                  メッセージを送る
+                  <span className="hidden sm:inline">メッセージを送る</span>
+                  <span className="sm:hidden">メッセージ</span>
                 </Link>
               )}
             </div>
@@ -308,17 +432,20 @@ export default function Profile() {
 
           {/* 基本情報 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div className="space-y-3">
+            <div className="space-y-3 md:col-span-2">
               {/* 組織アカウント情報 */}
               {profile.account_type !== 'individual' && (
                 <>
-                  {profile.organization_name && (
+                  {/* 表示組織（display_organization_idが設定されている場合はその組織、そうでない場合は元の優先ロジック） */}
+                  {(displayOrganization?.organization_name || profile.organization_name) && (
                     <div className="flex items-start space-x-2">
                       <Building2 className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center flex-wrap gap-2">
                           <span className="text-gray-600 whitespace-nowrap">組織名:</span>
-                          <span className="font-medium text-gray-900">{profile.organization_name}</span>
+                          <span className="font-medium text-gray-900">
+                            {displayOrganization?.organization_name || profile.organization_name}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -426,76 +553,110 @@ export default function Profile() {
                   </div>
                 </div>
               )}
-              {(university || profile.university) && (
-                <div className="flex items-start space-x-2">
+              {/* 所属大学（複数表示） */}
+              {userUniversities.length > 0 && (
+                <div className="space-y-3">
+                  {userUniversities.map((userUni, index) => (
+                    <div key={userUni.id} className="flex items-start space-x-2">
                   <GraduationCap className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center flex-wrap gap-2">
-                      <span className="text-gray-600 whitespace-nowrap">所属大学:</span>
+                          <span className="text-gray-600 whitespace-nowrap">
+                            {index === 0 ? '所属大学:' : `所属大学 ${index + 1}:`}
+                          </span>
                       <span className="font-medium text-gray-900">
-                        {university ? (university.name_ja || university.name_en) : profile.university}
+                            {userUni.university?.name_ja || userUni.university?.name_en || '大学名不明'}
                       </span>
-                      {university && university.name_ja && university.name_en && (
+                          {userUni.university?.name_ja && userUni.university?.name_en && (
                         <span className="text-sm text-gray-500 whitespace-nowrap">
-                          ({university.name_en})
+                              ({userUni.university.name_en})
                         </span>
                       )}
-                      {university && (
+                          {userUni.university?.country_code && (
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs font-medium whitespace-nowrap">
-                            {university.country_code}
+                                {userUni.university.country_code}
                           </span>
-                          {university.continent && (
+                              {userUni.university.continent?.name_ja && (
                             <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded-full text-xs font-medium whitespace-nowrap">
-                              {university.continent.name_ja}
+                                  {userUni.university.continent.name_ja}
                             </span>
                           )}
                         </div>
                       )}
                     </div>
+                        {/* 在籍期間 */}
+                        {(userUni.start_date || userUni.end_date) && (
+                          <div className="mt-1 text-sm text-gray-600">
+                            <Calendar className="h-4 w-4 inline mr-1" />
+                            {userUni.start_date && (
+                              <span>{new Date(userUni.start_date).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}</span>
+                            )}
+                            {userUni.start_date && userUni.end_date && <span> ～ </span>}
+                            {userUni.end_date ? (
+                              <span>{new Date(userUni.end_date).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}</span>
+                            ) : userUni.start_date ? (
+                              <span>（現在在籍中）</span>
+                            ) : null}
+                          </div>
+                        )}
                   </div>
+                    </div>
+                  ))}
                 </div>
               )}
-              {studyAbroadUniversity && (
-                <div className="flex items-start space-x-2">
+              {/* 留学先大学（複数表示） */}
+              {userStudyAbroadUniversities.length > 0 && (
+                <div className="space-y-3">
+                  {userStudyAbroadUniversities.map((userUni, index) => (
+                    <div key={userUni.id} className="flex items-start space-x-2">
                   <GraduationCap className="h-5 w-5 text-primary-400 mt-0.5 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center flex-wrap gap-2">
-                      <span className="text-gray-600 whitespace-nowrap">留学先大学:</span>
+                          <span className="text-gray-600 whitespace-nowrap">
+                            {index === 0 ? '留学先大学:' : `留学先大学 ${index + 1}:`}
+                          </span>
                       <span className="font-medium text-gray-900">
-                        {studyAbroadUniversity.name_ja || studyAbroadUniversity.name_en}
+                            {userUni.university?.name_ja || userUni.university?.name_en || '大学名不明'}
                       </span>
-                      {studyAbroadUniversity.name_ja && studyAbroadUniversity.name_en && (
+                          {userUni.university?.name_ja && userUni.university?.name_en && (
                         <span className="text-sm text-gray-500 whitespace-nowrap">
-                          ({studyAbroadUniversity.name_en})
+                              ({userUni.university.name_en})
                         </span>
                       )}
+                          {userUni.university?.country_code && (
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="px-2 py-0.5 bg-primary-100 text-primary-800 rounded-full text-xs font-medium whitespace-nowrap">
-                          {studyAbroadUniversity.country_code}
+                                {userUni.university.country_code}
                         </span>
-                        {studyAbroadUniversity.continent && (
+                              {userUni.university.continent?.name_ja && (
                           <span className="px-2 py-0.5 bg-gray-100 text-gray-800 rounded-full text-xs font-medium whitespace-nowrap">
-                            {studyAbroadUniversity.continent.name_ja}
+                                  {userUni.university.continent.name_ja}
                           </span>
                         )}
                       </div>
+                          )}
                     </div>
-                  </div>
+                        {/* 滞在期間 */}
+                        {(userUni.start_date || userUni.end_date) && (
+                          <div className="mt-1 text-sm text-gray-600">
+                            <Calendar className="h-4 w-4 inline mr-1" />
+                            {userUni.start_date && (
+                              <span>{new Date(userUni.start_date).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}</span>
+                            )}
+                            {userUni.start_date && userUni.end_date && <span> ～ </span>}
+                            {userUni.end_date ? (
+                              <span>{new Date(userUni.end_date).toLocaleDateString('ja-JP', { year: 'numeric', month: 'long' })}</span>
+                            ) : userUni.start_date ? (
+                              <span>（現在滞在中）</span>
+                            ) : null}
                 </div>
               )}
             </div>
-            
-            <div className="space-y-3">
-              <div className="flex items-start space-x-2">
-                <Calendar className="h-5 w-5 text-gray-400 mt-0.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center flex-wrap gap-2">
-                    <span className="text-gray-600 whitespace-nowrap">参加日:</span>
-                    <span className="font-medium text-gray-900">{formatDate(profile.created_at)}</span>
                   </div>
+                  ))}
                 </div>
-              </div>
+              )}
             </div>
           </div>
 

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/components/Providers'
 import { MessageCircle, Mail, Lock, Eye, EyeOff } from 'lucide-react'
+import { EARTH_GRADIENT } from '@/config/theme-config'
 
 export default function SignIn() {
   const [email, setEmail] = useState('')
@@ -50,7 +51,16 @@ export default function SignIn() {
       <div className="max-w-md w-full space-y-8">
         <div>
           <div className="flex justify-center">
-            <MessageCircle className="h-12 w-12 text-primary-600" />
+            <div 
+              className="rounded-full flex items-center justify-center shadow-2xl w-16 h-16 sm:w-20 sm:h-20 p-3 sm:p-4"
+              style={{ background: EARTH_GRADIENT.css, filter: 'drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3))' }}
+            >
+              <MessageCircle 
+                className="h-full w-full text-white" 
+                strokeWidth={2.5}
+                style={{ filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2))' }}
+              />
+            </div>
           </div>
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             アカウントにログイン

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+import { APP_NAME } from "@/config/app-config";
 
 // OpenAI APIクライアントの初期化（遅延初期化）
 function getOpenAIClient() {
@@ -54,7 +55,7 @@ export async function POST(req: Request) {
 
     // システムプロンプトを作成
     const systemPrompt = mode === "grounded"
-      ? `あなたは留学支援コミュニティ「RyugakuTalk」のAIコンシェルジュです。
+      ? `あなたは留学支援コミュニティ「${APP_NAME}」のAIコンシェルジュです。
 ユーザーの質問に対して、提供された過去の投稿や外部情報を根拠として、親切で正確な回答を提供してください。
 
 回答の際は以下の点に注意してください：
@@ -62,7 +63,7 @@ export async function POST(req: Request) {
 - 外部のウェブページの情報を参考にする場合は、「参考: [情報源]」のように出典を明記してください
 - 回答は日本語で、わかりやすく、親切に書いてください
 - 提供された情報に基づいて回答し、推測は最小限にしてください`
-      : `あなたは留学支援コミュニティ「RyugakuTalk」のAIコンシェルジュです。
+      : `あなたは留学支援コミュニティ「${APP_NAME}」のAIコンシェルジュです。
 ユーザーの質問に対して、一般的な留学経験・制度・合理的推論に基づいて回答してください。
 
 回答の際は以下の点に注意してください：

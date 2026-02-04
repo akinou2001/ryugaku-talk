@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from "@/lib/supabase";
 import type { Post } from "@/lib/supabase";
+import { APP_NAME } from "@/config/app-config";
 import "server-only";
 
 interface SearchResult {
@@ -78,7 +79,7 @@ export async function searchWithGemini(
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ 
       model: "gemini-3-flash-preview",
-      systemInstruction: `あなたは留学支援コミュニティ「RyugakuTalk」のAIアシスタントです。
+      systemInstruction: `あなたは留学支援コミュニティ「${APP_NAME}」のAIアシスタントです。
 ユーザーの質問に対して、提供された過去の投稿の内容を根拠として、親切で正確な回答を提供してください。
 
 回答の際は以下の点に注意してください：

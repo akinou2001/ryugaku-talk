@@ -16,7 +16,7 @@ function getSupabaseServerClient() {
 }
 
 /**
- * AI検索（拡張版）API
+ * AIコンシェルジュAPI
  * 投稿データベースから検索し、Gemini APIで要約・引用しながら回答を生成
  */
 export async function POST(req: Request) {
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // AI検索を実行
+    // AIコンシェルジュを実行
     // topK: 使用する関連投稿の最大数（デフォルト: 5）
     const result = await searchWithGemini(question_text, topK || 5);
 
