@@ -34,7 +34,7 @@ export const metadata: Metadata = {
     template: TITLE_TEMPLATE,
   },
   description: APP_DESCRIPTION,
-  keywords: SEO_KEYWORDS,
+  keywords: [...SEO_KEYWORDS],
   authors: [{ name: APP_NAME }],
   creator: APP_NAME,
   publisher: APP_NAME,
