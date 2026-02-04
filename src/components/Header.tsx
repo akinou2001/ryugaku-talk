@@ -9,6 +9,8 @@ import { isAdmin } from '@/lib/admin'
 import { UserAvatar } from './UserAvatar'
 import { usePathname } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { APP_NAME } from '@/config/app-config'
+import { EARTH_GRADIENT } from '@/config/theme-config'
 
 export function Header() {
   const { user, signOut } = useAuth()
@@ -261,8 +263,17 @@ export function Header() {
         <div className="flex items-center justify-between h-14 sm:h-16 min-w-0">
           {/* ロゴ */}
           <Link href="/" className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
-            <MessageCircle className="h-6 w-6 sm:h-8 sm:w-8 text-primary-600 flex-shrink-0" />
-            <span className="text-base sm:text-xl font-bold text-gray-900 whitespace-nowrap">RyugakuTalk</span>
+            <div 
+              className="rounded-full flex items-center justify-center shadow-lg h-6 w-6 sm:h-8 sm:w-8 p-1 sm:p-1.5 flex-shrink-0"
+              style={{ background: EARTH_GRADIENT.css }}
+            >
+              <MessageCircle 
+                className="h-full w-full text-white" 
+                strokeWidth={2.5}
+                style={{ filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2))' }}
+              />
+            </div>
+            <span className="text-base sm:text-xl font-bold text-gray-900 whitespace-nowrap">{APP_NAME}</span>
           </Link>
 
           {/* ナビゲーションタブ（広い画面で表示） */}
@@ -340,8 +351,6 @@ export function Header() {
 
           {/* ユーザーメニュー */}
           <div className="flex items-center space-x-1 sm:space-x-2 md:space-x-4 flex-shrink-0">
-            {user ? (
-              <>
                 {/* メインメニューボタン（xl未満で表示） */}
                 <div className="relative main-menu-container xl:hidden">
                   <button
@@ -406,6 +415,8 @@ export function Header() {
                   )}
                 </div>
 
+            {user ? (
+              <>
                 {/* 通知アイコン */}
                 <Link
                   href="/notifications"

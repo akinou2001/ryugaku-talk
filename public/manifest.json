@@ -1,0 +1,22 @@
+{
+  "name": "RyugakuTalk - 留学支援コミュニティ",
+  "short_name": "RyugakuTalk",
+  "description": "みんなの留学体験が紡ぐ、次世代の留学コミュニティプラットフォーム",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3B82F6",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ]
+}
+

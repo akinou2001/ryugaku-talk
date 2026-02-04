@@ -4,11 +4,11 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
-import { getCommunityById, getCommunityStats, getCommunityMembers, getCommunityPosts, getCommunityEvents, requestCommunityMembership, updateMembershipStatus, createEvent, registerEvent, cancelEventRegistration, getEventParticipants, updateEvent, deleteEvent, updateCommunity, getCommunityChannels, createChannel, deleteChannel, getChannelMessages, sendChannelMessage, deleteCommunity } from '@/lib/community'
+import { getCommunityById, getCommunityStats, getCommunityMembers, getCommunityPosts, getCommunityEvents, requestCommunityMembership, cancelCommunityMembershipRequest, updateMembershipStatus, createEvent, registerEvent, cancelEventRegistration, getEventParticipants, updateEvent, deleteEvent, updateCommunity, getCommunityChannels, createChannel, deleteChannel, getChannelMessages, sendChannelMessage, deleteCommunity, createCommunityInvite, getCommunityInvites, revokeCommunityInvite, transferCommunityOwnership, promoteToAdmin, demoteFromAdmin, leaveCommunity } from '@/lib/community'
 import { uploadFiles, uploadFile, validateFileType, validateFileSize, FILE_TYPES, getFileIcon, isImageFile } from '@/lib/storage'
 import { getQuests, createQuest, requestQuestCompletion, updateQuestCompletionStatus, getQuestCompletions, updateQuest, deleteQuest, getQuestPostCounts, getQuestPosts } from '@/lib/quest'
 import type { Community, Quest, QuestCompletion, Post, Event, CommunityMember, User, CommunityRoomMessage } from '@/lib/supabase'
-import { ArrowLeft, Plus, Users, Building2, CheckCircle, X, Clock, MessageSquare, Calendar, UserPlus, Settings, MapPin, Upload, File, Image as ImageIcon, Edit, Trash2, Award, Heart, Archive, ArchiveRestore, Hash, Send } from 'lucide-react'
+import { ArrowLeft, Plus, Users, Building2, CheckCircle, X, Clock, MessageSquare, Calendar, UserPlus, Settings, MapPin, Upload, File, Image as ImageIcon, Edit, Trash2, Award, Heart, Archive, ArchiveRestore, Hash, Send, MoreVertical, UserCog, Share2, LogOut, Shield } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
@@ -33,7 +33,18 @@ export default function CommunityDetail() {
   const [isMember, setIsMember] = useState(false)
   const [isOwner, setIsOwner] = useState(false)
   const [isAdminUser, setIsAdminUser] = useState(false)
+  const [userRole, setUserRole] = useState<'owner' | 'admin' | 'moderator' | 'member' | null>(null)
   const [membershipStatus, setMembershipStatus] = useState<'none' | 'pending' | 'approved'>('none')
+  
+  // ケバブメニュー
+  const [showKebabMenu, setShowKebabMenu] = useState(false)
+  const kebabMenuRef = useRef<HTMLDivElement>(null)
+  
+  // 設定モーダル
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [showPermissionModal, setShowPermissionModal] = useState(false)
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
   
   // 削除確認モーダル
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -98,6 +109,9 @@ export default function CommunityDetail() {
   const [communityCoverImage, setCommunityCoverImage] = useState<File | null>(null)
   const [communityCoverImagePreview, setCommunityCoverImagePreview] = useState<string | null>(null)
   const [communityCoverImageUploading, setCommunityCoverImageUploading] = useState(false)
+  const [communityIconImage, setCommunityIconImage] = useState<File | null>(null)
+  const [communityIconImagePreview, setCommunityIconImagePreview] = useState<string | null>(null)
+  const [communityIconImageUploading, setCommunityIconImageUploading] = useState(false)
 
   // チャンネル
   const [channels, setChannels] = useState<any[]>([])
@@ -206,6 +220,23 @@ export default function CommunityDetail() {
     scrollToBottom()
   }, [channelMessages])
 
+  // ケバブメニュー外クリックで閉じる
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (kebabMenuRef.current && !kebabMenuRef.current.contains(event.target as Node)) {
+        setShowKebabMenu(false)
+      }
+    }
+
+    if (showKebabMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showKebabMenu])
+
   useEffect(() => {
     if (community && isMember) {
       switch (activeTab) {
@@ -249,15 +280,40 @@ export default function CommunityDetail() {
       if (owner) {
         setIsMember(true)
         setMembershipStatus('approved')
+        setUserRole('owner')
       } else if (data?.is_member) {
         setIsMember(true)
         setMembershipStatus('approved')
+        // ユーザーのロールを取得
+        if (user) {
+          const { data: memberData } = await supabase
+            .from('community_members')
+            .select('role')
+            .eq('community_id', communityId)
+            .eq('user_id', user.id)
+            .eq('status', 'approved')
+            .single()
+          
+          if (memberData) {
+            if (memberData.role === 'admin') {
+              setUserRole('admin')
+            } else if (memberData.role === 'moderator') {
+              setUserRole('moderator')
+            } else {
+              setUserRole('member')
+            }
+          } else {
+            setUserRole('member')
+          }
+        }
       } else if (data?.member_status === 'pending') {
         setIsMember(false)
         setMembershipStatus('pending')
+        setUserRole(null)
       } else {
         setIsMember(false)
         setMembershipStatus('none')
+        setUserRole(null)
       }
       
       // コミュニティ情報取得後、統計情報を取得
@@ -433,8 +489,24 @@ export default function CommunityDetail() {
       await requestCommunityMembership(communityId)
       setMembershipStatus('pending')
       alert('加入申請を送信しました。承認をお待ちください。')
+      await fetchCommunity() // 状態を更新
     } catch (error: any) {
       setError(error.message || '加入申請に失敗しました')
+    }
+  }
+
+  const handleCancelMembershipRequest = async () => {
+    if (!confirm('加入申請を取り消しますか？')) {
+      return
+    }
+
+    try {
+      await cancelCommunityMembershipRequest(communityId)
+      setMembershipStatus('none')
+      alert('加入申請を取り消しました。')
+      await fetchCommunity() // 状態を更新
+    } catch (error: any) {
+      setError(error.message || '申請の取り消しに失敗しました')
     }
   }
 
@@ -766,6 +838,34 @@ export default function CommunityDetail() {
     setCommunityCoverImagePreview(null)
   }
 
+  const handleCommunityIconImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!isImageFile(file)) {
+      setError('画像ファイルを選択してください')
+      return
+    }
+
+    if (!validateFileSize(file, 5)) {
+      setError('画像サイズは5MB以下である必要があります')
+      return
+    }
+
+    setCommunityIconImage(file)
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setCommunityIconImagePreview(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+    setError('')
+  }
+
+  const handleRemoveCommunityIconImage = () => {
+    setCommunityIconImage(null)
+    setCommunityIconImagePreview(null)
+  }
+
   const handleEditCommunity = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!isOwner) return
@@ -788,15 +888,32 @@ export default function CommunityDetail() {
         }
       }
 
+      // アイコン画像をアップロード
+      let iconImageUrl: string | undefined = undefined
+      if (communityIconImage) {
+        setCommunityIconImageUploading(true)
+        try {
+          iconImageUrl = await uploadFile(communityIconImage, 'community-icons', `community-icon-${communityId}`)
+        } catch (error: any) {
+          setError(error.message || 'アイコン画像のアップロードに失敗しました')
+          setCommunityIconImageUploading(false)
+          return
+        } finally {
+          setCommunityIconImageUploading(false)
+        }
+      }
+
       await updateCommunity(communityId, {
         name: communityEditForm.name,
         description: communityEditForm.description || undefined,
         visibility: communityEditForm.visibility,
-        cover_image_url: coverImageUrl || undefined
+        cover_image_url: coverImageUrl || undefined,
+        icon_url: iconImageUrl || undefined
       })
       
       setIsEditingCommunity(false)
       setCommunityCoverImage(null)
+      setCommunityIconImage(null)
       await fetchCommunity()
     } catch (error: any) {
       setError(error.message || 'コミュニティの編集に失敗しました')
@@ -1096,7 +1213,7 @@ export default function CommunityDetail() {
             </button>
             <div>
               <div className="flex items-center space-x-2">
-              <h1 className="text-3xl font-bold text-gray-900">{community.name}</h1>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">{community.name}</h1>
                 {community.is_archived && (
                   <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
                     アーカイブ済み
@@ -1126,7 +1243,7 @@ export default function CommunityDetail() {
 
         {/* コミュニティ情報 */}
         <div className="card mb-6">
-          {isEditingCommunity && isOwner ? (
+          {isEditingCommunity && isOwner && !showSettingsModal ? (
             <form onSubmit={handleEditCommunity} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1163,6 +1280,44 @@ export default function CommunityDetail() {
                   <option value="public">公開</option>
                   <option value="private">非公開</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  アイコン画像
+                </label>
+                <div className="space-y-2">
+                  {(communityIconImagePreview || community.icon_url) && (
+                    <div className="relative inline-block">
+                      <img
+                        src={communityIconImagePreview || community.icon_url || ''}
+                        alt="アイコン画像プレビュー"
+                        className="w-24 h-24 object-cover rounded-full border-2 border-gray-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRemoveCommunityIconImage}
+                        className="absolute top-0 right-0 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )}
+                  {!communityIconImagePreview && !community.icon_url && (
+                    <label className="flex items-center justify-center w-24 h-24 border-2 border-dashed border-gray-300 rounded-full cursor-pointer hover:border-primary-500 transition-colors">
+                      <Upload className="h-6 w-6 text-gray-400" />
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        onChange={handleCommunityIconImageChange}
+                        className="hidden"
+                        disabled={communityIconImageUploading}
+                      />
+                    </label>
+                  )}
+                  <p className="text-xs text-gray-500">
+                    対応形式: JPEG, PNG, GIF, WebP（5MB以下、推奨サイズ: 正方形）
+                  </p>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1210,10 +1365,10 @@ export default function CommunityDetail() {
               <div className="flex space-x-2">
                 <button
                   type="submit"
-                  disabled={communityCoverImageUploading}
+                  disabled={communityCoverImageUploading || communityIconImageUploading}
                   className="btn-primary"
                 >
-                  {communityCoverImageUploading ? 'アップロード中...' : '保存'}
+                  {(communityCoverImageUploading || communityIconImageUploading) ? 'アップロード中...' : '保存'}
                 </button>
                 <button
                   type="button"
@@ -1221,6 +1376,8 @@ export default function CommunityDetail() {
                     setIsEditingCommunity(false)
                     setCommunityCoverImage(null)
                     setCommunityCoverImagePreview(community.cover_image_url || null)
+                    setCommunityIconImage(null)
+                    setCommunityIconImagePreview(community.icon_url || null)
                     setCommunityEditForm({
                       name: community.name || '',
                       description: community.description || '',
@@ -1302,14 +1459,114 @@ export default function CommunityDetail() {
                     </div>
                   </div>
                 </div>
-                {isOwner && (
-                  <button
-                    onClick={() => setIsEditingCommunity(true)}
-                    className="p-2 text-gray-600 hover:text-primary-600 transition-colors"
-                    title="コミュニティを編集"
-                  >
-                    <Settings className="h-5 w-5" />
-                  </button>
+                {/* ケバブメニュー */}
+                {isMember && (
+                  <div className="relative" ref={kebabMenuRef}>
+                    <button
+                      onClick={() => setShowKebabMenu(!showKebabMenu)}
+                      className="p-2 text-gray-600 hover:text-primary-600 transition-colors"
+                      title="メニュー"
+                    >
+                      <MoreVertical className="h-5 w-5" />
+                    </button>
+                    {showKebabMenu && (
+                      <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                        <div className="py-1">
+                          {/* コミュニティ設定（owner, admin） */}
+                          {(userRole === 'owner' || userRole === 'admin') && (
+                            <button
+                              onClick={() => {
+                                setShowSettingsModal(true)
+                                setShowKebabMenu(false)
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                            >
+                              <Settings className="h-4 w-4" />
+                              <span>コミュニティ設定</span>
+                            </button>
+                          )}
+                          
+                          {/* 権限設定（owner, admin） */}
+                          {(userRole === 'owner' || userRole === 'admin') && (
+                            <button
+                              onClick={() => {
+                                setShowPermissionModal(true)
+                                setShowKebabMenu(false)
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                            >
+                              <Shield className="h-4 w-4" />
+                              <span>権限設定</span>
+                            </button>
+                          )}
+                          
+                          {/* メンバー承認・拒否（owner, admin, moderator） */}
+                          {(userRole === 'owner' || userRole === 'admin' || userRole === 'moderator') && (
+                            <button
+                              onClick={() => {
+                                setActiveTab('members')
+                                setShowKebabMenu(false)
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                            >
+                              <UserCog className="h-4 w-4" />
+                              <span>メンバー承認・拒否</span>
+                            </button>
+                          )}
+                          
+                          {/* コミュニティ招待（owner, admin, moderator） */}
+                          {(userRole === 'owner' || userRole === 'admin' || userRole === 'moderator') && (
+                            <button
+                              onClick={() => {
+                                setShowInviteModal(true)
+                                setShowKebabMenu(false)
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                            >
+                              <UserPlus className="h-4 w-4" />
+                              <span>コミュニティ招待</span>
+                            </button>
+                          )}
+                          
+                          {/* URL共有（全メンバー） */}
+                          {isMember && (
+                            <button
+                              onClick={() => {
+                                setShowShareModal(true)
+                                setShowKebabMenu(false)
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                            >
+                              <Share2 className="h-4 w-4" />
+                              <span>URL共有</span>
+                            </button>
+                          )}
+                          
+                          {/* コミュニティからのサインアウト（owner以外） */}
+                          {isMember && userRole !== 'owner' && (
+                            <button
+                              onClick={async () => {
+                                if (confirm('このコミュニティから退出しますか？')) {
+                                  try {
+                                    await leaveCommunity(communityId)
+                                    alert('コミュニティから退出しました')
+                                    router.push('/communities')
+                                  } catch (error: any) {
+                                    setError(error.message || '退出に失敗しました')
+                                  }
+                                }
+                                setShowKebabMenu(false)
+                              }}
+                              className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2"
+                            >
+                              <LogOut className="h-4 w-4" />
+                              <span>コミュニティから退出</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </>
@@ -1321,7 +1578,13 @@ export default function CommunityDetail() {
               {membershipStatus === 'pending' ? (
                 <div className="text-center py-4">
                   <p className="text-gray-600 mb-2">加入申請中です</p>
-                  <p className="text-sm text-gray-500">承認をお待ちください</p>
+                  <p className="text-sm text-gray-500 mb-4">承認をお待ちください</p>
+                  <button
+                    onClick={handleCancelMembershipRequest}
+                    className="btn-secondary text-sm"
+                  >
+                    申請を取り消す
+                  </button>
                 </div>
               ) : (
                 <div className="text-center">
@@ -1584,7 +1847,7 @@ export default function CommunityDetail() {
                                     name={item.author?.name} 
                                     size="sm"
                                   />
-                                  <span className="truncate">{item.author?.name || '不明'}</span>
+                                  <span className="text-gray-900 truncate font-semibold">{item.author?.name || '不明'}</span>
                                 </div>
                                 <span className="whitespace-nowrap">{formatDate(item.created_at)}</span>
                                 <div className="flex items-center space-x-1">
@@ -2866,6 +3129,707 @@ export default function CommunityDetail() {
             </div>
           </div>
         )}
+
+        {/* コミュニティ設定モーダル */}
+        {showSettingsModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900">コミュニティ設定</h2>
+                <button
+                  onClick={() => {
+                    setShowSettingsModal(false)
+                    setIsEditingCommunity(false)
+                    // フォームをリセット
+                    if (community) {
+                      setCommunityCoverImage(null)
+                      setCommunityCoverImagePreview(community.cover_image_url || null)
+                      setCommunityIconImage(null)
+                      setCommunityIconImagePreview(community.icon_url || null)
+                      setCommunityEditForm({
+                        name: community.name || '',
+                        description: community.description || '',
+                        visibility: community.visibility || 'public'
+                      })
+                    }
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              {!isEditingCommunity ? (
+                <div className="space-y-4">
+                  <p className="text-gray-600">コミュニティの基本情報を編集できます。</p>
+                  <button
+                    onClick={() => setIsEditingCommunity(true)}
+                    className="btn-primary"
+                  >
+                    編集を開始
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={async (e) => {
+                  e.preventDefault()
+                  await handleEditCommunity(e)
+                  setShowSettingsModal(false)
+                }} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      コミュニティ名 *
+                    </label>
+                    <input
+                      type="text"
+                      value={communityEditForm.name}
+                      onChange={(e) => setCommunityEditForm(prev => ({ ...prev, name: e.target.value }))}
+                      required
+                      className="input-field"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      説明
+                    </label>
+                    <textarea
+                      value={communityEditForm.description}
+                      onChange={(e) => setCommunityEditForm(prev => ({ ...prev, description: e.target.value }))}
+                      rows={4}
+                      className="input-field"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      公開設定
+                    </label>
+                    <select
+                      value={communityEditForm.visibility}
+                      onChange={(e) => setCommunityEditForm(prev => ({ ...prev, visibility: e.target.value as 'public' | 'private' }))}
+                      className="input-field"
+                    >
+                      <option value="public">公開</option>
+                      <option value="private">非公開</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      アイコン画像
+                    </label>
+                    <div className="space-y-2">
+                      {(communityIconImagePreview || community?.icon_url) && (
+                        <div className="relative inline-block">
+                          <img
+                            src={communityIconImagePreview || community?.icon_url || ''}
+                            alt="アイコン画像プレビュー"
+                            className="w-24 h-24 object-cover rounded-full border-2 border-gray-200"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleRemoveCommunityIconImage}
+                            className="absolute top-0 right-0 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
+                      {!communityIconImagePreview && !community?.icon_url && (
+                        <label className="flex items-center justify-center w-24 h-24 border-2 border-dashed border-gray-300 rounded-full cursor-pointer hover:border-primary-500 transition-colors">
+                          <Upload className="h-6 w-6 text-gray-400" />
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/gif,image/webp"
+                            onChange={handleCommunityIconImageChange}
+                            className="hidden"
+                            disabled={communityIconImageUploading}
+                          />
+                        </label>
+                      )}
+                      <p className="text-xs text-gray-500">
+                        対応形式: JPEG, PNG, GIF, WebP（5MB以下、推奨サイズ: 正方形）
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      カバー画像
+                    </label>
+                    <div className="space-y-2">
+                      {(communityCoverImagePreview || community?.cover_image_url) && (
+                        <div className="relative inline-block">
+                          <img
+                            src={communityCoverImagePreview || community?.cover_image_url || ''}
+                            alt="カバー画像プレビュー"
+                            className="w-full h-48 object-cover rounded-lg border border-gray-200"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleRemoveCommunityCoverImage}
+                            className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
+                      {!communityCoverImagePreview && !community?.cover_image_url && (
+                        <label className="flex items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-primary-500 transition-colors">
+                          <div className="flex flex-col items-center space-y-2">
+                            <Upload className="h-8 w-8 text-gray-400" />
+                            <span className="text-sm text-gray-600">カバー画像を選択</span>
+                          </div>
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/gif,image/webp"
+                            onChange={handleCommunityCoverImageChange}
+                            className="hidden"
+                            disabled={communityCoverImageUploading}
+                          />
+                        </label>
+                      )}
+                      {!communityCoverImagePreview && !community?.cover_image_url && (
+                        <p className="text-xs text-gray-500">
+                          対応形式: JPEG, PNG, GIF, WebP（5MB以下）
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      type="submit"
+                      disabled={communityCoverImageUploading || communityIconImageUploading}
+                      className="btn-primary"
+                    >
+                      {(communityCoverImageUploading || communityIconImageUploading) ? 'アップロード中...' : '保存'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsEditingCommunity(false)
+                        if (community) {
+                          setCommunityCoverImage(null)
+                          setCommunityCoverImagePreview(community.cover_image_url || null)
+                          setCommunityIconImage(null)
+                          setCommunityIconImagePreview(community.icon_url || null)
+                          setCommunityEditForm({
+                            name: community.name || '',
+                            description: community.description || '',
+                            visibility: community.visibility || 'public'
+                          })
+                        }
+                      }}
+                      className="btn-secondary"
+                    >
+                      キャンセル
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 権限設定モーダル */}
+        {showPermissionModal && (
+          <PermissionSettingsModal
+            communityId={communityId}
+            isOwner={isOwner}
+            userRole={userRole}
+            members={members}
+            onClose={() => setShowPermissionModal(false)}
+            onUpdate={async () => {
+              await fetchCommunity()
+              await fetchMembers()
+            }}
+          />
+        )}
+
+        {/* 招待管理モーダル */}
+        {showInviteModal && (
+          <InviteManagementModal
+            communityId={communityId}
+            onClose={() => setShowInviteModal(false)}
+          />
+        )}
+
+        {/* URL共有モーダル */}
+        {showShareModal && community && (
+          <ShareModal
+            communityId={communityId}
+            communityName={community.name}
+            onClose={() => setShowShareModal(false)}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// 権限設定モーダルコンポーネント
+function PermissionSettingsModal({
+  communityId,
+  isOwner,
+  userRole,
+  members,
+  onClose,
+  onUpdate
+}: {
+  communityId: string
+  isOwner: boolean
+  userRole: 'owner' | 'admin' | 'moderator' | 'member' | null
+  members: CommunityMember[]
+  onClose: () => void
+  onUpdate: () => Promise<void>
+}) {
+  const [transferring, setTransferring] = useState(false)
+  const [promoting, setPromoting] = useState(false)
+  const [selectedUserId, setSelectedUserId] = useState<string>('')
+  const [transferReason, setTransferReason] = useState('')
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  const approvedMembers = members.filter(m => m.status === 'approved')
+  const adminMembers = approvedMembers.filter(m => m.role === 'admin')
+  const regularMembers = approvedMembers.filter(m => m.role === 'member')
+
+  const handleTransferOwnership = async () => {
+    if (!selectedUserId) {
+      setError('移管先のユーザーを選択してください')
+      return
+    }
+
+    if (!confirm('本当に所有者権限を移管しますか？この操作は取り消せません。')) {
+      return
+    }
+
+    setTransferring(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      await transferCommunityOwnership(communityId, selectedUserId, transferReason)
+      setSuccess('所有者権限を移管しました')
+      await onUpdate()
+      setTimeout(() => {
+        onClose()
+      }, 1500)
+    } catch (err: any) {
+      setError(err.message || '移管に失敗しました')
+    } finally {
+      setTransferring(false)
+    }
+  }
+
+  const handlePromoteToAdmin = async (userId: string) => {
+    if (!confirm('このユーザーを管理者に任命しますか？')) {
+      return
+    }
+
+    setPromoting(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      await promoteToAdmin(communityId, userId)
+      setSuccess('管理者に任命しました')
+      await onUpdate()
+    } catch (err: any) {
+      setError(err.message || '任命に失敗しました')
+    } finally {
+      setPromoting(false)
+    }
+  }
+
+  const handleDemoteFromAdmin = async (userId: string) => {
+    if (!confirm('このユーザーの管理者権限を剥奪しますか？')) {
+      return
+    }
+
+    setError('')
+    setSuccess('')
+
+    try {
+      await demoteFromAdmin(communityId, userId)
+      setSuccess('管理者権限を剥奪しました')
+      await onUpdate()
+    } catch (err: any) {
+      setError(err.message || '剥奪に失敗しました')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-gray-900">権限設定</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg">
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-600 rounded-lg">
+            {success}
+          </div>
+        )}
+
+        {/* 所有者移管（ownerのみ） */}
+        {isOwner && (
+          <div className="mb-6 p-4 border border-gray-200 rounded-lg">
+            <h3 className="font-semibold text-gray-900 mb-3">所有者権限の移管</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  新しい所有者を選択
+                </label>
+                <select
+                  value={selectedUserId}
+                  onChange={(e) => setSelectedUserId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                >
+                  <option value="">選択してください</option>
+                  {approvedMembers.map((member) => (
+                    <option key={member.user_id} value={member.user_id}>
+                      {member.user?.name || '不明なユーザー'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  移管理由（任意）
+                </label>
+                <textarea
+                  value={transferReason}
+                  onChange={(e) => setTransferReason(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                  rows={3}
+                  placeholder="移管理由を入力してください"
+                />
+              </div>
+              <button
+                onClick={handleTransferOwnership}
+                disabled={transferring || !selectedUserId}
+                className="btn-primary bg-red-600 hover:bg-red-700 disabled:opacity-50"
+              >
+                {transferring ? '移管中...' : '所有者権限を移管'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 管理者任命（owner, admin） */}
+        {(isOwner || userRole === 'admin') && (
+          <div className="mb-6 p-4 border border-gray-200 rounded-lg">
+            <h3 className="font-semibold text-gray-900 mb-3">管理者の任命</h3>
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600 mb-3">現在の管理者</p>
+              {adminMembers.length > 0 ? (
+                <div className="space-y-2">
+                  {adminMembers.map((member) => (
+                    <div key={member.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <span>{member.user?.name || '不明なユーザー'}</span>
+                      {isOwner && member.user_id !== (members.find(m => m.role === 'owner')?.user_id) && (
+                        <button
+                          onClick={() => handleDemoteFromAdmin(member.user_id)}
+                          className="text-sm text-red-600 hover:text-red-800"
+                        >
+                          管理者権限を剥奪
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">管理者がいません</p>
+              )}
+              
+              <div className="mt-4">
+                <p className="text-sm text-gray-600 mb-2">メンバーから管理者を任命</p>
+                <div className="space-y-2">
+                  {regularMembers.map((member) => (
+                    <div key={member.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <span>{member.user?.name || '不明なユーザー'}</span>
+                      <button
+                        onClick={() => handlePromoteToAdmin(member.user_id)}
+                        disabled={promoting}
+                        className="text-sm text-primary-600 hover:text-primary-800 disabled:opacity-50"
+                      >
+                        {promoting ? '任命中...' : '管理者に任命'}
+                      </button>
+                    </div>
+                  ))}
+                  {regularMembers.length === 0 && (
+                    <p className="text-sm text-gray-500">任命可能なメンバーがいません</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// 招待管理モーダルコンポーネント
+function InviteManagementModal({
+  communityId,
+  onClose
+}: {
+  communityId: string
+  onClose: () => void
+}) {
+  const [invites, setInvites] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [expiresInDays, setExpiresInDays] = useState<number | undefined>(7)
+  const [maxUses, setMaxUses] = useState<number | undefined>(undefined)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  useEffect(() => {
+    fetchInvites()
+  }, [])
+
+  const fetchInvites = async () => {
+    try {
+      setLoading(true)
+      const data = await getCommunityInvites(communityId)
+      setInvites(data)
+    } catch (err: any) {
+      setError(err.message || '招待リンクの取得に失敗しました')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreateInvite = async () => {
+    setCreating(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const { inviteUrl } = await createCommunityInvite(communityId, {
+        expiresInDays,
+        maxUses
+      })
+      setSuccess('招待リンクを作成しました')
+      await fetchInvites()
+      // クリップボードにコピー
+      if (navigator.clipboard) {
+        await navigator.clipboard.writeText(inviteUrl)
+        setSuccess('招待リンクを作成し、クリップボードにコピーしました')
+      }
+    } catch (err: any) {
+      setError(err.message || '招待リンクの作成に失敗しました')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleRevokeInvite = async (inviteId: string) => {
+    if (!confirm('この招待リンクを無効化しますか？')) {
+      return
+    }
+
+    try {
+      await revokeCommunityInvite(inviteId)
+      setSuccess('招待リンクを無効化しました')
+      await fetchInvites()
+    } catch (err: any) {
+      setError(err.message || '無効化に失敗しました')
+    }
+  }
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setSuccess('クリップボードにコピーしました')
+    } catch (err) {
+      setError('コピーに失敗しました')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-gray-900">コミュニティ招待</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg">
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-600 rounded-lg">
+            {success}
+          </div>
+        )}
+
+        {/* 新しい招待リンクを作成 */}
+        <div className="mb-6 p-4 border border-gray-200 rounded-lg">
+          <h3 className="font-semibold text-gray-900 mb-3">新しい招待リンクを作成</h3>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                有効期限（日数）
+              </label>
+              <input
+                type="number"
+                value={expiresInDays || ''}
+                onChange={(e) => setExpiresInDays(e.target.value ? parseInt(e.target.value) : undefined)}
+                min="1"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                placeholder="無期限の場合は空欄"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                最大使用回数
+              </label>
+              <input
+                type="number"
+                value={maxUses || ''}
+                onChange={(e) => setMaxUses(e.target.value ? parseInt(e.target.value) : undefined)}
+                min="1"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                placeholder="無制限の場合は空欄"
+              />
+            </div>
+            <button
+              onClick={handleCreateInvite}
+              disabled={creating}
+              className="btn-primary disabled:opacity-50"
+            >
+              {creating ? '作成中...' : '招待リンクを作成'}
+            </button>
+          </div>
+        </div>
+
+        {/* 招待リンク一覧 */}
+        <div>
+          <h3 className="font-semibold text-gray-900 mb-3">招待リンク一覧</h3>
+          {loading ? (
+            <p className="text-gray-500">読み込み中...</p>
+          ) : invites.length > 0 ? (
+            <div className="space-y-2">
+              {invites.map((invite) => {
+                const inviteUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/communities/${communityId}/invite/${invite.invite_token}`
+                const isExpired = invite.expires_at && new Date(invite.expires_at) < new Date()
+                const isMaxUsesReached = invite.max_uses !== null && invite.used_count >= invite.max_uses
+                const isActive = invite.is_active && !isExpired && !isMaxUsesReached
+
+                return (
+                  <div key={invite.id} className="p-3 border border-gray-200 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <span className={`px-2 py-1 text-xs rounded ${isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                          {isActive ? '有効' : '無効'}
+                        </span>
+                        {invite.expires_at && (
+                          <span className="text-xs text-gray-500">
+                            期限: {new Date(invite.expires_at).toLocaleDateString('ja-JP')}
+                          </span>
+                        )}
+                      </div>
+                      {invite.is_active && (
+                        <button
+                          onClick={() => handleRevokeInvite(invite.id)}
+                          className="text-sm text-red-600 hover:text-red-800"
+                        >
+                          無効化
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        value={inviteUrl}
+                        readOnly
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                      />
+                      <button
+                        onClick={() => copyToClipboard(inviteUrl)}
+                        className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
+                      >
+                        コピー
+                      </button>
+                    </div>
+                    <div className="mt-2 text-xs text-gray-500">
+                      使用回数: {invite.used_count} {invite.max_uses !== null ? `/ ${invite.max_uses}` : '(無制限)'}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-gray-500">招待リンクがありません</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// URL共有モーダルコンポーネント
+function ShareModal({
+  communityId,
+  communityName,
+  onClose
+}: {
+  communityId: string
+  communityName: string
+  onClose: () => void
+}) {
+  const [copied, setCopied] = useState(false)
+  const communityUrl = typeof window !== 'undefined' ? `${window.location.origin}/communities/${communityId}` : ''
+
+  const copyToClipboard = async () => {
+    try {
+      await navigator.clipboard.writeText(communityUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      alert('コピーに失敗しました')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-gray-900">URL共有</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="space-y-4">
+          <p className="text-gray-600">{communityName}のURLを共有します</p>
+          <div className="flex items-center space-x-2">
+            <input
+              type="text"
+              value={communityUrl}
+              readOnly
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            />
+            <button
+              onClick={copyToClipboard}
+              className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm"
+            >
+              {copied ? 'コピー済み' : 'コピー'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )

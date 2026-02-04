@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
-import { searchCommunities, requestCommunityMembership } from '@/lib/community'
+import { searchCommunities, requestCommunityMembership, cancelCommunityMembershipRequest } from '@/lib/community'
 import type { Community } from '@/lib/supabase'
 import { Search, Plus, Users, Lock, Globe, Building2, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
+import { EARTH_GRADIENT } from '@/config/theme-config'
 
 export default function CommunitiesPage() {
   const { user } = useAuth()
@@ -101,17 +102,16 @@ export default function CommunitiesPage() {
         {/* ヘッダー */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-1 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
               コミュニティ
             </h1>
             <p className="text-sm text-gray-600">コミュニティを見つけて参加しましょう</p>
           </div>
           <div className="flex items-center gap-2">
             {user && user.account_type !== 'individual' && user.verification_status === 'verified' && (
-              <Link href="/communities/new" className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center whitespace-nowrap text-sm sm:text-base">
-                <Plus className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5 sm:mr-2" />
-                <span className="hidden sm:inline">コミュニティを作成</span>
-                <span className="sm:hidden">作成</span>
+              <Link href="/communities/new" className="px-6 py-3 bg-gray-900 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center whitespace-nowrap text-base">
+                <Plus className="h-5 w-5 mr-2" />
+                <span>コミュニティを作成</span>
               </Link>
             )}
             {user && user.account_type !== 'individual' && user.verification_status === 'pending' && (
@@ -151,28 +151,10 @@ export default function CommunitiesPage() {
                 <option value="guild">サークル</option>
                 <option value="official">公式コミュニティ</option>
               </select>
-              <button type="submit" className="px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl text-sm font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 whitespace-nowrap">
+              <button type="submit" className="px-4 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 whitespace-nowrap">
                 検索
               </button>
             </div>
-            {user && (
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 pt-2 border-t border-gray-200">
-                <span className="text-xs sm:text-sm text-gray-600">
-                  {user.account_type === 'individual' 
-                    ? <span className="hidden sm:inline">個人アカウント: サークルを作成できます</span>
-                    : user.verification_status === 'verified'
-                    ? <span className="hidden sm:inline">組織アカウント: 公式コミュニティを作成できます</span>
-                    : <span className="hidden sm:inline">組織アカウント: 認証後に公式コミュニティを作成できます</span>}
-                </span>
-                {user.account_type === 'individual' && (
-                  <Link href="/communities/new" className="btn-secondary text-sm flex items-center justify-center sm:justify-start whitespace-nowrap">
-                    <Plus className="h-4 w-4 mr-1" />
-                    <span className="hidden sm:inline">サークルを作成</span>
-                    <span className="sm:hidden">サークル作成</span>
-                  </Link>
-                )}
-              </div>
-            )}
           </form>
         </div>
 
@@ -194,8 +176,7 @@ export default function CommunitiesPage() {
             {/* 運営中のコミュニティ */}
             {user && communities.filter(c => c.owner_id === user.id).length > 0 && (
               <div className="mb-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
-                  <Building2 className="h-6 w-6 mr-2 text-primary-600" />
+                <h2 className="text-2xl font-bold text-gray-900 mb-6">
                   運営中のコミュニティ
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -284,8 +265,8 @@ function CommunityCard({
           className="w-full h-32 object-cover"
         />
       ) : (
-        <div className="w-full h-32 bg-gradient-to-r from-primary-500 to-primary-600 flex items-center justify-center">
-          <Building2 className="h-12 w-12 text-white opacity-50" />
+        <div className="w-full h-32 bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200 flex items-center justify-center">
+          <Building2 className="h-12 w-12 text-gray-400" />
         </div>
       )}
 
@@ -355,7 +336,7 @@ function CommunityCard({
           {user && !community.is_member && (
             <button
               onClick={() => onJoinRequest(community.id)}
-              className="flex-1 px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className="flex-1 px-4 py-2.5 bg-gray-900 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               disabled={community.member_status === 'pending'}
             >
               {community.member_status === 'pending' ? '申請中' : '加入申請'}
@@ -364,9 +345,13 @@ function CommunityCard({
           {user && community.is_member && (
             <Link
               href={`/communities/${community.id}`}
-              className="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold text-center shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+              className="flex-1 px-4 py-2.5 text-white rounded-xl font-semibold text-center shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
+              style={{ 
+                background: EARTH_GRADIENT.css,
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)'
+              }}
             >
-              参加中
+              <span style={{ textShadow: '0 2px 4px rgba(0, 0, 0, 0.3)' }}>参加中</span>
             </Link>
           )}
         </div>

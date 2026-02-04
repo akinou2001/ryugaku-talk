@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import type { Post } from '@/lib/supabase'
-import { MessageCircle, MessageSquare, Clock, Heart, HelpCircle, BookOpen, MapPin, GraduationCap, CheckCircle2 } from 'lucide-react'
+import { MessageCircle, MessageSquare, Clock, Heart, HelpCircle, BookOpen, MapPin, GraduationCap, CheckCircle, CheckCircle2, Briefcase, Shield } from 'lucide-react'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
 import { StudentStatusBadge } from '@/components/StudentStatusBadge'
@@ -23,7 +23,7 @@ export function RecentPosts() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, account_type, verification_status, organization_name, icon_url, languages, study_abroad_destination, is_operator)
+          author:profiles(name, account_type, verification_status, organization_name, icon_url, languages, study_abroad_destination, university, university_id, is_operator)
         `)
         .is('community_id', null) // コミュニティ限定投稿は除外
         .order('created_at', { ascending: false })
@@ -260,79 +260,64 @@ export function RecentPosts() {
                     <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent"></div>
                     
                     {/* 下部：ユーザー情報（グラスモーフィズム） */}
-                    <div className="absolute bottom-3 left-3 z-20">
+                    <div className="absolute bottom-3 left-3 z-20 max-w-[calc(100%-120px)] sm:max-w-none">
                       <div className="backdrop-blur-xl bg-white/20 border border-white/30 rounded-xl p-2.5 shadow-2xl">
-                        <div className="flex items-center space-x-2 flex-wrap gap-1.5">
+                        <div className="flex items-center space-x-2">
                           <UserAvatar 
                             iconUrl={post.author?.icon_url} 
                             name={post.author?.name} 
                             size="sm"
                           />
-                          <span className="text-white font-semibold text-xs drop-shadow-lg">
-                            {post.author?.name || '匿名'}
-                          </span>
-                          {post.author && (
-                            <>
-                              {post.author.account_type && post.author.account_type !== 'individual' && (
-                                <div className="drop-shadow-lg">
-                                  <AccountBadge 
-                                    accountType={post.author.account_type} 
-                                    verificationStatus={post.author.verification_status}
-                                    organizationName={post.author.organization_name}
-                                    isOperator={post.author.is_operator}
-                                    size="sm"
-                                  />
-                                </div>
+                          <div className="flex flex-col">
+                            <div className="flex items-center space-x-1.5">
+                              <span className="text-white font-semibold text-xs drop-shadow-lg">
+                                {post.author?.name || '匿名'}
+                              </span>
+                              {post.author && post.author.account_type && post.author.account_type !== 'individual' && post.author.verification_status === 'verified' && (
+                                <CheckCircle className={`h-3 w-3 drop-shadow-lg ${post.author.is_operator ? 'text-purple-300' : 'text-[#FFD700]'}`} />
                               )}
-                              <div className="drop-shadow-lg">
-                                <StudentStatusBadge 
-                                  languages={post.author.languages}
-                                  size="sm"
-                                />
-                              </div>
-                            </>
-                          )}
+                            </div>
+                            {post.author && (
+                              <>
+                                {/* 組織アカウントの場合：組織名を表示 */}
+                                {post.author.account_type && post.author.account_type !== 'individual' && post.author.organization_name && (
+                                  <span className="text-white text-xs opacity-90 mt-0.5 drop-shadow-lg">
+                                    {post.author.organization_name}
+                                  </span>
+                                )}
+                                {/* 個人アカウントの場合：留学先または所属大学を表示 */}
+                                {(!post.author.account_type || post.author.account_type === 'individual') && (
+                                  <>
+                                    {post.author.study_abroad_destination ? (
+                                      <span className="text-white text-xs opacity-90 mt-0.5 drop-shadow-lg">
+                                        {post.author.study_abroad_destination}
+                                      </span>
+                                    ) : post.author.university ? (
+                                      <span className="text-white text-xs opacity-90 mt-0.5 drop-shadow-lg">
+                                        {post.author.university}
+                                      </span>
+                                    ) : null}
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
                     
-                    {/* 右下：いいね数・コメント数（グラスモーフィズム） */}
-                    <div className="absolute bottom-3 right-3 z-20">
-                      <div className="backdrop-blur-xl bg-white/20 border border-white/30 rounded-xl px-3 py-2 shadow-2xl">
-                        <div className="flex items-center space-x-3 text-xs text-white">
-                          <span className="flex items-center font-semibold drop-shadow-lg">
-                            <Heart className="h-3.5 w-3.5 mr-1 text-red-300" />
-                            {post.likes_count}
-                          </span>
-                          <span className="flex items-center font-semibold drop-shadow-lg">
-                            <MessageSquare className="h-3.5 w-3.5 mr-1 text-primary-200" />
-                            {post.comments_count}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
                     
                     {/* 上部オーバーレイ（タイトルとタグ用） */}
                     <div className="absolute top-2 left-0 right-0 p-4 z-20">
                       {/* タグチップ（一番上） */}
                       <div className="flex items-center gap-1.5 flex-wrap mb-3">
+                        {/* 国ラベル（画像付き日記の場合のみここに表示） */}
                         {post.study_abroad_destination && (
                           <span className="px-2 py-0.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-medium border border-primary-200 drop-shadow-lg flex items-center gap-0.5">
                             <MapPin className="h-2.5 w-2.5" />
                             {post.study_abroad_destination}
                           </span>
                         )}
-                        {(post.university_id || post.university) && (
-                          <span className="px-2 py-0.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-medium border border-primary-200 drop-shadow-lg flex items-center gap-0.5">
-                            <GraduationCap className="h-2.5 w-2.5" />
-                            {post.university || '大学'}
-                          </span>
-                        )}
-                        {post.tags && post.tags.length > 0 && post.tags.slice(0, 2).map((tag, idx) => (
-                          <span key={idx} className="px-2 py-0.5 bg-gradient-to-r from-primary-50 to-primary-100 text-primary-700 rounded-full text-xs font-medium border border-primary-200 drop-shadow-lg">
-                            {tag}
-                          </span>
-                        ))}
                       </div>
                       
                       {/* タイトル（画像の上に重ねて表示） */}
@@ -391,44 +376,41 @@ export function RecentPosts() {
                         name={post.author?.name} 
                         size="sm"
                       />
-                      <span className="font-medium">{post.author?.name || '匿名'}</span>
-                    </div>
-                    {post.author && (
-                      <>
-                        {/* 投稿カテゴリがofficialの場合はAccountBadgeを非表示 */}
-                        {post.author.account_type && post.author.account_type !== 'individual' && post.category !== 'official' && (
-                          <AccountBadge 
-                            accountType={post.author.account_type} 
-                            verificationStatus={post.author.verification_status}
-                            organizationName={post.author.organization_name}
-                            isOperator={post.author.is_operator}
-                            size="sm"
-                          />
+                      <div className="flex flex-col">
+                        <div className="flex items-center space-x-1.5">
+                          <span className="font-medium">{post.author?.name || '匿名'}</span>
+                          {post.author && post.author.account_type && post.author.account_type !== 'individual' && post.author.verification_status === 'verified' && (
+                            <CheckCircle className={`h-3 w-3 ${post.author.is_operator ? 'text-purple-600' : 'text-[#B39855]'}`} />
+                          )}
+                        </div>
+                        {post.author && (
+                          <>
+                            {/* 組織アカウントの場合：組織名を表示 */}
+                            {post.author.account_type && post.author.account_type !== 'individual' && post.author.organization_name && (
+                              <span className="text-xs text-gray-500 mt-0.5">
+                                {post.author.organization_name}
+                              </span>
+                            )}
+                            {/* 個人アカウントの場合：留学先または所属大学を表示 */}
+                            {(!post.author.account_type || post.author.account_type === 'individual') && (
+                              <>
+                                {post.author.study_abroad_destination ? (
+                                  <span className="text-xs text-gray-500 mt-0.5">
+                                    {post.author.study_abroad_destination}
+                                  </span>
+                                ) : post.author.university ? (
+                                  <span className="text-xs text-gray-500 mt-0.5">
+                                    {post.author.university}
+                                  </span>
+                                ) : null}
+                              </>
+                            )}
+                          </>
                         )}
-                        <StudentStatusBadge 
-                          languages={post.author.languages}
-                          size="sm"
-                        />
-                      </>
-                    )}
-                    {(post.university_id || post.university) && (
-                      <span className="flex items-center text-gray-600">
-                        <GraduationCap className="h-3 w-3 mr-0.5" />
-                        <span className="font-medium text-xs">{post.university || '大学'}</span>
-                      </span>
-                    )}
+                      </div>
+                    </div>
                   </div>
                   
-                  <div className="flex items-center space-x-3 text-xs text-gray-600">
-                    <span className="flex items-center font-semibold">
-                      <Heart className="h-3.5 w-3.5 mr-1 text-red-500" />
-                      {post.likes_count}
-                    </span>
-                    <span className="flex items-center font-semibold">
-                      <MessageSquare className="h-3.5 w-3.5 mr-1 text-primary-500" />
-                      {post.comments_count}
-                    </span>
-                  </div>
                 </div>
               )}
             </div>

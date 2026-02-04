@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import { FileText, AlertCircle, Shield, Ban, Users } from 'lucide-react'
+import { APP_NAME, TITLE_TEMPLATE } from '@/config/app-config'
 
 export const metadata: Metadata = {
-  title: '利用規約 - RyugakuTalk',
-  description: 'RyugakuTalkの利用規約',
+  title: `利用規約`,
+  description: `${APP_NAME}の利用規約`,
 }
 
 export default function TermsPage() {
@@ -28,7 +29,7 @@ export default function TermsPage() {
                 1. はじめに
               </h2>
               <p className="text-gray-700 leading-relaxed">
-                本利用規約（以下「本規約」）は、RyugakuTalk（以下「当サービス」）の利用条件を定めるものです。
+                本利用規約（以下「本規約」）は、{APP_NAME}（以下「当サービス」）の利用条件を定めるものです。
                 当サービスをご利用になることで、本規約に同意したものとみなされます。
                 本規約に同意いただけない場合は、当サービスをご利用いただけません。
               </p>

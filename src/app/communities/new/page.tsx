@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { createCommunity } from '@/lib/community'
 import { uploadFile, validateFileType, validateFileSize, FILE_TYPES } from '@/lib/storage'
+import { DEFAULT_COMMUNITY_COVERS } from '@/config/theme-config'
 import { ArrowLeft, Save, X, Image as ImageIcon } from 'lucide-react'
 
 export default function NewCommunity() {
@@ -21,6 +22,9 @@ export default function NewCommunity() {
   })
   const [coverImage, setCoverImage] = useState<File | null>(null)
   const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null)
+  const [selectedDefaultCover, setSelectedDefaultCover] = useState<string | null>(null)
+  const [iconImage, setIconImage] = useState<File | null>(null)
+  const [iconImagePreview, setIconImagePreview] = useState<string | null>(null)
   const [imageUploading, setImageUploading] = useState(false)
 
   const handleCoverImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -37,6 +41,7 @@ export default function NewCommunity() {
       }
       
       setCoverImage(file)
+      setSelectedDefaultCover(null) // デフォルト選択を解除
       // プレビューを作成
       const reader = new FileReader()
       reader.onloadend = () => {
@@ -47,9 +52,46 @@ export default function NewCommunity() {
     }
   }
 
+  const handleSelectDefaultCover = (coverPath: string) => {
+    setSelectedDefaultCover(coverPath)
+    setCoverImage(null) // アップロードファイルを解除
+    setCoverImagePreview(coverPath) // デフォルト写真のパスをプレビューに設定
+    setError('')
+  }
+
   const handleRemoveCoverImage = () => {
     setCoverImage(null)
     setCoverImagePreview(null)
+    setSelectedDefaultCover(null)
+  }
+
+  const handleIconImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // ファイルタイプとサイズを検証
+      if (!validateFileType(file, FILE_TYPES.POST_IMAGE)) {
+        setError('画像はJPEG、PNG、GIF、WebP形式のみ対応しています')
+        return
+      }
+      if (!validateFileSize(file, 5)) { // 5MB制限
+        setError('画像は5MB以下である必要があります')
+        return
+      }
+      
+      setIconImage(file)
+      // プレビューを作成
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setIconImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+      setError('')
+    }
+  }
+
+  const handleRemoveIconImage = () => {
+    setIconImage(null)
+    setIconImagePreview(null)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -63,14 +105,34 @@ export default function NewCommunity() {
     setError('')
 
     try {
-      // カバー画像をアップロード
+      // カバー画像をアップロードまたはデフォルト写真を設定
       let coverImageUrl: string | undefined = undefined
       if (coverImage) {
+        // ファイルアップロードの場合
         setImageUploading(true)
         try {
           coverImageUrl = await uploadFile(coverImage, 'community-covers', `community-cover-${user.id}`)
         } catch (error: any) {
-          setError(error.message || '画像のアップロードに失敗しました')
+          setError(error.message || 'カバー画像のアップロードに失敗しました')
+          setLoading(false)
+          setImageUploading(false)
+          return
+        } finally {
+          setImageUploading(false)
+        }
+      } else if (selectedDefaultCover) {
+        // デフォルト写真を選択した場合
+        coverImageUrl = selectedDefaultCover
+      }
+
+      // アイコン画像をアップロード
+      let iconImageUrl: string | undefined = undefined
+      if (iconImage) {
+        setImageUploading(true)
+        try {
+          iconImageUrl = await uploadFile(iconImage, 'community-icons', `community-icon-${user.id}`)
+        } catch (error: any) {
+          setError(error.message || 'アイコン画像のアップロードに失敗しました')
           setLoading(false)
           setImageUploading(false)
           return
@@ -83,7 +145,7 @@ export default function NewCommunity() {
         formData.name,
         formData.description || undefined,
         coverImageUrl,
-        undefined, // icon_urlは不要
+        iconImageUrl,
         formData.visibility,
         formData.community_type
       )
@@ -220,12 +282,53 @@ export default function NewCommunity() {
             />
           </div>
 
+          {/* アイコン画像 */}
+          <div>
+            <label htmlFor="icon_image" className="block text-sm font-medium text-gray-700 mb-2">
+              アイコン画像（任意）
+            </label>
+            <div className="space-y-2">
+              <input
+                type="file"
+                id="icon_image"
+                accept="image/jpeg,image/png,image/gif,image/webp"
+                onChange={handleIconImageChange}
+                className="input-field"
+                disabled={imageUploading}
+              />
+              {iconImagePreview && (
+                <div className="relative inline-block">
+                  <img
+                    src={iconImagePreview}
+                    alt="アイコン画像プレビュー"
+                    className="w-24 h-24 object-cover rounded-full border-2 border-gray-200"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRemoveIconImage}
+                    className="absolute top-0 right-0 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+              <p className="text-xs text-gray-500">
+                対応形式: JPEG, PNG, GIF, WebP（5MB以下、推奨サイズ: 正方形）
+              </p>
+            </div>
+          </div>
+
           {/* カバー画像 */}
           <div>
             <label htmlFor="cover_image" className="block text-sm font-medium text-gray-700 mb-2">
               カバー画像（任意）
             </label>
-            <div className="space-y-2">
+            <div className="space-y-4">
+              {/* ファイルアップロード */}
+              <div>
+                <label htmlFor="cover_image" className="block text-xs font-medium text-gray-600 mb-2">
+                  画像をアップロード
+                </label>
               <input
                 type="file"
                 id="cover_image"
@@ -234,6 +337,61 @@ export default function NewCommunity() {
                 className="input-field"
                 disabled={imageUploading}
               />
+                <p className="text-xs text-gray-500 mt-1">
+                  対応形式: JPEG, PNG, GIF, WebP（5MB以下）
+                </p>
+              </div>
+
+              {/* デフォルト写真の選択 */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-2">
+                  デフォルト写真から選択
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                  {DEFAULT_COMMUNITY_COVERS.map((coverPath, index) => {
+                    const isSelected = selectedDefaultCover === coverPath
+                    return (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => handleSelectDefaultCover(coverPath)}
+                        className={`relative aspect-video rounded-lg overflow-hidden border-2 transition-all bg-gray-100 ${
+                          isSelected
+                            ? 'border-primary-600 ring-2 ring-primary-200'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <img
+                          src={coverPath}
+                          alt={`デフォルトカバー ${index + 1}`}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // 画像が読み込めない場合はプレースホルダーを表示
+                            const target = e.currentTarget
+                            target.style.display = 'none'
+                            const placeholder = target.parentElement?.querySelector('.image-placeholder')
+                            if (placeholder) {
+                              (placeholder as HTMLElement).style.display = 'flex'
+                            }
+                          }}
+                        />
+                        <div className="image-placeholder absolute inset-0 flex items-center justify-center bg-gradient-to-br from-gray-200 to-gray-300" style={{ display: 'none' }}>
+                          <ImageIcon className="h-8 w-8 text-gray-400" />
+                        </div>
+                        {isSelected && (
+                          <div className="absolute inset-0 bg-primary-600 bg-opacity-20 flex items-center justify-center z-10">
+                            <div className="bg-primary-600 text-white rounded-full p-1">
+                              <ImageIcon className="h-4 w-4" />
+                            </div>
+                          </div>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* プレビュー */}
               {coverImagePreview && (
                 <div className="relative">
                   <img
@@ -250,9 +408,6 @@ export default function NewCommunity() {
                   </button>
                 </div>
               )}
-              <p className="text-xs text-gray-500">
-                対応形式: JPEG, PNG, GIF, WebP（5MB以下）
-              </p>
             </div>
           </div>
 

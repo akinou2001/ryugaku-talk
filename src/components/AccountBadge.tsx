@@ -2,6 +2,7 @@
 
 import { GraduationCap, Briefcase, Shield, CheckCircle, Sparkles } from 'lucide-react'
 import type { AccountType, VerificationStatus } from '@/lib/supabase'
+import { APP_NAME } from '@/config/app-config'
 
 interface AccountBadgeProps {
   accountType: AccountType
@@ -9,6 +10,7 @@ interface AccountBadgeProps {
   organizationName?: string
   isOperator?: boolean // 運営バッジ用フラグ
   size?: 'sm' | 'md' | 'lg'
+  className?: string // 追加のクラス名
 }
 
 export function AccountBadge({ 
@@ -16,7 +18,8 @@ export function AccountBadge({
   verificationStatus, 
   organizationName,
   isOperator = false,
-  size = 'md' 
+  size = 'md',
+  className = ''
 }: AccountBadgeProps) {
   const isVerified = verificationStatus === 'verified'
   const isOrganization = accountType !== 'individual'
@@ -32,7 +35,7 @@ export function AccountBadge({
     return (
       <div className={`inline-flex items-center space-x-1 ${sizeClasses[size]} rounded-full border bg-gradient-to-r from-purple-500 to-pink-500 text-white border-purple-600`}>
         <Sparkles className={size === 'sm' ? 'h-3 w-3' : size === 'lg' ? 'h-5 w-5' : 'h-4 w-4'} />
-        <span className="font-bold">RyugakuTalk運営</span>
+        <span className="font-bold">{APP_NAME}運営</span>
         <CheckCircle className={size === 'sm' ? 'h-3 w-3' : size === 'lg' ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
       </div>
     )
@@ -81,7 +84,7 @@ export function AccountBadge({
   }
 
   return (
-    <div className={`inline-flex items-center space-x-1 ${sizeClasses[size]} rounded-full border ${getAccountTypeColor()}`}>
+    <div className={`inline-flex items-center space-x-1 ${sizeClasses[size]} rounded-full border ${getAccountTypeColor()} ${className}`}>
       {getAccountTypeIcon()}
       <span className="font-medium">{getAccountTypeLabel()}</span>
       {isVerified && (

@@ -385,6 +385,40 @@ export async function requestCommunityMembership(communityId: string) {
 }
 
 /**
+ * コミュニティへの加入申請を取り消す
+ */
+export async function cancelCommunityMembershipRequest(communityId: string) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // 申請中のメンバーシップを取得
+  const { data: membership } = await supabase
+    .from('community_members')
+    .select('*')
+    .eq('community_id', communityId)
+    .eq('user_id', user.id)
+    .eq('status', 'pending')
+    .single()
+
+  if (!membership) {
+    throw new Error('加入申請が見つかりません')
+  }
+
+  // 申請を取り消す（削除）
+  const { error } = await supabase
+    .from('community_members')
+    .delete()
+    .eq('id', membership.id)
+
+  if (error) {
+    console.error('Error canceling membership request:', error)
+    throw error
+  }
+}
+
+/**
  * メンバー申請を承認/拒否
  */
 export async function updateMembershipStatus(
@@ -1160,3 +1194,489 @@ export async function sendChannelMessage(
   return data
 }
 
+// ============================================
+// コミュニティ招待機能
+// ============================================
+
+/**
+ * 招待リンクを生成
+ */
+export async function createCommunityInvite(
+  communityId: string,
+  options?: {
+    expiresInDays?: number
+    maxUses?: number
+  }
+): Promise<{ inviteToken: string; inviteUrl: string }> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // コミュニティの所有者または管理者か確認
+  const { data: community } = await supabase
+    .from('communities')
+    .select('owner_id')
+    .eq('id', communityId)
+    .single()
+
+  if (!community) {
+    throw new Error('コミュニティが見つかりません')
+  }
+
+  const isOwner = community.owner_id === user.id
+  if (!isOwner) {
+    const { data: member } = await supabase
+      .from('community_members')
+      .select('role')
+      .eq('community_id', communityId)
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .in('role', ['admin', 'moderator'])
+      .single()
+
+    if (!member) {
+      throw new Error('コミュニティの所有者・管理者のみ招待リンクを作成できます')
+    }
+  }
+
+  // トークンを生成（32文字のランダム文字列）
+  const inviteToken = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+
+  // 有効期限を計算
+  const expiresAt = options?.expiresInDays
+    ? new Date(Date.now() + options.expiresInDays * 24 * 60 * 60 * 1000).toISOString()
+    : null
+
+  const { data, error } = await supabase
+    .from('community_invites')
+    .insert({
+      community_id: communityId,
+      created_by: user.id,
+      invite_token: inviteToken,
+      expires_at: expiresAt,
+      max_uses: options?.maxUses || null,
+      used_count: 0,
+      is_active: true
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error creating invite:', error)
+    throw error
+  }
+
+  const inviteUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/communities/${communityId}/invite/${inviteToken}`
+
+  return { inviteToken, inviteUrl }
+}
+
+/**
+ * 招待トークンでコミュニティに参加
+ */
+export async function joinCommunityByInvite(inviteToken: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // 招待を取得
+  const { data: invite, error: inviteError } = await supabase
+    .from('community_invites')
+    .select('*, community:communities(id)')
+    .eq('invite_token', inviteToken)
+    .eq('is_active', true)
+    .single()
+
+  if (inviteError || !invite) {
+    throw new Error('有効な招待リンクが見つかりません')
+  }
+
+  // 有効期限チェック
+  if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
+    throw new Error('この招待リンクの有効期限が切れています')
+  }
+
+  // 使用回数チェック
+  if (invite.max_uses !== null && invite.used_count >= invite.max_uses) {
+    throw new Error('この招待リンクの使用回数制限に達しています')
+  }
+
+  // 既にメンバーか確認
+  const { data: existingMember } = await supabase
+    .from('community_members')
+    .select('id, status')
+    .eq('community_id', invite.community_id)
+    .eq('user_id', user.id)
+    .single()
+
+  if (existingMember) {
+    if (existingMember.status === 'approved') {
+      throw new Error('既にこのコミュニティのメンバーです')
+    } else if (existingMember.status === 'pending') {
+      throw new Error('既に加入申請済みです')
+    }
+  }
+
+  // メンバーシップを作成（承認済み）
+  const { error: memberError } = await supabase
+    .from('community_members')
+    .insert({
+      community_id: invite.community_id,
+      user_id: user.id,
+      status: 'approved',
+      role: 'member',
+      joined_at: new Date().toISOString()
+    })
+
+  if (memberError) {
+    console.error('Error joining community:', memberError)
+    throw memberError
+  }
+
+  // 使用回数を増やす
+  await supabase
+    .from('community_invites')
+    .update({ used_count: invite.used_count + 1 })
+    .eq('id', invite.id)
+}
+
+/**
+ * 招待リンク一覧を取得
+ */
+export async function getCommunityInvites(communityId: string) {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // 権限チェック
+  const { data: community } = await supabase
+    .from('communities')
+    .select('owner_id')
+    .eq('id', communityId)
+    .single()
+
+  if (!community) {
+    throw new Error('コミュニティが見つかりません')
+  }
+
+  const isOwner = community.owner_id === user.id
+  if (!isOwner) {
+    const { data: member } = await supabase
+      .from('community_members')
+      .select('role')
+      .eq('community_id', communityId)
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .in('role', ['admin', 'moderator'])
+      .single()
+
+    if (!member) {
+      throw new Error('権限がありません')
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('community_invites')
+    .select('*, creator:profiles(id, name)')
+    .eq('community_id', communityId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching invites:', error)
+    throw error
+  }
+
+  return data || []
+}
+
+/**
+ * 招待リンクを無効化
+ */
+export async function revokeCommunityInvite(inviteId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // 招待を取得して権限チェック
+  const { data: invite } = await supabase
+    .from('community_invites')
+    .select('*, community:communities(owner_id)')
+    .eq('id', inviteId)
+    .single()
+
+  if (!invite) {
+    throw new Error('招待リンクが見つかりません')
+  }
+
+  const isOwner = invite.community?.owner_id === user.id
+  if (!isOwner) {
+    const { data: member } = await supabase
+      .from('community_members')
+      .select('role')
+      .eq('community_id', invite.community_id)
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .in('role', ['admin', 'moderator'])
+      .single()
+
+    if (!member) {
+      throw new Error('権限がありません')
+    }
+  }
+
+  const { error } = await supabase
+    .from('community_invites')
+    .update({ is_active: false })
+    .eq('id', inviteId)
+
+  if (error) {
+    console.error('Error revoking invite:', error)
+    throw error
+  }
+}
+
+// ============================================
+// 所有者権限移管機能
+// ============================================
+
+/**
+ * コミュニティの所有者権限を移管
+ */
+export async function transferCommunityOwnership(
+  communityId: string,
+  newOwnerId: string,
+  reason?: string
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // 現在の所有者か確認
+  const { data: community } = await supabase
+    .from('communities')
+    .select('owner_id')
+    .eq('id', communityId)
+    .single()
+
+  if (!community) {
+    throw new Error('コミュニティが見つかりません')
+  }
+
+  if (community.owner_id !== user.id) {
+    throw new Error('所有者のみ権限を移管できます')
+  }
+
+  // 移管先のユーザーがコミュニティメンバーか確認
+  const { data: newOwnerMember } = await supabase
+    .from('community_members')
+    .select('id, status')
+    .eq('community_id', communityId)
+    .eq('user_id', newOwnerId)
+    .eq('status', 'approved')
+    .single()
+
+  if (!newOwnerMember) {
+    throw new Error('移管先のユーザーは承認済みメンバーである必要があります')
+  }
+
+  // トランザクション開始（Supabaseでは手動で管理）
+  const oldOwnerId = community.owner_id
+
+  // 所有者を更新
+  const { error: updateError } = await supabase
+    .from('communities')
+    .update({ owner_id: newOwnerId })
+    .eq('id', communityId)
+
+  if (updateError) {
+    console.error('Error transferring ownership:', updateError)
+    throw updateError
+  }
+
+  // 元の所有者を管理者ロールに変更
+  const { error: memberUpdateError } = await supabase
+    .from('community_members')
+    .update({ role: 'admin' })
+    .eq('community_id', communityId)
+    .eq('user_id', oldOwnerId)
+
+  if (memberUpdateError) {
+    console.error('Error updating old owner role:', memberUpdateError)
+    // エラーでも続行（既にadminの場合など）
+  }
+
+  // 移管先のユーザーを管理者ロールに変更（既にメンバーの場合）
+  await supabase
+    .from('community_members')
+    .update({ role: 'admin' })
+    .eq('community_id', communityId)
+    .eq('user_id', newOwnerId)
+
+  // 移管履歴を記録
+  await supabase
+    .from('community_ownership_transfers')
+    .insert({
+      community_id: communityId,
+      from_user_id: oldOwnerId,
+      to_user_id: newOwnerId,
+      reason: reason || null
+    })
+}
+
+// ============================================
+// 管理者ロール管理機能
+// ============================================
+
+/**
+ * メンバーに管理者ロールを付与
+ */
+export async function promoteToAdmin(
+  communityId: string,
+  userId: string
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // 権限チェック（所有者または管理者）
+  const { data: community } = await supabase
+    .from('communities')
+    .select('owner_id')
+    .eq('id', communityId)
+    .single()
+
+  if (!community) {
+    throw new Error('コミュニティが見つかりません')
+  }
+
+  const isOwner = community.owner_id === user.id
+  if (!isOwner) {
+    const { data: member } = await supabase
+      .from('community_members')
+      .select('role')
+      .eq('community_id', communityId)
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .eq('role', 'admin')
+      .single()
+
+    if (!member) {
+      throw new Error('所有者または管理者のみ管理者を任命できます')
+    }
+  }
+
+  // 対象ユーザーが承認済みメンバーか確認
+  const { data: targetMember } = await supabase
+    .from('community_members')
+    .select('id, status')
+    .eq('community_id', communityId)
+    .eq('user_id', userId)
+    .eq('status', 'approved')
+    .single()
+
+  if (!targetMember) {
+    throw new Error('対象ユーザーは承認済みメンバーである必要があります')
+  }
+
+  // 管理者ロールに変更
+  const { error } = await supabase
+    .from('community_members')
+    .update({ role: 'admin' })
+    .eq('community_id', communityId)
+    .eq('user_id', userId)
+
+  if (error) {
+    console.error('Error promoting to admin:', error)
+    throw error
+  }
+}
+
+/**
+ * 管理者ロールを剥奪
+ */
+export async function demoteFromAdmin(
+  communityId: string,
+  userId: string
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // 所有者のみ実行可能
+  const { data: community } = await supabase
+    .from('communities')
+    .select('owner_id')
+    .eq('id', communityId)
+    .single()
+
+  if (!community) {
+    throw new Error('コミュニティが見つかりません')
+  }
+
+  if (community.owner_id !== user.id) {
+    throw new Error('所有者のみ管理者権限を剥奪できます')
+  }
+
+  // 自分自身を剥奪できない
+  if (userId === user.id) {
+    throw new Error('所有者の権限を剥奪することはできません')
+  }
+
+  // 一般メンバーに変更
+  const { error } = await supabase
+    .from('community_members')
+    .update({ role: 'member' })
+    .eq('community_id', communityId)
+    .eq('user_id', userId)
+
+  if (error) {
+    console.error('Error demoting from admin:', error)
+    throw error
+  }
+}
+
+/**
+ * コミュニティから退出
+ */
+export async function leaveCommunity(communityId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    throw new Error('ログインが必要です')
+  }
+
+  // 所有者は退出できない
+  const { data: community } = await supabase
+    .from('communities')
+    .select('owner_id')
+    .eq('id', communityId)
+    .single()
+
+  if (!community) {
+    throw new Error('コミュニティが見つかりません')
+  }
+
+  if (community.owner_id === user.id) {
+    throw new Error('所有者はコミュニティから退出できません。先に所有者権限を移管してください。')
+  }
+
+  // メンバーシップを削除
+  const { error } = await supabase
+    .from('community_members')
+    .delete()
+    .eq('community_id', communityId)
+    .eq('user_id', user.id)
+
+  if (error) {
+    console.error('Error leaving community:', error)
+    throw error
+  }
+}

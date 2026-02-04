@@ -194,7 +194,7 @@ export default function Diary() {
           <div>
             <div className="flex items-center space-x-3 mb-2">
               <BookOpen className="h-10 w-10 text-primary-600" />
-              <h1 className="text-2xl font-bold text-gray-900 bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">
                 留学日記
               </h1>
             </div>
@@ -437,7 +437,7 @@ export default function Diary() {
                     </div>
                   </div>
                   
-                  <h2 className="text-lg font-bold text-gray-900 mb-3 group-hover:text-primary-600 transition-colors">
+                  <h2 className="text-lg font-bold text-gray-900 mb-3">
                     {post.title || 'タイトルなし'}
                   </h2>
                   
@@ -472,24 +472,6 @@ export default function Diary() {
                     </p>
                   )}
                   
-                  {/* タグ */}
-                  {post.tags && post.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {post.tags.slice(0, 3).map((tag, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-1.5 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-full text-sm font-medium border border-gray-300"
-                        >
-                          #{tag}
-                        </span>
-                      ))}
-                      {post.tags.length > 3 && (
-                        <span className="px-3 py-1.5 bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 rounded-full text-sm font-medium border border-gray-300">
-                          +{post.tags.length - 3}
-                        </span>
-                      )}
-                    </div>
-                  )}
                   
                   <div className="flex items-center justify-between pt-4 border-t border-gray-100">
                     <div className="flex items-center space-x-2 text-sm text-gray-600 flex-wrap gap-2">
@@ -499,7 +481,7 @@ export default function Diary() {
                           name={post.author?.name} 
                           size="sm"
                         />
-                        <span className="font-semibold">{post.author?.name || '匿名'}</span>
+                        <span className="text-gray-900 font-semibold">{post.author?.name || '匿名'}</span>
                       </div>
                       {post.author && (
                         <>

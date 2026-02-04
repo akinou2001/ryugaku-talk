@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
 import { Shield, Lock, Eye, FileText } from 'lucide-react'
+import { APP_NAME } from '@/config/app-config'
 
 export const metadata: Metadata = {
-  title: 'プライバシーポリシー - RyugakuTalk',
-  description: 'RyugakuTalkのプライバシーポリシー',
+  title: 'プライバシーポリシー',
+  description: `${APP_NAME}のプライバシーポリシー`,
 }
 
 export default function PrivacyPage() {
@@ -28,7 +29,7 @@ export default function PrivacyPage() {
                 1. はじめに
               </h2>
               <p className="text-gray-700 leading-relaxed">
-                RyugakuTalk（以下「当サービス」）は、ユーザーのプライバシーを尊重し、個人情報の保護に努めています。
+                {APP_NAME}（以下「当サービス」）は、ユーザーのプライバシーを尊重し、個人情報の保護に努めています。
                 本プライバシーポリシーは、当サービスがどのように個人情報を収集、使用、保護するかについて説明します。
                 当サービスをご利用になることで、本ポリシーに同意したものとみなされます。
               </p>
