@@ -1462,9 +1462,9 @@ export default function CommunityDetail() {
                 {/* ケバブメニュー */}
                 {isMember && (
                   <div className="relative" ref={kebabMenuRef}>
-                    <button
+                  <button
                       onClick={() => setShowKebabMenu(!showKebabMenu)}
-                      className="p-2 text-gray-600 hover:text-primary-600 transition-colors"
+                    className="p-2 text-gray-600 hover:text-primary-600 transition-colors"
                       title="メニュー"
                     >
                       <MoreVertical className="h-5 w-5" />
@@ -1480,7 +1480,7 @@ export default function CommunityDetail() {
                                 setShowKebabMenu(false)
                               }}
                               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
-                            >
+                  >
                               <Settings className="h-4 w-4" />
                               <span>コミュニティ設定</span>
                             </button>
@@ -1561,7 +1561,7 @@ export default function CommunityDetail() {
                             >
                               <LogOut className="h-4 w-4" />
                               <span>コミュニティから退出</span>
-                            </button>
+                  </button>
                           )}
                         </div>
                       </div>
@@ -3333,6 +3333,7 @@ export default function CommunityDetail() {
             isOwner={isOwner}
             userRole={userRole}
             members={members}
+            ownerId={community?.owner_id || ''}
             onClose={() => setShowPermissionModal(false)}
             onUpdate={async () => {
               await fetchCommunity()
@@ -3368,6 +3369,7 @@ function PermissionSettingsModal({
   isOwner,
   userRole,
   members,
+  ownerId,
   onClose,
   onUpdate
 }: {
@@ -3375,6 +3377,7 @@ function PermissionSettingsModal({
   isOwner: boolean
   userRole: 'owner' | 'admin' | 'moderator' | 'member' | null
   members: CommunityMember[]
+  ownerId: string
   onClose: () => void
   onUpdate: () => Promise<void>
 }) {
@@ -3532,7 +3535,7 @@ function PermissionSettingsModal({
                   {adminMembers.map((member) => (
                     <div key={member.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                       <span>{member.user?.name || '不明なユーザー'}</span>
-                      {isOwner && member.user_id !== (members.find(m => m.role === 'owner')?.user_id) && (
+                      {isOwner && member.user_id !== ownerId && (
                         <button
                           onClick={() => handleDemoteFromAdmin(member.user_id)}
                           className="text-sm text-red-600 hover:text-red-800"
