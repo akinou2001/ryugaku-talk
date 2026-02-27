@@ -9,9 +9,10 @@
 -- 以下のSQLで、指定したユーザーID（またはメールアドレス）を管理者に設定できます
 
 -- ユーザーIDで指定する場合
-UPDATE profiles
-SET is_admin = true
-WHERE id = 'ユーザーIDをここに記入';
+-- 注意: 以下のコメントを外して、実際のユーザーID（UUID形式）に置き換えてください
+-- UPDATE profiles
+-- SET is_admin = true
+-- WHERE id = '00000000-0000-0000-0000-000000000000';  -- ここを実際のユーザーIDに変更
 
 -- メールアドレスで指定する場合
 UPDATE profiles

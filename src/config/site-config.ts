@@ -6,16 +6,19 @@
  */
 
 import { APP_NAME, APP_SUBTITLE } from './app-config'
+import { IMAGE_SIZES, SITEMAP_PRIORITIES } from './constants'
 
 /**
  * サイトのベースURL（本番環境）
+ * 環境変数 NEXT_PUBLIC_SITE_URL が設定されていない場合はデフォルト値を使用
  */
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://ryugakutalk.com'
 
 /**
  * サイトのドメイン
+ * 環境変数 NEXT_PUBLIC_SITE_DOMAIN が設定されていない場合はデフォルト値を使用
  */
-export const SITE_DOMAIN = 'ryugakutalk.com'
+export const SITE_DOMAIN = process.env.NEXT_PUBLIC_SITE_DOMAIN || 'ryugakutalk.com'
 
 /**
  * サイトのロケール
@@ -42,8 +45,8 @@ export const SEO_KEYWORDS = [
  */
 export const OG_IMAGE = {
   url: '/og-image.png',
-  width: 1200,
-  height: 630,
+  width: IMAGE_SIZES.OG_WIDTH,
+  height: IMAGE_SIZES.OG_HEIGHT,
   alt: `${APP_NAME} - ${APP_SUBTITLE}`,
 } as const
 
@@ -52,7 +55,7 @@ export const OG_IMAGE = {
  */
 export const APPLE_ICON = {
   url: '/apple-icon.png',
-  sizes: '180x180',
+  sizes: `${IMAGE_SIZES.APPLE_ICON}x${IMAGE_SIZES.APPLE_ICON}`,
   type: 'image/png',
 } as const
 
@@ -85,8 +88,8 @@ export const SITEMAP_CONFIG = {
     other: 'weekly' as const,
   },
   priority: {
-    home: 1.0,
-    other: 0.8,
+    home: SITEMAP_PRIORITIES.HOME_PRIORITY,
+    other: SITEMAP_PRIORITIES.OTHER_PRIORITY,
   },
 } as const
 

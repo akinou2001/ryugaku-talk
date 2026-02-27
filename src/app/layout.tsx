@@ -24,6 +24,7 @@ import {
   FAVICON 
 } from '@/config/site-config'
 import { TWITTER } from '@/config/social-config'
+import { CDN_URLS } from '@/config/constants'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -106,8 +107,8 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <head>
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/twemoji@latest/dist/twemoji.css" />
-        <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+        <link rel="stylesheet" href={CDN_URLS.TWEMOJI_CSS} />
+        <link rel="preconnect" href={CDN_URLS.TWEMOJI_BASE} />
       </head>
       <body className={inter.className}>
         <Providers>

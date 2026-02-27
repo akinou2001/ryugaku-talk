@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/components/Providers'
 import { supabase } from '@/lib/supabase'
 import type { User, Message } from '@/lib/supabase'
-import { MessageCircle, Search, Send, Plus, X, Loader2, Filter, ChevronLeft, ChevronRight } from 'lucide-react'
+import { MessageCircle, Search, Send, Plus, X, Loader2, Filter, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
@@ -966,6 +966,46 @@ export default function ChatList() {
             </div>
           ) : (
             <div className="space-y-2">
+              {/* AIコンシェルジュ - 常に一番上に表示 */}
+              <Link
+                href="/ai/concierge"
+                className="flex items-center space-x-4 p-4 rounded-xl transition-all bg-gradient-to-r from-primary-50 to-primary-100 border-2 border-primary-300 hover:shadow-lg hover:border-primary-400"
+              >
+                {/* AIアイコン */}
+                <div className="relative flex-shrink-0">
+                  <div className="w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center shadow-lg">
+                    <Sparkles className="h-8 w-8 text-white" />
+                  </div>
+                  <div className="absolute -top-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-white flex items-center justify-center">
+                    <span className="text-xs font-bold text-white">AI</span>
+                  </div>
+                </div>
+
+                {/* AI情報 */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center space-x-2 flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 truncate">
+                        AIコンシェルジュ
+                      </h3>
+                      <span className="px-2 py-0.5 bg-primary-600 text-white text-xs font-semibold rounded-full">
+                        公式
+                      </span>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-700 font-medium">
+                    留学に関する質問にAIが回答します
+                  </p>
+                </div>
+
+                {/* 矢印アイコン */}
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center bg-primary-200">
+                    <Send className="h-4 w-4 text-primary-700" />
+                  </div>
+                </div>
+              </Link>
+
               {conversations.map((conversation) => {
                 const isUnread = conversation.unreadCount > 0
                 const lastMessagePreview = conversation.lastMessage?.content || ''

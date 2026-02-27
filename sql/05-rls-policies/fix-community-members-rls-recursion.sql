@@ -5,8 +5,9 @@
 -- 問題: SELECTポリシー内でcommunity_membersテーブル自体を参照しているため無限再帰が発生
 -- 解決策: ポリシーを簡略化し、再帰を避ける
 
--- 既存のポリシーを削除
+-- 既存のポリシーを削除（すべてのバリエーションを含む）
 DROP POLICY IF EXISTS "コミュニティメンバー情報はメンバーとコミュニティ所有者が閲覧可能" ON community_members;
+DROP POLICY IF EXISTS "コミュニティメンバー情報は自分とコミュニティ所有者が閲覧可能" ON community_members;
 DROP POLICY IF EXISTS "認証ユーザーは加入申請可能" ON community_members;
 DROP POLICY IF EXISTS "コミュニティ所有者はメンバーを承認・拒否可能" ON community_members;
 DROP POLICY IF EXISTS "ユーザーは自分の申請を削除可能" ON community_members;

@@ -78,6 +78,18 @@ ALTER TABLE candle_sends ENABLE ROW LEVEL SECURITY;
 -- 8. 基本的なRLSポリシー（全ユーザーが読み取り可能、自分のデータは更新可能）
 -- 注意: 実際の運用では、より詳細なポリシーを設定してください
 
+-- 既存のポリシーを削除（存在する場合）
+DROP POLICY IF EXISTS "quests_select" ON quests;
+DROP POLICY IF EXISTS "quests_insert" ON quests;
+DROP POLICY IF EXISTS "quests_update" ON quests;
+DROP POLICY IF EXISTS "quest_completions_select" ON quest_completions;
+DROP POLICY IF EXISTS "quest_completions_insert" ON quest_completions;
+DROP POLICY IF EXISTS "quest_completions_update" ON quest_completions;
+DROP POLICY IF EXISTS "user_scores_select" ON user_scores;
+DROP POLICY IF EXISTS "user_scores_insert" ON user_scores;
+DROP POLICY IF EXISTS "candle_sends_select" ON candle_sends;
+DROP POLICY IF EXISTS "candle_sends_insert" ON candle_sends;
+
 -- quests: コミュニティメンバーは読み取り可能、作成者は更新可能
 CREATE POLICY "quests_select" ON quests FOR SELECT USING (true);
 CREATE POLICY "quests_insert" ON quests FOR INSERT WITH CHECK (auth.uid() = created_by);

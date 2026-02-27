@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { SEARCH_LIMITS } from '@/config/constants'
 
 // 型定義
 export interface Continent {
@@ -66,7 +67,7 @@ export async function searchUniversities(
     countryCode,
     continentId,
     tags,
-    limit = 50,
+    limit = SEARCH_LIMITS.UNIVERSITY_SEARCH_MAX,
     offset = 0,
   } = options
 

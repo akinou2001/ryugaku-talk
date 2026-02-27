@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { PLACEHOLDERS } from '@/config/constants'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
@@ -18,8 +19,8 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 // 空の文字列でもクライアントを作成（エラーを防ぐため）
 export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-key'
+  supabaseUrl || PLACEHOLDERS.SUPABASE_URL,
+  supabaseAnonKey || PLACEHOLDERS.SUPABASE_KEY
 )
 
 // 型定義
@@ -419,3 +420,16 @@ export interface Report {
   created_at: string
 }
 
+// AIコンシェルジュチャット履歴の型定義
+export interface AIConciergeChat {
+  id: string
+  user_id: string
+  user?: User
+  question_text: string
+  answer_text: string
+  mode: 'grounded' | 'reasoning'
+  confidence_level: 'high' | 'medium' | 'low'
+  related_posts: any[] // JSONB形式で保存される関連投稿情報
+  created_at: string
+  updated_at: string
+}

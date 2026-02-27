@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { APP_NAME } from "@/config/app-config";
+import { AI_CONFIG } from "@/config/constants";
 
 // OpenAI APIクライアントの初期化（遅延初期化）
 function getOpenAIClient() {
@@ -104,13 +105,13 @@ export async function POST(req: Request) {
     // ChatGPT mini (gpt-3.5-turbo) で回答を生成
     const openai = getOpenAIClient();
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: AI_CONFIG.OPENAI_MODEL,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      temperature: 0.7,
-      max_tokens: 1500,
+      temperature: AI_CONFIG.TEMPERATURE,
+      max_tokens: AI_CONFIG.MAX_TOKENS,
     });
 
     const answer_text = completion.choices[0]?.message?.content || "回答を生成できませんでした。";

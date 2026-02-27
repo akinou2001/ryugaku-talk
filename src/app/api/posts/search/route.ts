@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { findRelevantPostsForQuery } from "@/lib/searchPosts";
+import { SEARCH_LIMITS, TEXT_LIMITS } from "@/config/constants";
 
 /**
  * 関連投稿検索API（AI以外）
@@ -7,7 +8,7 @@ import { findRelevantPostsForQuery } from "@/lib/searchPosts";
  */
 export async function POST(req: Request) {
   try {
-    const { query_text, filters, limit = 5 } = await req.json();
+    const { query_text, filters, limit = SEARCH_LIMITS.POST_SEARCH } = await req.json();
 
     if (!query_text || typeof query_text !== 'string' || !query_text.trim()) {
       return NextResponse.json(
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
     const result = posts.map(post => ({
       post_id: post.id,
       title: post.title,
-      content_snippet: post.content.substring(0, 300) + (post.content.length > 300 ? '...' : ''),
+      content_snippet: post.content.substring(0, TEXT_LIMITS.CONTENT_SNIPPET) + (post.content.length > TEXT_LIMITS.CONTENT_SNIPPET ? '...' : ''),
       author_id: post.author_id,
       author_name: post.author?.name || '匿名',
       created_at: post.created_at,

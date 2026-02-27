@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { supabase } from "@/lib/supabase";
 import "server-only";
+import { SEARCH_LIMITS, TEXT_LIMITS, VALIDATION, PLACEHOLDER_PATTERNS, AI_CONFIG } from "@/config/constants";
 
 /**
  * タイトルとコンテンツを使用してAI検索を実行
@@ -13,8 +14,8 @@ import "server-only";
  */
 export async function searchByTitleAndContent(
   query: string,
-  limit = 100,
-  topK = 5
+  limit = SEARCH_LIMITS.AI_SEARCH,
+  topK = SEARCH_LIMITS.POST_SEARCH
 ): Promise<string> {
   try {
     // 1️⃣ 投稿データ（title + content）を取得
@@ -36,7 +37,7 @@ export async function searchByTitleAndContent(
     const items = (data ?? []).map((r: any, idx: number) => ({
       no: idx + 1, // 1ベースの番号
       title: (r.title ?? "").toString().trim(),
-      content: (r.content ?? "").toString().trim().slice(0, 800), // トークン数を制御
+      content: (r.content ?? "").toString().trim().slice(0, TEXT_LIMITS.CONTENT_TRUNCATE_LONG), // トークン数を制御
     }));
 
     // 3️⃣ DashScope API（サーバーサイド専用）
@@ -46,7 +47,7 @@ export async function searchByTitleAndContent(
     console.log("[DEBUG] DASHSCOPE_API_KEY check:", {
       exists: !!dashscopeApiKey,
       length: dashscopeApiKey?.length || 0,
-      startsWith: dashscopeApiKey?.substring(0, 3) || "N/A",
+      startsWith: dashscopeApiKey?.substring(0, TEXT_LIMITS.SHORT_PREVIEW) || "N/A",
       hasPlaceholder: dashscopeApiKey?.includes("your_dashscope_api_key") || false,
     });
     
@@ -62,15 +63,7 @@ export async function searchByTitleAndContent(
     }
     
     // プレースホルダーのチェック（大文字小文字を区別しない）
-    const placeholderPatterns = [
-      "your_dashscope_api_key",
-      "your_dashscope",
-      "placeholder",
-      "example",
-      "sk-xxxxxxxx",
-    ];
-    
-    const hasPlaceholder = placeholderPatterns.some(pattern => 
+    const hasPlaceholder = PLACEHOLDER_PATTERNS.some(pattern => 
       trimmedKey.toLowerCase().includes(pattern.toLowerCase())
     );
     
@@ -78,8 +71,8 @@ export async function searchByTitleAndContent(
       throw new Error("DASHSCOPE_API_KEYがプレースホルダーのままです。.env.localファイルで実際のAPIキーに置き換えてください。");
     }
     
-    // APIキーの最小長チェック（通常は20文字以上）
-    if (trimmedKey.length < 10) {
+    // APIキーの最小長チェック
+    if (trimmedKey.length < VALIDATION.MIN_API_KEY_LENGTH) {
       throw new Error(`DASHSCOPE_API_KEYが短すぎます（${trimmedKey.length}文字）。正しいAPIキーを設定してください。`);
     }
 
@@ -121,7 +114,7 @@ export async function searchByTitleAndContent(
     // 5️⃣ AIを呼び出し（非ストリーミング、安定したJSON返却）
     try {
       const stream = await openai.chat.completions.create({
-        model: "qwen-flash",
+        model: AI_CONFIG.DASHSCOPE_MODEL,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },

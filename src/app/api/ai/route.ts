@@ -4,6 +4,7 @@ import { findSimilarUsers } from "@/lib/searchUsers";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { createClient } from '@supabase/supabase-js';
 import { APP_NAME } from "@/config/app-config";
+import { SEARCH_LIMITS, TEXT_LIMITS, AI_CONFIG } from "@/config/constants";
 
 // サーバーサイド用のSupabaseクライアントを作成
 function getSupabaseServerClient() {
@@ -78,11 +79,11 @@ export async function POST(req: Request) {
     }
 
     // 1. 関連投稿を検索
-    const posts = await findRelevantPostsForQuery(question_text, 5);
+    const posts = await findRelevantPostsForQuery(question_text, SEARCH_LIMITS.AI_RELATED_POSTS);
     const relatedPosts = posts.map(post => ({
       post_id: post.id,
       title: post.title,
-      content_snippet: post.content.substring(0, 300) + (post.content.length > 300 ? '...' : ''),
+      content_snippet: post.content.substring(0, TEXT_LIMITS.CONTENT_SNIPPET) + (post.content.length > TEXT_LIMITS.CONTENT_SNIPPET ? '...' : ''),
       author_name: post.author?.name || '匿名',
       created_at: post.created_at,
       likes_count: post.likes_count || 0,
@@ -91,7 +92,7 @@ export async function POST(req: Request) {
     }));
 
     // 2. 類似ユーザーを検索
-    const users = await findSimilarUsers(question_text, 3);
+    const users = await findSimilarUsers(question_text, SEARCH_LIMITS.SIMILAR_USERS);
     const recommendedUsers = users.map(user => ({
       user_id: user.id,
       display_name: user.name,
@@ -164,7 +165,7 @@ export async function POST(req: Request) {
     const genAI = getGeminiClient();
     // gemini-3-flash-preview: 最新の軽量で高速なモデル
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-3-flash-preview",
+      model: AI_CONFIG.GEMINI_MODEL,
       systemInstruction: systemInstruction,
     });
     

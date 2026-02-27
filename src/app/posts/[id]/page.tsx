@@ -18,6 +18,7 @@ import { ReportModal } from '@/components/ReportModal'
 import { getUniversityById, type University } from '@/lib/universities'
 import { getQuestById, getQuestCompletions, updateQuestCompletionStatus } from '@/lib/quest'
 import type { Quest, QuestCompletion } from '@/lib/supabase'
+import { SNS_URLS } from '@/config/constants'
 
 // スケルトンローディング
 const SkeletonCard = () => {
@@ -1377,7 +1378,7 @@ export default function PostDetail() {
                           onClick={() => {
                             const url = `${window.location.origin}/posts/${postId}`
                             const text = post.title || '投稿を共有'
-                            const shareUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`
+                            const shareUrl = `${SNS_URLS.TWITTER_SHARE}?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`
                             window.open(shareUrl, '_blank', 'width=550,height=420')
                             setShowShareMenu(false)
                           }}

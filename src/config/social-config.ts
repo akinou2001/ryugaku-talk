@@ -4,17 +4,20 @@
  * SNSアカウント、連絡先情報を管理します。
  */
 
+import { SNS_URLS } from './constants'
+
 /**
  * メールアドレス
+ * 環境変数 NEXT_PUBLIC_CONTACT_EMAIL が設定されていない場合はデフォルト値を使用
  */
-export const CONTACT_EMAIL = 'contact@ryugakutalk.com'
+export const CONTACT_EMAIL = process.env.NEXT_PUBLIC_CONTACT_EMAIL || 'contact@ryugakutalk.com'
 
 /**
  * Twitter設定
  */
 export const TWITTER = {
   handle: '@ryugakutalk',
-  url: 'https://twitter.com', // 実際のTwitterアカウントURLに更新してください
+  url: SNS_URLS.TWITTER,
   cardType: 'summary_large_image' as const,
 } as const
 
