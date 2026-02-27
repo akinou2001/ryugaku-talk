@@ -50,3 +50,6 @@ next-env.d.ts
 
 # exports
 /exports/
+
+# Supabase
+supabase/.temp/
