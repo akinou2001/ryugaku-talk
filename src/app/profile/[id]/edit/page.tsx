@@ -9,6 +9,7 @@ import { ArrowLeft, Save, X, User as UserIcon, Search, Briefcase, Home, Graduati
 import { uploadFile, validateFileType, validateFileSize, FILE_TYPES } from '@/lib/storage'
 import { searchUniversities, findUniversityByAlias, type University } from '@/lib/universities'
 import type { UserUniversity, UserStudyAbroadUniversity } from '@/lib/supabase'
+import { SNS_URLS } from '@/config/constants'
 
 export default function EditProfile() {
   const { user } = useAuth()
@@ -536,15 +537,15 @@ export default function EditProfile() {
           const username = trimmedUrl.substring(1)
           switch (platform) {
             case 'x':
-              return `https://x.com/${username}`
+              return `${SNS_URLS.X}/${username}`
             case 'tiktok':
-              return `https://www.tiktok.com/@${username}`
+              return `${SNS_URLS.TIKTOK}${username}`
             case 'instagram':
-              return `https://www.instagram.com/${username}`
+              return `${SNS_URLS.INSTAGRAM}${username}`
             case 'facebook':
-              return `https://www.facebook.com/${username}`
+              return `${SNS_URLS.FACEBOOK}${username}`
             case 'linkedin':
-              return `https://www.linkedin.com/in/${username}`
+              return `${SNS_URLS.LINKEDIN}${username}`
             default:
               return `https://${username}`
           }

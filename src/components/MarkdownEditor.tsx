@@ -5,6 +5,7 @@ import {
   Heading1, Heading2, List, ListOrdered, Quote, Image as ImageIcon, 
   Link as LinkIcon, BookOpen, Bold, Italic, Sparkles, Send, X
 } from 'lucide-react'
+import { SEARCH_LIMITS } from '@/config/constants'
 
 interface MarkdownEditorProps {
   value: string
@@ -136,8 +137,8 @@ export function MarkdownEditor({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           query: aiQuery,
-          limit: 100,
-          topK: 5,
+          limit: SEARCH_LIMITS.AI_SEARCH,
+          topK: SEARCH_LIMITS.POST_SEARCH,
           mode: 'diary', // 日記作成モード
         }),
       })

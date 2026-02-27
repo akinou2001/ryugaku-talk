@@ -117,6 +117,35 @@ const resources = {
         unauthorized: 'アクセス権限がありません',
         serverError: 'サーバーエラーが発生しました',
         validationError: '入力内容に誤りがあります',
+        // 認証関連
+        authRequired: '認証が必要です。ログインしてください。',
+        loginRequired: 'ログインが必要です',
+        // AI関連
+        aiNotConfigured: 'AI機能の設定が完了していません',
+        aiKeyInvalid: 'AI APIキーが無効です',
+        aiQuotaExceeded: 'APIの利用制限に達しました。しばらく待ってから再度お試しください。',
+        aiModelNotFound: '指定されたモデルが見つかりません。APIキーの設定、支払い情報の登録、または利用可能なモデル名をご確認ください。',
+        aiGenerationFailed: 'AI回答の生成に失敗しました',
+        geminiKeyInvalid: 'Gemini APIキーが無効です',
+        dashscopeKeyNotSet: 'DASHSCOPE_API_KEY環境変数が設定されていません。.env.localファイルにDASHSCOPE_API_KEYを設定してください。',
+        dashscopeKeyEmpty: 'DASHSCOPE_API_KEYが空です。.env.localファイルで実際のAPIキーを設定してください。',
+        dashscopeKeyPlaceholder: 'DASHSCOPE_API_KEYがプレースホルダーのままです。.env.localファイルで実際のAPIキーに置き換えてください。',
+        dashscopeKeyTooShort: 'DASHSCOPE_API_KEYが短すぎます。正しいAPIキーを設定してください。',
+        dashscopeKeyInvalid: 'DashScope APIキーが無効です。以下の点を確認してください：\n1. .env.localファイルにDASHSCOPE_API_KEYが正しく設定されているか\n2. APIキーが有効で、期限切れでないか\n3. 開発サーバーを再起動したか（環境変数の変更を反映するため）\n4. APIキーに余分なスペースや改行が含まれていないか',
+        // 投稿関連
+        questionRequired: '質問内容が必要です',
+        postCreationFailed: '投稿の作成に失敗しました',
+        postSearchFailed: '投稿検索に失敗しました',
+        // 検索関連
+        searchQueryRequired: '検索クエリが必要です',
+        // アカウント関連
+        accountCreationFailed: 'アカウント作成に失敗しました。',
+        emailInvalid: 'メールアドレスの形式が正しくありません。有効なメールアドレスを入力してください。',
+        emailAlreadyRegistered: 'このメールアドレスは既に登録されています。ログインページからログインしてください。',
+        passwordTooShort: 'パスワードが要件を満たしていません。6文字以上のパスワードを入力してください。',
+        passwordMismatch: 'パスワードが一致しません',
+        emailRequired: 'メールアドレスを入力してください',
+        emailCheckFailed: 'ネットワークエラーが発生しました。インターネット接続を確認してもう一度お試しください。',
       },
       // 成功メッセージ
       success: {
@@ -244,6 +273,35 @@ const resources = {
         unauthorized: 'Unauthorized access',
         serverError: 'Server error occurred',
         validationError: 'Validation error',
+        // Authentication related
+        authRequired: 'Authentication required. Please log in.',
+        loginRequired: 'Login required',
+        // AI related
+        aiNotConfigured: 'AI feature is not configured',
+        aiKeyInvalid: 'AI API key is invalid',
+        aiQuotaExceeded: 'API quota exceeded. Please try again later.',
+        aiModelNotFound: 'Specified model not found. Please check API key settings, payment information, or available model names.',
+        aiGenerationFailed: 'Failed to generate AI response',
+        geminiKeyInvalid: 'Gemini API key is invalid',
+        dashscopeKeyNotSet: 'DASHSCOPE_API_KEY environment variable is not set. Please set DASHSCOPE_API_KEY in .env.local file.',
+        dashscopeKeyEmpty: 'DASHSCOPE_API_KEY is empty. Please set the actual API key in .env.local file.',
+        dashscopeKeyPlaceholder: 'DASHSCOPE_API_KEY is still a placeholder. Please replace it with the actual API key in .env.local file.',
+        dashscopeKeyTooShort: 'DASHSCOPE_API_KEY is too short. Please set the correct API key.',
+        dashscopeKeyInvalid: 'DashScope API key is invalid. Please check:\n1. Is DASHSCOPE_API_KEY correctly set in .env.local file?\n2. Is the API key valid and not expired?\n3. Have you restarted the development server (to reflect environment variable changes)?\n4. Does the API key contain extra spaces or line breaks?',
+        // Post related
+        questionRequired: 'Question content is required',
+        postCreationFailed: 'Failed to create post',
+        postSearchFailed: 'Failed to search posts',
+        // Search related
+        searchQueryRequired: 'Search query is required',
+        // Account related
+        accountCreationFailed: 'Failed to create account.',
+        emailInvalid: 'Email format is incorrect. Please enter a valid email address.',
+        emailAlreadyRegistered: 'This email address is already registered. Please log in from the login page.',
+        passwordTooShort: 'Password does not meet requirements. Please enter a password with at least 6 characters.',
+        passwordMismatch: 'Passwords do not match',
+        emailRequired: 'Please enter email address',
+        emailCheckFailed: 'Network error occurred. Please check your internet connection and try again.',
       },
       // Success messages
       success: {

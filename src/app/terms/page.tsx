@@ -43,9 +43,16 @@ export default function TermsPage() {
               <div className="space-y-4">
                 <div>
                   <h3 className="text-xl font-semibold text-gray-900 mb-2">2.1 アカウントの作成</h3>
-                  <p className="text-gray-700 leading-relaxed">
+                  <p className="text-gray-700 leading-relaxed mb-2">
                     当サービスを利用するには、アカウントの作成が必要です。
                     アカウント作成時には、正確で最新の情報を提供する必要があります。
+                    以下の認証方法から選択できます：
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-gray-700 ml-4 mb-2">
+                    <li>メールアドレスとパスワードによる登録（必須）</li>
+                    <li>Googleアカウントによる登録（オプション、利用可能な場合）</li>
+                  </ul>
+                  <p className="text-gray-700 leading-relaxed">
                     個人アカウントと組織アカウント（教育機関・企業・政府機関）から選択できます。
                     組織アカウントは認証審査が必要で、審査完了まで通常1-3営業日かかります。
                   </p>
@@ -91,14 +98,17 @@ export default function TermsPage() {
                     当サービスでは、以下の機能を利用できます：
                   </p>
                   <ul className="list-disc list-inside space-y-1 text-gray-700 ml-4">
-                    <li>掲示板への投稿・閲覧・コメント（質問、日記、つぶやき）</li>
+                    <li>掲示板への投稿・閲覧・コメント（質問、日記、つぶやき、情報共有）</li>
+                    <li>画像・ファイルのアップロード（投稿への添付）</li>
                     <li>ユーザー間のチャット（1対1メッセージ）</li>
                     <li>コミュニティの作成・参加（個人はサークル、組織は公式コミュニティ）</li>
                     <li>コミュニティ内での投稿・交流（タイムライン）</li>
                     <li>公式コミュニティでのイベント作成・参加（組織アカウントのみ）</li>
                     <li>クエストの作成・完了申請・承認</li>
-                    <li>スコアシステムの利用</li>
+                    <li>スコアシステムの利用（貢献スコア）</li>
+                    <li>AIコンシェルジュ機能（質問へのAI回答）</li>
                     <li>通報機能の利用</li>
+                    <li>安否確認機能（組織アカウントのみ）</li>
                   </ul>
                 </div>
               </div>
@@ -216,7 +226,35 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">9. 規約の変更</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">9. 外部サービスの利用</h2>
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">9.1 データベース・認証サービス</h3>
+                  <p className="text-gray-700 leading-relaxed">
+                    当サービスは、Supabase（データベース、認証、ストレージサービス）を使用しています。
+                    ユーザー情報や投稿データは、Supabaseのサーバーに保存されます。
+                  </p>
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">9.2 AI機能</h3>
+                  <p className="text-gray-700 leading-relaxed">
+                    当サービスのAIコンシェルジュ機能は、Google Gemini APIを使用しています。
+                    質問内容は、回答生成のためにGoogle Gemini APIに送信されます。
+                    AIが生成した回答の正確性については、当サービスは保証しません。
+                  </p>
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">9.3 外部サービスの責任</h3>
+                  <p className="text-gray-700 leading-relaxed">
+                    外部サービスの利用により生じた問題や、外部サービスの利用規約違反については、
+                    当サービスは責任を負いません。
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">10. 規約の変更</h2>
               <p className="text-gray-700 leading-relaxed">
                 当サービスは、必要に応じて本規約を変更することができます。
                 重要な変更がある場合は、サービス内で通知いたします。
@@ -226,7 +264,7 @@ export default function TermsPage() {
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">10. 準拠法と管轄裁判所</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">11. 準拠法と管轄裁判所</h2>
               <p className="text-gray-700 leading-relaxed">
                 本規約は、日本法に準拠して解釈されます。
                 本規約に関する紛争については、当サービスの本店所在地を管轄する裁判所を第一審の専属的合意管轄裁判所とします。
@@ -236,7 +274,7 @@ export default function TermsPage() {
             <section>
               <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center">
                 <AlertCircle className="h-6 w-6 mr-2 text-primary-600" />
-                11. お問い合わせ
+                12. お問い合わせ
               </h2>
               <p className="text-gray-700 leading-relaxed mb-4">
                 本規約に関するご質問やご意見がございましたら、お問い合わせフォームからご連絡ください。

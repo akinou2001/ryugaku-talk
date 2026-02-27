@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { findSimilarUsers } from "@/lib/searchUsers";
+import { SEARCH_LIMITS } from "@/config/constants";
 
 /**
  * 類似ユーザー検索API（AI以外）
@@ -7,7 +8,7 @@ import { findSimilarUsers } from "@/lib/searchUsers";
  */
 export async function POST(req: Request) {
   try {
-    const { query_text, limit = 5 } = await req.json();
+    const { query_text, limit = SEARCH_LIMITS.SIMILAR_USERS } = await req.json();
 
     if (!query_text || typeof query_text !== 'string' || !query_text.trim()) {
       return NextResponse.json(

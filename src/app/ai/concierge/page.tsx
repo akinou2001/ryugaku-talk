@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Link as LinkIcon } from "lucide-react";
+import { Sparkles, Link as LinkIcon, Menu, Send, Plus } from "lucide-react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { useAuth } from "@/components/Providers";
 import { supabase } from "@/lib/supabase";
 import { UserAvatar } from "@/components/UserAvatar";
+import { AIConciergeSidebar } from "@/components/AIConciergeSidebar";
 
 interface RelevantPost {
   post_id: string;
@@ -21,17 +22,50 @@ interface RelevantPost {
   category: string;
 }
 
+interface ChatHistory {
+  id: string;
+  question_text: string;
+  answer_text: string;
+  mode: 'grounded' | 'reasoning';
+  confidence_level: 'high' | 'medium' | 'low';
+  related_posts: any[];
+  created_at: string;
+}
+
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  relatedPosts?: RelevantPost[];
+  mode?: 'grounded' | 'reasoning';
+  confidenceLevel?: 'high' | 'medium' | 'low';
+  timestamp: Date;
+}
+
 export default function AiConciergePage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [query, setQuery] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState<string>("");
-  const [answer, setAnswer] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [relevantPosts, setRelevantPosts] = useState<RelevantPost[]>([]);
-  const [mode, setMode] = useState<'grounded' | 'reasoning'>('grounded');
-  const [confidenceLevel, setConfidenceLevel] = useState<'high' | 'medium' | 'low'>('medium');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [currentChatId, setCurrentChatId] = useState<string | undefined>();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // デスクトップではサイドバーを常に表示
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setSidebarOpen(true);
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // ログインチェック
   useEffect(() => {
@@ -39,6 +73,11 @@ export default function AiConciergePage() {
       router.push('/auth/signin');
     }
   }, [user, authLoading, router]);
+
+  // メッセージが更新されたらスクロール
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
 
   // ログイン中または認証確認中の場合は何も表示しない
   if (authLoading) {
@@ -57,13 +96,30 @@ export default function AiConciergePage() {
     return null;
   }
 
-  async function aiSearch() {
-    if (!query.trim()) return;
+  // 新しい会話を開始
+  const handleNewChat = () => {
+    setMessages([]);
+    setInput("");
+    setError(null);
+    setCurrentChatId(undefined);
+  };
 
+  async function sendMessage() {
+    if (!input.trim() || loading) return;
+
+    const userMessage: Message = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      content: input.trim(),
+      timestamp: new Date()
+    };
+
+    // ユーザーメッセージを追加
+    setMessages(prev => [...prev, userMessage]);
+    const currentInput = input.trim();
+    setInput("");
     setLoading(true);
     setError(null);
-    setAnswer("");
-    setRelevantPosts([]);
     setLoadingStep("投稿を検索中...");
 
     try {
@@ -77,7 +133,6 @@ export default function AiConciergePage() {
       }
 
       setLoadingStep("関連する投稿を検索中...");
-      // 少し待ってから次のステップに進む（UX向上のため）
       await new Promise(resolve => setTimeout(resolve, 300));
 
       setLoadingStep("AIが回答を生成中...");
@@ -87,7 +142,7 @@ export default function AiConciergePage() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${session.access_token}`
         },
-        body: JSON.stringify({ question_text: query }),
+        body: JSON.stringify({ question_text: currentInput }),
       });
 
       const data = await res.json();
@@ -97,251 +152,363 @@ export default function AiConciergePage() {
       }
 
       setLoadingStep("回答を整理中...");
-      // 少し待ってから結果を表示（スムーズな表示のため）
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      setAnswer(data.answer_text ?? "");
-      setRelevantPosts(data.related_posts || []);
-      setMode(data.mode || 'grounded');
-      setConfidenceLevel(data.confidence_level || 'medium');
+      const answerText = data.answer_text ?? "";
+      const relatedPosts = data.related_posts || [];
+      const chatMode = data.mode || 'grounded';
+      const chatConfidence = data.confidence_level || 'medium';
+
+      // AIの回答を追加
+      const assistantMessage: Message = {
+        id: `assistant-${Date.now()}`,
+        role: 'assistant',
+        content: answerText,
+        relatedPosts: relatedPosts,
+        mode: chatMode,
+        confidenceLevel: chatConfidence,
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+
+      // チャット履歴を自動保存（会話の最後の質問と回答のみ保存）
+      try {
+        const saveRes = await fetch("/api/ai/concierge/history", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            question_text: currentInput,
+            answer_text: answerText,
+            mode: chatMode,
+            confidence_level: chatConfidence,
+            related_posts: relatedPosts
+          })
+        });
+
+        if (!saveRes.ok) {
+          const errorData = await saveRes.json().catch(() => ({}));
+          console.error("Failed to save chat history:", {
+            status: saveRes.status,
+            statusText: saveRes.statusText,
+            error: errorData.error || 'Unknown error'
+          });
+          // エラーは表示しない（非同期処理のため、ユーザー体験を損なわない）
+        } else {
+          const saveData = await saveRes.json();
+          if (saveData.chat?.id) {
+            setCurrentChatId(saveData.chat.id);
+            console.log("Chat history saved successfully:", saveData.chat.id);
+          } else {
+            console.warn("Chat history save response missing chat ID:", saveData);
+          }
+        }
+      } catch (saveError: any) {
+        console.error("Failed to save chat history (exception):", {
+          message: saveError?.message,
+          stack: saveError?.stack,
+          error: saveError
+        });
+      }
     } catch (e: any) {
       setError(e?.message ?? "AIコンシェルジュへの問い合わせに失敗しました");
+      // エラー時はユーザーメッセージを残す
     } finally {
       setLoading(false);
       setLoadingStep("");
     }
   }
 
+  // チャット履歴を選択したときの処理
+  const handleSelectChat = (chat: ChatHistory) => {
+    setMessages([
+      {
+        id: `user-${chat.id}`,
+        role: 'user',
+        content: chat.question_text,
+        timestamp: new Date(chat.created_at)
+      },
+      {
+        id: `assistant-${chat.id}`,
+        role: 'assistant',
+        content: chat.answer_text,
+        relatedPosts: chat.related_posts || [],
+        mode: chat.mode,
+        confidenceLevel: chat.confidence_level,
+        timestamp: new Date(chat.created_at)
+      }
+    ]);
+    setCurrentChatId(chat.id);
+    setError(null);
+  }
+
+  // 引用番号をMarkdownリンクに変換
+  const processAnswer = (answer: string, relatedPosts: RelevantPost[] = []) => {
+    let processedAnswer = answer;
+    relatedPosts.forEach((post, index) => {
+      const citationNum = index + 1;
+      const citationPattern = new RegExp(`\\[${citationNum}\\]`, 'g');
+      processedAnswer = processedAnswer.replace(
+        citationPattern,
+        `[${citationNum}](/posts/${post.post_id})`
+      );
+    });
+    return processedAnswer;
+  };
+
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 pb-24">
-        <div className="max-w-4xl mx-auto">
-          <div className="mb-6 sm:mb-8">
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              AIコンシェルジュ
-            </h1>
-            <p className="text-sm text-gray-600">投稿データベースから関連情報を検索し、要約・引用しながら回答します</p>
-          </div>
+    <div className="h-screen flex flex-col bg-gray-50">
+      <div className="flex flex-1 overflow-hidden">
+        {/* サイドバー */}
+        <AIConciergeSidebar
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          onSelectChat={handleSelectChat}
+          currentChatId={currentChatId}
+        />
 
-          {/* 入力エリア */}
-          <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 mb-4 sm:mb-6">
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
-              質問を入力
-            </label>
-            <div className="flex flex-col gap-2 sm:gap-3">
-              <textarea
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  // Ctrl+Enter または Cmd+Enter で送信
-                  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !loading && query.trim()) {
-                    e.preventDefault();
-                    aiSearch();
-                  }
-                }}
-                placeholder="留学に関する質問を入力してください...&#10;複数行の入力も可能です。"
-                rows={4}
-                className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-gray-200 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all resize-y min-h-[100px] sm:min-h-[120px] max-h-[300px] font-sans leading-relaxed"
-                style={{ fontFamily: 'inherit' }}
-              />
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">
-                    {query.length} 文字
-                  </span>
-                  <span className="text-xs text-gray-400 hidden sm:inline">
-                    （Ctrl+Enter または Cmd+Enter で送信）
-                  </span>
+        {/* メインコンテンツ */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* ヘッダー */}
+          <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                aria-label="サイドバーを開く"
+              >
+                <Menu className="h-5 w-5 text-gray-600" />
+              </button>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center">
+                  <Sparkles className="h-5 w-5 text-white" />
                 </div>
-                <button
-                  onClick={aiSearch}
-                  className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-lg sm:rounded-xl text-sm sm:text-base font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center space-x-2 whitespace-nowrap relative"
-                  disabled={loading || !query.trim()}
-                  type="button"
-                >
-                  {loading ? (
-                    <>
-                      <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-white border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
-                      <span>処理中...</span>
-                    </>
-                  ) : (
-                    <>
-                  <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                      <span>送信</span>
-                    </>
-                  )}
-                </button>
+                <div>
+                  <h1 className="text-lg font-bold text-gray-900">AIコンシェルジュ</h1>
+                  <p className="text-xs text-gray-500">留学に関する質問にAIが回答します</p>
+                </div>
               </div>
             </div>
-            {error && (
-              <div className="mt-3 p-2.5 sm:p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-xs sm:text-sm">
-                {error}
-              </div>
-            )}
+            <button
+              onClick={handleNewChat}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">新しい会話</span>
+            </button>
           </div>
 
-
-          {/* 回答エリア */}
-          <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 mb-4 sm:mb-6">
-            <div className="mb-3 sm:mb-4">
-              <h2 className="text-base sm:text-lg font-semibold flex items-center space-x-2">
-                <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-primary-600 flex-shrink-0" />
-                <span>AIからの回答</span>
-              </h2>
-            </div>
-            <div className="min-h-[200px] border-2 border-gray-200 rounded-lg sm:rounded-xl p-4 sm:p-6 text-xs sm:text-sm bg-gray-50">
-              {loading ? (
-                <div className="flex flex-col items-center justify-center h-full min-h-[200px] space-y-4">
-                  <div className="relative">
-                    <div className="w-16 h-16 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
-                    <Sparkles className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-6 w-6 text-primary-600 animate-pulse" />
-                  </div>
-                  <div className="text-center space-y-2">
-                    <p className="text-primary-600 font-semibold text-sm sm:text-base animate-pulse">
-                      {loadingStep || "処理中..."}
+          {/* メッセージエリア */}
+          <div className="flex-1 overflow-y-auto bg-gray-50">
+            <div className="max-w-4xl mx-auto px-4 py-6">
+              {messages.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center max-w-md">
+                    <div className="w-20 h-20 bg-gradient-to-br from-primary-100 to-primary-200 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <Sparkles className="h-10 w-10 text-primary-600" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">AIコンシェルジュへようこそ</h2>
+                    <p className="text-gray-600 mb-6">
+                      留学に関する質問を入力してください。投稿データベースから関連情報を検索し、要約・引用しながら回答します。
                     </p>
-                    <p className="text-gray-500 text-xs">
-                      しばらくお待ちください
-                    </p>
-                  </div>
-                  {/* スケルトンローディング */}
-                  <div className="w-full space-y-3 mt-4">
-                    <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
-                    <div className="h-4 bg-gray-200 rounded animate-pulse w-5/6"></div>
-                    <div className="h-4 bg-gray-200 rounded animate-pulse w-4/6"></div>
                   </div>
                 </div>
-              ) : answer ? (() => {
-                // 引用番号をMarkdownリンクに変換
-                let processedAnswer = answer;
-                const citationMap = new Map<number, string>();
-                
-                relevantPosts.forEach((post, index) => {
-                  const citationNum = index + 1;
-                  citationMap.set(citationNum, post.post_id);
-                  // [1], [2]などの引用番号をMarkdownリンクに変換
-                  const citationPattern = new RegExp(`\\[${citationNum}\\]`, 'g');
-                  processedAnswer = processedAnswer.replace(
-                    citationPattern,
-                    `[${citationNum}](/posts/${post.post_id})`
-                  );
-                });
-                
-                return (
-                <div className="text-gray-800 leading-relaxed prose prose-sm prose-gray max-w-none">
-                  <ReactMarkdown
-                    components={{
-                      h1: ({node, ...props}) => <h1 className="text-lg font-bold mb-2 mt-4" {...props} />,
-                      h2: ({node, ...props}) => <h2 className="text-base font-bold mb-2 mt-3" {...props} />,
-                      h3: ({node, ...props}) => <h3 className="text-sm font-bold mb-1 mt-2" {...props} />,
-                      p: ({node, ...props}) => <p className="mb-2" {...props} />,
-                      ul: ({node, ...props}) => <ul className="list-disc list-inside mb-2 space-y-1" {...props} />,
-                      ol: ({node, ...props}) => <ol className="list-decimal list-inside mb-2 space-y-1" {...props} />,
-                      li: ({node, ...props}) => <li className="ml-2" {...props} />,
-                      strong: ({node, ...props}) => <strong className="font-semibold" {...props} />,
-                      em: ({node, ...props}) => <em className="italic" {...props} />,
-                      code: ({node, ...props}) => <code className="bg-gray-200 px-1 rounded text-xs" {...props} />,
-                        a: ({node, ...props}) => {
-                          // 引用番号のリンクに特別なスタイルを適用
-                          const href = props.href || '';
-                          const linkText = props.children?.toString() || '';
-                          const isCitation = /^\/posts\/.+$/.test(href) && /^\d+$/.test(linkText);
+              ) : (
+                <div className="space-y-6">
+                  {messages.map((message, index) => {
+                    const isUser = message.role === 'user';
+                    const showAvatar = !isUser || index === 0 || messages[index - 1].role === 'assistant';
+
+                    return (
+                      <div
+                        key={message.id}
+                        className={`flex items-start gap-4 ${isUser ? 'flex-row-reverse' : ''}`}
+                      >
+                        {/* アバター */}
+                        {showAvatar && (
+                          <div className="flex-shrink-0">
+                            {isUser ? (
+                              <UserAvatar
+                                iconUrl={user?.icon_url}
+                                name={user?.name || ''}
+                                size="md"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center">
+                                <Sparkles className="h-5 w-5 text-white" />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {!showAvatar && <div className="w-10 h-10 flex-shrink-0" />}
+
+                        {/* メッセージコンテンツ */}
+                        <div className={`flex-1 min-w-0 ${isUser ? 'flex flex-col items-end' : ''}`}>
+                          <div
+                            className={`rounded-2xl px-4 py-3 max-w-[85%] ${
+                              isUser
+                                ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white'
+                                : 'bg-white border border-gray-200 text-gray-900'
+                            }`}
+                          >
+                            {isUser ? (
+                              <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                                {message.content}
+                              </p>
+                            ) : (
+                              <div className="text-sm leading-relaxed prose prose-sm prose-gray max-w-none">
+                                <ReactMarkdown
+                                  components={{
+                                    h1: ({node, ...props}) => <h1 className="text-lg font-bold mb-2 mt-4" {...props} />,
+                                    h2: ({node, ...props}) => <h2 className="text-base font-bold mb-2 mt-3" {...props} />,
+                                    h3: ({node, ...props}) => <h3 className="text-sm font-bold mb-1 mt-2" {...props} />,
+                                    p: ({node, ...props}) => <p className="mb-2" {...props} />,
+                                    ul: ({node, ...props}) => <ul className="list-disc list-inside mb-2 space-y-1" {...props} />,
+                                    ol: ({node, ...props}) => <ol className="list-decimal list-inside mb-2 space-y-1" {...props} />,
+                                    li: ({node, ...props}) => <li className="ml-2" {...props} />,
+                                    strong: ({node, ...props}) => <strong className="font-semibold" {...props} />,
+                                    em: ({node, ...props}) => <em className="italic" {...props} />,
+                                    code: ({node, ...props}) => <code className="bg-gray-200 px-1 rounded text-xs" {...props} />,
+                                    a: ({node, ...props}) => {
+                                      const href = props.href || '';
+                                      const linkText = props.children?.toString() || '';
+                                      const isCitation = /^\/posts\/.+$/.test(href) && /^\d+$/.test(linkText);
+                                      
+                                      if (isCitation) {
+                                        const post = message.relatedPosts?.find(p => href.includes(p.post_id));
+                                        return (
+                                          <Link
+                                            href={href}
+                                            className="inline-flex items-center justify-center w-5 h-5 mx-0.5 text-xs font-semibold text-primary-600 bg-primary-100 rounded-full hover:bg-primary-200 hover:text-primary-700 transition-colors"
+                                            title={post ? `投稿: ${post.title}` : '投稿を開く'}
+                                          >
+                                            {linkText}
+                                          </Link>
+                                        );
+                                      } else {
+                                        return (
+                                          <a className="text-primary-600 hover:underline" href={href} {...props}>
+                                            {props.children}
+                                          </a>
+                                        );
+                                      }
+                                    },
+                                  }}
+                                >
+                                  {processAnswer(message.content, message.relatedPosts)}
+                                </ReactMarkdown>
+                              </div>
+                            )}
+                          </div>
                           
-                          if (isCitation) {
-                            // 引用番号のリンク
-                            const post = relevantPosts.find(p => href.includes(p.post_id));
-                            return (
-                              <Link
-                                href={href}
-                                className="inline-flex items-center justify-center w-5 h-5 mx-0.5 text-xs font-semibold text-primary-600 bg-primary-100 rounded-full hover:bg-primary-200 hover:text-primary-700 transition-colors"
-                                title={post ? `投稿: ${post.title}` : '投稿を開く'}
-                              >
-                                {linkText}
-                              </Link>
-                            );
-                          } else {
-                            // 通常のリンク
-                            return (
-                              <a className="text-primary-600 hover:underline" href={href} {...props}>
-                                {props.children}
-                              </a>
-                            );
-                          }
-                        },
-                    }}
-                  >
-                      {processedAnswer}
-                  </ReactMarkdown>
-                </div>
-                );
-              })() : (
-                <div className="text-gray-400 flex items-center justify-center h-full min-h-[200px]">
-                  <div className="text-center">
-                    <Sparkles className="h-8 w-8 text-gray-300 mx-auto mb-2" />
-                    <span className="text-sm">回答が表示されます</span>
-                  </div>
+                          {/* 引用した投稿 */}
+                          {!isUser && message.relatedPosts && message.relatedPosts.length > 0 && (
+                            <div className="mt-3 space-y-2 max-w-[85%]">
+                              <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                                <LinkIcon className="h-3 w-3" />
+                                <span>引用した投稿 ({message.relatedPosts.length}件)</span>
+                              </div>
+                              {message.relatedPosts.slice(0, 3).map((post, idx) => (
+                                <Link
+                                  key={post.post_id}
+                                  href={`/posts/${post.post_id}`}
+                                  className="flex items-center gap-2 p-2 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-xs"
+                                >
+                                  <div className="flex-shrink-0 w-6 h-6 bg-primary-500 text-white rounded-full flex items-center justify-center font-bold text-xs">
+                                    {idx + 1}
+                                  </div>
+                                  <span className="truncate text-gray-700">{post.title}</span>
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* タイムスタンプ */}
+                          <div className={`mt-1 text-xs text-gray-500 ${isUser ? 'text-right' : ''}`}>
+                            {formatTime(message.timestamp)}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* ローディング表示 */}
+                  {loading && (
+                    <div className="flex items-start gap-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center">
+                          <Sparkles className="h-5 w-5 text-white" />
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                            <div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                            <div className="w-2 h-2 bg-primary-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                            <span className="ml-2 text-xs text-gray-500">{loadingStep || "処理中..."}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div ref={messagesEndRef} />
                 </div>
               )}
             </div>
           </div>
 
-          {/* 引用した投稿 */}
-          {relevantPosts.length > 0 && (
-            <div className="bg-white rounded-xl sm:rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 mb-4 sm:mb-6">
-              <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4 flex items-center space-x-2">
-                <LinkIcon className="h-4 w-4 sm:h-5 sm:w-5 text-primary-600 flex-shrink-0" />
-                <span>引用した投稿</span>
-              </h2>
-              <div className="space-y-2 sm:space-y-3">
-                {relevantPosts.map((post, index) => {
-                  const isChat = post.category === 'chat';
-                  
-                  return (
-                  <Link
-                    key={post.post_id}
-                    href={`/posts/${post.post_id}`}
-                      className="flex items-center gap-3 p-3 sm:p-4 border-2 border-gray-200 rounded-lg sm:rounded-xl hover:border-primary-500 hover:bg-primary-50 transition-all"
-                  >
-                      {/* 番号バッジ */}
-                      <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 bg-primary-500 text-white rounded-full flex items-center justify-center font-bold text-sm sm:text-base">
-                        {index + 1}
-                      </div>
-                      
-                      {/* 投稿者アイコン */}
-                      <div className="flex-shrink-0">
-                        <UserAvatar
-                          iconUrl={post.author_icon_url}
-                          name={post.author_name}
-                          size="md"
-                        />
-                    </div>
-                      
-                      {/* 投稿情報 */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-semibold text-sm sm:text-base text-gray-900 truncate">
-                            {post.title}
-                          </h3>
+          {/* 入力エリア（下部固定） */}
+          <div className="bg-white border-t border-gray-200 px-4 py-4">
+            <div className="max-w-4xl mx-auto">
+              {error && (
+                <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm">
+                  {error}
+                </div>
+              )}
+              <div className="flex items-end gap-3">
+                <div className="flex-1 relative">
+                  <textarea
+                    ref={inputRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey && !loading) {
+                        e.preventDefault();
+                        sendMessage();
+                      }
+                    }}
+                    placeholder="メッセージを入力... (Enterで送信、Shift+Enterで改行)"
+                    rows={1}
+                    className="w-full px-4 py-3 pr-12 text-sm border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none max-h-32 overflow-y-auto"
+                    style={{ minHeight: '48px' }}
+                  />
+                </div>
+                <button
+                  onClick={sendMessage}
+                  disabled={loading || !input.trim()}
+                  className="flex-shrink-0 w-12 h-12 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center"
+                >
+                  {loading ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <Send className="h-5 w-5" />
+                  )}
+                </button>
               </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs sm:text-sm text-gray-600 truncate">
-                            {post.author_name}
-                          </span>
+              <p className="mt-2 text-xs text-gray-500 text-center">
+                回答は投稿データベースから検索した情報に基づいています
+              </p>
             </div>
-                        {/* つぶやきの場合は1行のみ表示 */}
-                        {isChat && (
-                          <p className="text-xs sm:text-sm text-gray-500 mt-1 line-clamp-1">
-                            {post.content_snippet}
-                          </p>
-                        )}
-                      </div>
-                  </Link>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
+          </div>
         </div>
       </div>
     </div>

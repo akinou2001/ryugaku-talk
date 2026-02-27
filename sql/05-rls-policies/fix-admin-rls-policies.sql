@@ -10,6 +10,7 @@ DROP POLICY IF EXISTS "管理者は認証申請を閲覧可能" ON organization_
 DROP POLICY IF EXISTS "管理者は認証申請を更新可能" ON organization_verification_requests;
 DROP POLICY IF EXISTS "申請者は自分の申請を閲覧可能" ON organization_verification_requests;
 DROP POLICY IF EXISTS "申請者は自分の申請を作成可能" ON organization_verification_requests;
+DROP POLICY IF EXISTS "申請者は自分の申請を更新可能" ON organization_verification_requests;
 
 -- 管理者は認証申請を閲覧可能
 -- 注意: RLSポリシー内でprofilesテーブルを参照する際の無限再帰を避けるため、

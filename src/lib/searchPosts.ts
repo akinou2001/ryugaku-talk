@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import type { Post } from './supabase'
+import { SEARCH_LIMITS, VALIDATION } from '@/config/constants'
 
 /**
  * 過去の投稿を検索して、質問に関連する投稿を返す
@@ -38,14 +39,14 @@ export async function searchRelevantPosts(
  */
 export async function findRelevantPostsForQuery(
   query: string,
-  topK: number = 5
+  topK: number = SEARCH_LIMITS.AI_RELATED_POSTS
 ): Promise<Post[]> {
   try {
     // キーワードを抽出（簡単な実装）
     const keywords = query
       .split(/\s+/)
-      .filter(word => word.length > 2)
-      .slice(0, 5) // 最大5つのキーワード
+      .filter(word => word.length > VALIDATION.MIN_KEYWORD_LENGTH)
+      .slice(0, SEARCH_LIMITS.MAX_KEYWORDS)
 
     if (keywords.length === 0) {
       return []

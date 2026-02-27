@@ -13,9 +13,10 @@ SET is_admin = true
 WHERE email = 'your-email@example.com';  -- ここを実際のメールアドレスに変更
 
 -- 確認用クエリ（設定後、管理者権限が付与されたか確認）
-SELECT id, email, name, is_admin, account_type
-FROM profiles
-WHERE email = @admin_email;
+-- 注意: 上記のUPDATE文で指定したメールアドレスに置き換えてください
+-- SELECT id, email, name, is_admin, account_type
+-- FROM profiles
+-- WHERE email = 'your-email@example.com';
 
 -- 複数の管理者を設定する場合（複数のメールアドレスを指定）
 -- UPDATE profiles

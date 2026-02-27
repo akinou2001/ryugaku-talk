@@ -19,3 +19,6 @@ export * from './social-config'
 
 // テーマ設定
 export * from './theme-config'
+
+// 定数設定
+export * from './constants'

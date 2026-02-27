@@ -7,20 +7,25 @@ VALUES ('channel-attachments', 'channel-attachments', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- RLSポリシーを設定
+-- 既存のポリシーを削除（存在する場合）
+DROP POLICY IF EXISTS "認証済みユーザーはチャンネルファイルをアップロード可能" ON storage.objects;
+DROP POLICY IF EXISTS "認証済みユーザーはチャンネルファイルを閲覧可能" ON storage.objects;
+DROP POLICY IF EXISTS "認証済みユーザーはチャンネルファイルを削除可能" ON storage.objects;
+
 -- 認証済みユーザーはファイルをアップロード可能
-CREATE POLICY IF NOT EXISTS "認証済みユーザーはチャンネルファイルをアップロード可能"
+CREATE POLICY "認証済みユーザーはチャンネルファイルをアップロード可能"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (bucket_id = 'channel-attachments');
 
 -- 認証済みユーザーはファイルを閲覧可能
-CREATE POLICY IF NOT EXISTS "認証済みユーザーはチャンネルファイルを閲覧可能"
+CREATE POLICY "認証済みユーザーはチャンネルファイルを閲覧可能"
 ON storage.objects FOR SELECT
 TO authenticated
 USING (bucket_id = 'channel-attachments');
 
 -- 認証済みユーザーは自分のファイルを削除可能
-CREATE POLICY IF NOT EXISTS "認証済みユーザーはチャンネルファイルを削除可能"
+CREATE POLICY "認証済みユーザーはチャンネルファイルを削除可能"
 ON storage.objects FOR DELETE
 TO authenticated
 USING (bucket_id = 'channel-attachments');

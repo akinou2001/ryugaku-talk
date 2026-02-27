@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
+import { TIMEOUTS, DEV_URLS } from './src/config/constants'
 
 /**
  * Playwrightの設定ファイル
@@ -12,7 +13,7 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
-    baseURL: process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:3000',
+    baseURL: process.env.PLAYWRIGHT_TEST_BASE_URL || DEV_URLS.LOCALHOST,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -34,9 +35,9 @@ export default defineConfig({
 
   webServer: {
     command: 'npm run dev:local',
-    url: 'http://localhost:3000',
+    url: DEV_URLS.LOCALHOST,
     reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
+    timeout: TIMEOUTS.PLAYWRIGHT_TEST,
   },
 })
 
