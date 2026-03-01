@@ -34,17 +34,17 @@ Supabaseの認証設定は、プロジェクトごとに個別に設定する必
 #### 2.1 本番環境でメール認証を設定
 
 1. **本番環境のSupabaseダッシュボードにログイン**
+
    - [Supabaseダッシュボード](https://app.supabase.com)にアクセス
    - 本番用プロジェクトを選択
-
 2. **「Authentication」→「Settings」を開く**
-
 3. **「Auth Settings」セクションで以下を設定**：
+
    - **Enable email confirmations**: 本番環境では有効にすることを推奨
    - **Site URL**: `https://ryugakutalk.com`
    - **Redirect URLs**: `https://ryugakutalk.com/**`
-
 4. **「Email Templates」セクションで確認**（必要に応じて）：
+
    - メールテンプレートをカスタマイズしている場合、同じ内容を本番環境にも設定
 
 #### 2.2 メール送信設定（オプション）
@@ -71,14 +71,16 @@ Google Cloud Consoleで、本番環境用のリダイレクトURIを追加：
 
 1. OAuth 2.0 クライアント IDを選択
 2. 「承認済みのリダイレクト URI」に以下を追加：
+
    ```
    https://[本番プロジェクトID].supabase.co/auth/v1/callback
    ```
-   （`[本番プロジェクトID]`は本番環境のSupabaseプロジェクトID）
 
+   （`[本番プロジェクトID]`は本番環境のSupabaseプロジェクトID）
 3. 「保存」をクリック
 
 **注意**: 開発環境用のリダイレクトURIも残しておいてください：
+
 ```
 https://[開発プロジェクトID].supabase.co/auth/v1/callback
 ```
@@ -110,6 +112,7 @@ https://[開発プロジェクトID].supabase.co/auth/v1/callback
 #### 4.2 開発環境のリダイレクトURL（参考）
 
 開発環境では以下のURLが設定されているはずです：
+
 ```
 http://localhost:3000/**
 http://localhost:3000/auth/callback
@@ -126,12 +129,12 @@ GitHub、Twitter、FacebookなどのOAuthプロバイダーを使用している
 
 本番環境の認証設定が正しく移行されたか確認：
 
-- [ ] メール認証が有効になっている
-- [ ] Site URLが本番環境のURL（`https://ryugakutalk.com`）に設定されている
-- [ ] Redirect URLsに本番環境のURLが追加されている
-- [ ] Google OAuthが有効になっている（使用している場合）
-- [ ] Google Cloud Consoleに本番環境用のリダイレクトURIが追加されている
-- [ ] その他のOAuthプロバイダーが設定されている（使用している場合）
+- [X] メール認証が有効になっている
+- [X] Site URLが本番環境のURL（`https://ryugakutalk.com`）に設定されている
+- [X] Redirect URLsに本番環境のURLが追加されている
+- [X] Google OAuthが有効になっている（使用している場合）
+- [X] Google Cloud Consoleに本番環境用のリダイレクトURIが追加されている
+- [X] その他のOAuthプロバイダーが設定されている（使用している場合）
 
 ## 🧪 動作確認
 
@@ -179,6 +182,7 @@ GitHub、Twitter、FacebookなどのOAuthプロバイダーを使用している
 **症状**: 「redirect_uri_mismatch」エラー
 
 **解決方法**:
+
 1. Google Cloud Consoleで、本番環境用のリダイレクトURIが正しく追加されているか確認
 2. SupabaseのプロジェクトIDが正しいか確認
 3. リダイレクトURIの形式が正しいか確認：
@@ -189,6 +193,7 @@ GitHub、Twitter、FacebookなどのOAuthプロバイダーを使用している
 ### 問題2: メール認証のメールが届かない
 
 **解決方法**:
+
 1. Supabaseダッシュボードで「Authentication」→「Settings」→「SMTP Settings」を確認
 2. メール送信の設定が正しいか確認
 3. スパムフォルダを確認
@@ -196,6 +201,7 @@ GitHub、Twitter、FacebookなどのOAuthプロバイダーを使用している
 ### 問題3: リダイレクト後にエラーが発生する
 
 **解決方法**:
+
 1. Supabaseダッシュボードで「Authentication」→「URL Configuration」を確認
 2. Redirect URLsに正しいURLが追加されているか確認
 3. Site URLが正しく設定されているか確認

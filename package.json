@@ -26,9 +26,16 @@
     "enrich-japanese-names": "tsx scripts/enrich-japanese-universities.ts",
     "reset-japanese-names": "tsx scripts/reset-japanese-names.ts",
     "db:push": "supabase db push",
+    "db:push:dev": "supabase link --project-ref fujrsewwhmdfryinverw && supabase db push",
+    "db:push:prod": "supabase link --project-ref nsriudhbbkoxorrhyitd && supabase db push",
     "db:reset": "supabase db reset",
     "db:migration:new": "supabase migration new",
-    "db:link": "supabase link"
+    "db:link": "supabase link",
+    "db:link:dev": "supabase link --project-ref fujrsewwhmdfryinverw",
+    "db:link:prod": "supabase link --project-ref nsriudhbbkoxorrhyitd",
+    "test:migration": "jest tests/db-migration-integrity.test.ts",
+    "test:migration:dev": "TEST_ENV=dev jest tests/db-migration-integrity.test.ts",
+    "test:migration:prod": "TEST_ENV=prod jest tests/db-migration-integrity.test.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",
@@ -52,6 +59,7 @@
     "react-i18next": "^13.5.0",
     "react-icons": "^5.5.0",
     "react-markdown": "^9.1.0",
+    "recharts": "^3.7.0",
     "tailwind-merge": "^2.2.0",
     "three": "^0.182.0"
   },

@@ -1882,13 +1882,17 @@ export default function CommunityDetail() {
                       {pendingMembers.map((member) => (
                         <div key={member.id} className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                           <div className="flex items-center space-x-3">
-                            <UserAvatar
-                              iconUrl={member.user?.icon_url}
-                              name={member.user?.name}
-                              size="md"
-                            />
+                            <Link href={`/profile/${member.user_id}`}>
+                              <UserAvatar
+                                iconUrl={member.user?.icon_url}
+                                name={member.user?.name}
+                                size="md"
+                              />
+                            </Link>
                             <div>
-                              <p className="font-medium text-gray-900">{member.user?.name || '不明'}</p>
+                              <Link href={`/profile/${member.user_id}`} className="font-medium text-gray-900 hover:text-primary-600 hover:underline">
+                                {member.user?.name || '不明'}
+                              </Link>
                               <p className="text-xs text-gray-500">申請日: {formatDate(member.created_at)}</p>
                             </div>
                           </div>
@@ -1938,7 +1942,7 @@ export default function CommunityDetail() {
                         <div className="flex-1">
                           <p className="font-medium text-gray-900">{member.user?.name || '不明'}</p>
                           <p className="text-xs text-gray-500">
-                            {member.role === 'admin' ? '管理者' : 'メンバー'} • {formatDate(member.joined_at || member.created_at)}
+                            {community.owner_id === member.user_id ? '所有者' : member.role === 'admin' ? '管理者' : 'メンバー'} • {formatDate(member.joined_at || member.created_at)}
                           </p>
                         </div>
                       </div>
@@ -3494,12 +3498,17 @@ function PermissionSettingsModal({
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
                   <option value="">選択してください</option>
-                  {approvedMembers.map((member) => (
+                  {adminMembers.map((member) => (
                     <option key={member.user_id} value={member.user_id}>
                       {member.user?.name || '不明なユーザー'}
                     </option>
                   ))}
                 </select>
+                {adminMembers.length === 0 && (
+                  <p className="text-sm text-yellow-600 mt-2">
+                    移管先の管理者がいません。先にメンバーを管理者に任命してください。
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">

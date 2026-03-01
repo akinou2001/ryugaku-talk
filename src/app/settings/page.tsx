@@ -422,8 +422,8 @@ export default function SettingsPage() {
       return
     }
 
-    // 組織アカウントでコミュニティのオーナーがいる場合は退会不可
-    if (user.account_type !== 'individual' && ownedCommunities.length > 0) {
+    // コミュニティのオーナーである場合は退会不可
+    if (ownedCommunities.length > 0) {
       setError('コミュニティのオーナーであるため、退会できません。まずコミュニティの移管または削除を行ってください。')
       setShowDeleteModal(false)
       return
@@ -1058,8 +1058,8 @@ export default function SettingsPage() {
                 <div className="card space-y-6">
                   <h2 className="text-xl font-semibold text-gray-900">退会</h2>
 
-                  {/* 組織アカウントでコミュニティのオーナーがいる場合 */}
-                  {user && user.account_type !== 'individual' && ownedCommunities.length > 0 && (
+                  {/* コミュニティのオーナーである場合 */}
+                  {user && ownedCommunities.length > 0 && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
                       <h3 className="text-lg font-semibold text-yellow-800 mb-2 flex items-center">
                         <Building2 className="h-5 w-5 mr-2" />
@@ -1118,13 +1118,13 @@ export default function SettingsPage() {
                       </p>
                       <button
                         onClick={() => setShowDeleteModal(true)}
-                        disabled={user && user.account_type !== 'individual' && ownedCommunities.length > 0}
+                        disabled={user && ownedCommunities.length > 0}
                         className="btn-secondary bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
                         退会する
                       </button>
-                      {user && user.account_type !== 'individual' && ownedCommunities.length > 0 && (
+                      {user && ownedCommunities.length > 0 && (
                         <p className="text-xs text-red-700 mt-2">
                           コミュニティの管理を完了してから退会できます
                         </p>

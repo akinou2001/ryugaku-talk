@@ -39,6 +39,32 @@ jobs:
           files: ./coverage/lcov.info
           fail_ci_if_error: false
 
+  migration-integrity:
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run migration integrity tests
+        run: npm run test:migration -- --ci
+        env:
+          DEV_SUPABASE_URL: ${{ secrets.DEV_SUPABASE_URL }}
+          DEV_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.DEV_SUPABASE_SERVICE_ROLE_KEY }}
+          PROD_SUPABASE_URL: ${{ secrets.PROD_SUPABASE_URL }}
+          PROD_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PROD_SUPABASE_SERVICE_ROLE_KEY }}
+
   build:
     runs-on: ubuntu-latest
 
