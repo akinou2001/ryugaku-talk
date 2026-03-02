@@ -113,6 +113,8 @@ export interface User {
   sns_url?: string | null
   // 表示組織選択（組織アカウントの場合）
   display_organization_id?: string | null
+  // タイムゾーン（IANAタイムゾーン名、例: "Asia/Tokyo"）
+  timezone?: string | null
   created_at: string
   updated_at: string
 }
@@ -220,6 +222,8 @@ export interface Community {
   is_public?: boolean // 誰でも参加可能か、承認制か
   community_type?: 'guild' | 'official' // サークル or 公式コミュニティ
   is_archived?: boolean // アーカイブ済みかどうか
+  // タイムゾーン（IANAタイムゾーン名、例: "Asia/Tokyo"）
+  timezone?: string | null
   created_at: string
   updated_at: string
   // 集計情報（クエリ時に追加）

@@ -8,6 +8,7 @@ import { MessageCircle, MessageSquare, Clock, Heart, HelpCircle, BookOpen, MapPi
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
 import { StudentStatusBadge } from '@/components/StudentStatusBadge'
+import { formatPostLocalTime, getTimezoneAbbreviation } from '@/lib/timezone'
 
 export function RecentPosts() {
   const [posts, setPosts] = useState<Post[]>([])
@@ -23,7 +24,7 @@ export function RecentPosts() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, account_type, verification_status, organization_name, icon_url, languages, study_abroad_destination, university, university_id, is_operator)
+          author:profiles(name, account_type, verification_status, organization_name, icon_url, languages, study_abroad_destination, university, university_id, is_operator, timezone)
         `)
         .is('community_id', null) // コミュニティ限定投稿は除外
         .order('created_at', { ascending: false })
@@ -237,11 +238,17 @@ export function RecentPosts() {
                   <span className="px-3 py-1.5 backdrop-blur-md bg-white/20 border border-white/30 rounded-full text-xs font-semibold text-white shadow-lg flex items-center gap-1">
                     <Clock className="h-3 w-3" />
                     {formatDate(post.created_at)}
+                    {post.author?.timezone && formatPostLocalTime(post.created_at, post.author.timezone) && (
+                      <span className="opacity-75 ml-0.5">({formatPostLocalTime(post.created_at, post.author.timezone)} {getTimezoneAbbreviation(post.author.timezone)})</span>
+                    )}
                   </span>
                 ) : (
                   <span className="text-xs text-gray-500 flex items-center font-medium">
                     <Clock className="h-3 w-3 mr-0.5" />
                     {formatDate(post.created_at)}
+                    {post.author?.timezone && formatPostLocalTime(post.created_at, post.author.timezone) && (
+                      <span className="text-gray-400 ml-1">({formatPostLocalTime(post.created_at, post.author.timezone)} {getTimezoneAbbreviation(post.author.timezone)})</span>
+                    )}
                   </span>
                 )}
               </div>

@@ -13,6 +13,7 @@ import Link from 'next/link'
 import { AccountBadge } from '@/components/AccountBadge'
 import { UserAvatar } from '@/components/UserAvatar'
 import { isAdmin } from '@/lib/admin'
+import { TIMEZONE_GROUPS, formatLocalTime, formatPostLocalTime, getTimezoneAbbreviation } from '@/lib/timezone'
 
 type TabType = 'timeline' | 'members' | 'events' | 'quests' | 'channels'
 
@@ -104,7 +105,8 @@ export default function CommunityDetail() {
   const [communityEditForm, setCommunityEditForm] = useState({
     name: '',
     description: '',
-    visibility: 'public' as 'public' | 'private'
+    visibility: 'public' as 'public' | 'private',
+    timezone: ''
   })
   const [communityCoverImage, setCommunityCoverImage] = useState<File | null>(null)
   const [communityCoverImagePreview, setCommunityCoverImagePreview] = useState<string | null>(null)
@@ -142,7 +144,8 @@ export default function CommunityDetail() {
       setCommunityEditForm({
         name: community.name || '',
         description: community.description || '',
-        visibility: community.visibility || 'public'
+        visibility: community.visibility || 'public',
+        timezone: community.timezone || ''
       })
       setCommunityCoverImagePreview(community.cover_image_url || null)
     }
@@ -902,9 +905,10 @@ export default function CommunityDetail() {
         description: communityEditForm.description || undefined,
         visibility: communityEditForm.visibility,
         cover_image_url: coverImageUrl || undefined,
-        icon_url: iconImageUrl || undefined
+        icon_url: iconImageUrl || undefined,
+        timezone: communityEditForm.timezone || null
       })
-      
+
       setIsEditingCommunity(false)
       setCommunityCoverImage(null)
       setCommunityIconImage(null)
@@ -1279,6 +1283,27 @@ export default function CommunityDetail() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
+                  タイムゾーン（任意）
+                </label>
+                <select
+                  value={communityEditForm.timezone}
+                  onChange={(e) => setCommunityEditForm(prev => ({ ...prev, timezone: e.target.value }))}
+                  className="input-field"
+                >
+                  <option value="">未設定</option>
+                  {TIMEZONE_GROUPS.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.options.map((tz) => (
+                        <option key={tz.value} value={tz.value}>
+                          {tz.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   アイコン画像
                 </label>
                 <div className="space-y-2">
@@ -1377,7 +1402,8 @@ export default function CommunityDetail() {
                     setCommunityEditForm({
                       name: community.name || '',
                       description: community.description || '',
-                      visibility: community.visibility || 'public'
+                      visibility: community.visibility || 'public',
+                      timezone: community.timezone || ''
                     })
                   }}
                   className="btn-secondary"
@@ -1442,11 +1468,17 @@ export default function CommunityDetail() {
                     {community.description && (
                       <p className="text-gray-600 mb-3">{community.description}</p>
                     )}
-                    <div className="flex items-center space-x-4 text-sm text-gray-500">
+                    <div className="flex items-center space-x-4 text-sm text-gray-500 flex-wrap gap-y-1">
                       <div className="flex items-center space-x-1">
                         <Users className="h-4 w-4" />
                         <span>{memberCount}名</span>
                       </div>
+                      {community.timezone && formatLocalTime(community.timezone) && (
+                        <div className="flex items-center space-x-1">
+                          <Clock className="h-4 w-4" />
+                          <span>現地時間: {formatLocalTime(community.timezone)}</span>
+                        </div>
+                      )}
                       {community.owner && (
                         <div>
                           運営: {community.owner.organization_name || community.owner.name}
@@ -1848,7 +1880,14 @@ export default function CommunityDetail() {
                                   />
                                   <span className="text-gray-900 truncate font-semibold">{item.author?.name || '不明'}</span>
                                 </div>
-                                <span className="whitespace-nowrap">{formatDate(item.created_at)}</span>
+                                <span className="whitespace-nowrap">
+                                  {formatDate(item.created_at)}
+                                  {item.author?.timezone && formatPostLocalTime(item.created_at, item.author.timezone) && (
+                                    <span className="text-gray-400 ml-1">
+                                      (現地 {formatPostLocalTime(item.created_at, item.author.timezone)})
+                                    </span>
+                                  )}
+                                </span>
                                 <div className="flex items-center space-x-1">
                                   <Heart className="h-3 w-3 text-red-500 flex-shrink-0" />
                                   <span>{item.likes_count}</span>
@@ -3151,7 +3190,8 @@ export default function CommunityDetail() {
                       setCommunityEditForm({
                         name: community.name || '',
                         description: community.description || '',
-                        visibility: community.visibility || 'public'
+                        visibility: community.visibility || 'public',
+                        timezone: community.timezone || ''
                       })
                     }
                   }}
@@ -3210,6 +3250,27 @@ export default function CommunityDetail() {
                     >
                       <option value="public">公開</option>
                       <option value="private">非公開</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      タイムゾーン（任意）
+                    </label>
+                    <select
+                      value={communityEditForm.timezone}
+                      onChange={(e) => setCommunityEditForm(prev => ({ ...prev, timezone: e.target.value }))}
+                      className="input-field"
+                    >
+                      <option value="">未設定</option>
+                      {TIMEZONE_GROUPS.map((group) => (
+                        <optgroup key={group.label} label={group.label}>
+                          {group.options.map((tz) => (
+                            <option key={tz.value} value={tz.value}>
+                              {tz.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -3313,7 +3374,8 @@ export default function CommunityDetail() {
                           setCommunityEditForm({
                             name: community.name || '',
                             description: community.description || '',
-                            visibility: community.visibility || 'public'
+                            visibility: community.visibility || 'public',
+                            timezone: community.timezone || ''
                           })
                         }
                       }}

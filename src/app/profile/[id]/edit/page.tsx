@@ -10,6 +10,7 @@ import { uploadFile, validateFileType, validateFileSize, FILE_TYPES } from '@/li
 import { searchUniversities, findUniversityByAlias, type University } from '@/lib/universities'
 import type { UserUniversity, UserStudyAbroadUniversity } from '@/lib/supabase'
 import { SNS_URLS } from '@/config/constants'
+import { TIMEZONE_GROUPS } from '@/lib/timezone'
 
 export default function EditProfile() {
   const { user } = useAuth()
@@ -45,7 +46,8 @@ export default function EditProfile() {
     sns_instagram: '',
     sns_facebook: '',
     sns_linkedin: '',
-    sns_url: ''
+    sns_url: '',
+    timezone: ''
   })
   
   // 所属大学（複数登録対応）
@@ -318,7 +320,8 @@ export default function EditProfile() {
         sns_instagram: data.sns_instagram || '',
         sns_facebook: data.sns_facebook || '',
         sns_linkedin: data.sns_linkedin || '',
-        sns_url: data.sns_url || ''
+        sns_url: data.sns_url || '',
+        timezone: data.timezone || ''
       })
       
       // 複数所属大学を取得
@@ -577,6 +580,7 @@ export default function EditProfile() {
         sns_linkedin: validateUrl(formData.sns_linkedin, 'linkedin'),
         sns_url: validateUrl(formData.sns_url),
         display_organization_id: displayOrganizationId,
+        timezone: formData.timezone || null,
         updated_at: new Date().toISOString()
       }
       
@@ -1515,6 +1519,33 @@ export default function EditProfile() {
                 </div>
               )}
             </div>
+
+              {/* タイムゾーン */}
+              <div>
+                <label htmlFor="timezone" className="block text-sm font-medium text-gray-700 mb-2">
+                  タイムゾーン（任意）
+                </label>
+                <select
+                  id="timezone"
+                  value={formData.timezone}
+                  onChange={(e) => setFormData(prev => ({ ...prev, timezone: e.target.value }))}
+                  className="input-field"
+                >
+                  <option value="">未設定</option>
+                  {TIMEZONE_GROUPS.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.options.map((tz) => (
+                        <option key={tz.value} value={tz.value}>
+                          {tz.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  設定すると、あなたの投稿に留学先の現地時間が表示されます
+                </p>
+              </div>
           </div>
 
           {/* 自己紹介 */}
