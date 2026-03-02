@@ -11,6 +11,8 @@ interface AccountBadgeProps {
   isOperator?: boolean // 運営バッジ用フラグ
   size?: 'sm' | 'md' | 'lg'
   className?: string // 追加のクラス名
+  /** true のときラベルを非表示にし、公式マーク（アイコン）のみ表示。一列で収まらないレイアウトで使用 */
+  iconOnly?: boolean
 }
 
 export function AccountBadge({ 
@@ -19,7 +21,8 @@ export function AccountBadge({
   organizationName,
   isOperator = false,
   size = 'md',
-  className = ''
+  className = '',
+  iconOnly = false
 }: AccountBadgeProps) {
   const isVerified = verificationStatus === 'verified'
   const isOrganization = accountType !== 'individual'
@@ -83,15 +86,26 @@ export function AccountBadge({
     lg: 'text-base px-3 py-1.5'
   }
 
+  // 一列で表示できない場合：ラベル・組織名は非表示（iconOnly または 狭い画面では公式マークのみ）
+  const labelHideClass = iconOnly ? 'hidden' : 'max-sm:hidden'
+  const checkSizeClass = size === 'sm' ? 'h-3 w-3' : size === 'lg' ? 'h-4 w-4' : 'h-3.5 w-3.5'
+
   return (
-    <div className={`inline-flex items-center space-x-1 ${sizeClasses[size]} rounded-full border ${getAccountTypeColor()} ${className}`}>
+    <div
+      className={`inline-flex items-center ${iconOnly ? 'space-x-0' : 'space-x-1'} ${sizeClasses[size]} rounded-full border ${getAccountTypeColor()} ${className}`}
+      title={iconOnly ? getAccountTypeLabel() : undefined}
+    >
       {getAccountTypeIcon()}
-      <span className="font-medium">{getAccountTypeLabel()}</span>
-      {isVerified && (
-        <CheckCircle className={size === 'sm' ? 'h-3 w-3' : size === 'lg' ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
+      {!iconOnly && (
+        <>
+          <span className={`font-medium ${labelHideClass}`}>{getAccountTypeLabel()}</span>
+          {organizationName && size !== 'sm' && (
+            <span className={`ml-1 opacity-75 ${labelHideClass}`}>({organizationName})</span>
+          )}
+        </>
       )}
-      {organizationName && size !== 'sm' && (
-        <span className="ml-1 opacity-75">({organizationName})</span>
+      {isVerified && (
+        <CheckCircle className={`${checkSizeClass} ${iconOnly ? 'ml-0.5' : ''}`} />
       )}
     </div>
   )

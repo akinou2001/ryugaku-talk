@@ -1,11 +1,20 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useId } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { Post, User } from '@/lib/supabase'
-import { getCountryCoordinates, defaultMapCenter, defaultZoom } from '@/lib/countryCoordinates'
-import { getUniversityById, type University } from '@/lib/universities'
+import 'leaflet.markercluster/dist/MarkerCluster.css'
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css'
+import 'leaflet.markercluster'
+import type { Post } from '@/lib/supabase'
+import { defaultMapCenter, defaultZoom } from '@/lib/countryCoordinates'
+import { useUniversityCoordinates } from '@/hooks/useUniversityCoordinates'
+import {
+  type MapComponentProps,
+  type UserPostData,
+  getCategoryStyle,
+  isWithin24Hours,
+} from '@/lib/mapUtils'
 import { HelpCircle, X, Move, ZoomIn, MousePointer2, Info } from 'lucide-react'
 
 // Leafletのデフォルトアイコンの問題を修正
@@ -18,131 +27,32 @@ if (typeof window !== 'undefined') {
   })
 }
 
-interface UserPostData {
-  user: User
-  posts: Post[]
-  displayPost: Post
-  displayType: 'question' | 'diary' | 'chat' | 'normal'
-}
-
-interface MapViewProps {
-  posts: Post[]
-  userPostData?: UserPostData[]
-  onMarkerClick?: (post: Post) => void
-  selectedPostId?: string | null
-}
-
-// 投稿種別に応じた色とアイコンを取得
-function getCategoryStyle(category: string, urgencyLevel?: string, isResolved?: boolean) {
-  const baseStyles = {
-    question: {
-      bgColor: '#3B82F6', // 青
-      borderColor: '#2563EB',
-      icon: '?', // 白色のテキストに変更
-      shape: 'circle' as const,
-    },
-    diary: {
-      bgColor: '#10B981', // 緑
-      borderColor: '#059669',
-      icon: 'D', // 白色のテキストに変更
-      shape: 'square' as const,
-    },
-    chat: {
-      bgColor: '#8B5CF6', // 紫
-      borderColor: '#7C3AED',
-      icon: 'C', // 白色のテキストに変更
-      shape: 'diamond' as const,
-    },
-  }
-
-  const style = baseStyles[category as keyof typeof baseStyles] || baseStyles.question
-
-  // 緊急度に応じたリングの色（質問のみ、未解決の場合）
-  let ringColor = style.borderColor
-  let ringWidth = 2
-  if (category === 'question' && !isResolved && urgencyLevel) {
-    switch (urgencyLevel) {
-      case 'urgent':
-        ringColor = '#EF4444' // 赤
-        ringWidth = 4
-        break
-      case 'normal':
-        ringColor = '#3B82F6' // 青
-        ringWidth = 2
-        break
-    }
-  }
-
-  return { ...style, ringColor, ringWidth }
-}
-
-// 同じ国に複数の投稿がある場合、位置を少しずつずらす
-function getOffsetCoordinates(baseCoords: { lat: number; lng: number }, index: number, total: number) {
-  if (total === 1) return baseCoords
-  
-  // 円形に配置するための角度を計算
-  const angle = (index / total) * Math.PI * 2
-  const radius = 0.1 // 約11km
-  const latOffset = radius * Math.cos(angle) / 111 // 1度 ≈ 111km
-  const lngOffset = radius * Math.sin(angle) / (111 * Math.cos(baseCoords.lat * Math.PI / 180))
-
-  return {
-    lat: baseCoords.lat + latOffset,
-    lng: baseCoords.lng + lngOffset,
-  }
-}
-
-// 24時間以内かどうかを判定
-function isWithin24Hours(createdAt: string): boolean {
-  const now = new Date()
-  const postDate = new Date(createdAt)
-  const hoursSincePost = (now.getTime() - postDate.getTime()) / (1000 * 60 * 60)
-  return hoursSincePost <= 24
-}
-
-// カスタムマーカーアイコンを作成
-function createMarkerIcon(
-  post: Post, 
-  isSelected: boolean,
-  userPostData?: UserPostData
-) {
-  const now = new Date()
-  // postパラメータには既にdisplayPostが渡されているので、そのcategoryを使用
-  const postCategory = post.category || 'question' // フォールバック
-  
-  // デバッグログ（すべての投稿）
-  console.log('createMarkerIcon:', {
-    postId: post.id,
-    category: post.category,
-    postCategory,
-    hasUserData: !!userPostData,
-    userDataDisplayType: userPostData?.displayType
-  })
-  
+// カスタムマーカーアイコンを作成（CSSアニメーションは外部定義に移動）
+function createMarkerIcon(post: Post, isSelected: boolean, userData?: UserPostData) {
+  const postCategory = post.category || 'question'
   const isDiaryRecent = postCategory === 'diary' && isWithin24Hours(post.created_at)
   const isQuestionUnresolved = postCategory === 'question' && !post.is_resolved
   const isChat = postCategory === 'chat'
-  
+
   const style = getCategoryStyle(postCategory, post.urgency_level, post.is_resolved)
   const size = isSelected ? 40 : 32
   const scale = isSelected ? 1.2 : 1
 
-  // 投稿者のアイコン画像URL
   const avatarUrl = post.author?.icon_url
   const authorName = post.author?.name || '匿名'
-  const defaultBgColor = style.bgColor
   const initials = authorName.charAt(0).toUpperCase()
 
-  // 吹き出しに表示するテキストを決定
   const getBubbleText = () => {
-    if (isChat) {
-      return post.content.substring(0, 10) + (post.content.length > 10 ? '...' : '')
-    } else if (postCategory === 'question' || postCategory === 'diary') {
+    if (isChat) return post.content.substring(0, 10) + (post.content.length > 10 ? '...' : '')
+    if (postCategory === 'question' || postCategory === 'diary') {
       return (post.title?.substring(0, 10) + (post.title && post.title.length > 10 ? '...' : '')) || ''
     }
     return ''
   }
   const bubbleText = getBubbleText()
+
+  const ringAnimClass = isQuestionUnresolved ? 'marker-pulse' : isDiaryRecent ? 'marker-sparkle' : ''
+  const glowAnimClass = isDiaryRecent ? 'marker-glow' : ''
 
   const iconHtml = `
     <div class="custom-marker-wrapper" style="
@@ -156,8 +66,7 @@ function createMarkerIcon(
       transition: transform 0.2s ease;
       transform: scale(${scale});
     ">
-      <!-- 外側のリング（投稿種別と緊急度表示） -->
-      <div style="
+      <div class="${ringAnimClass}" style="
         position: absolute;
         width: ${size * 1.8}px;
         height: ${size * 1.8}px;
@@ -165,24 +74,7 @@ function createMarkerIcon(
         border: ${style.ringWidth}px solid ${style.ringColor};
         background: rgba(255, 255, 255, 0.9);
         box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        ${isQuestionUnresolved ? 'animation: pulse-ring 2s infinite;' : ''}
-        ${isDiaryRecent ? 'animation: sparkle 2s infinite;' : ''}
       "></div>
-      
-      <!-- キラキラエフェクト（24時間以内の日記） -->
-      ${isDiaryRecent ? `
-        <div style="
-          position: absolute;
-          width: ${size * 1.8}px;
-          height: ${size * 1.8}px;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, transparent 70%);
-          animation: sparkle-rotate 3s linear infinite;
-          pointer-events: none;
-        "></div>
-      ` : ''}
-      
-      <!-- 投稿種別の形状インジケーター（小さなバッジ） -->
       <div style="
         position: absolute;
         top: -2px;
@@ -204,32 +96,25 @@ function createMarkerIcon(
       ">
         ${style.shape === 'diamond' ? '' : style.icon}
       </div>
-      
-      <!-- メインアイコン（投稿者の画像） -->
-      <div style="
+      <div class="${glowAnimClass}" style="
         position: relative;
         width: ${size}px;
         height: ${size}px;
         border-radius: 50%;
         border: 3px solid white;
         overflow: hidden;
-        background: ${defaultBgColor};
+        background: ${style.bgColor};
         box-shadow: 0 2px 6px rgba(0,0,0,0.2);
         z-index: 1;
         display: flex;
         align-items: center;
         justify-content: center;
-        ${isDiaryRecent ? 'animation: sparkle-glow 2s infinite;' : ''}
       ">
         ${avatarUrl ? `
-          <img 
-            src="${avatarUrl}" 
+          <img
+            src="${avatarUrl}"
             alt="${authorName}"
-            style="
-              width: 100%;
-              height: 100%;
-              object-fit: cover;
-            "
+            style="width: 100%; height: 100%; object-fit: cover;"
             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
           />
         ` : ''}
@@ -242,13 +127,11 @@ function createMarkerIcon(
           color: white;
           font-weight: bold;
           font-size: ${size * 0.4}px;
-          background: ${defaultBgColor};
+          background: ${style.bgColor};
         ">
           ${initials}
         </div>
       </div>
-      
-      <!-- 吹き出し（つぶやき・質問・日記のタイトル） -->
       ${bubbleText ? `
         <div style="
           position: absolute;
@@ -272,45 +155,6 @@ function createMarkerIcon(
         </div>
       ` : ''}
     </div>
-    <style>
-      @keyframes pulse-ring {
-        0%, 100% {
-          transform: scale(1);
-          opacity: 1;
-        }
-        50% {
-          transform: scale(1.15);
-          opacity: 0.7;
-        }
-      }
-      @keyframes sparkle {
-        0%, 100% {
-          box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7);
-        }
-        50% {
-          box-shadow: 0 0 0 8px rgba(255, 215, 0, 0);
-        }
-      }
-      @keyframes sparkle-rotate {
-        0% {
-          transform: rotate(0deg);
-        }
-        100% {
-          transform: rotate(360deg);
-        }
-      }
-      @keyframes sparkle-glow {
-        0%, 100% {
-          filter: brightness(1);
-        }
-        50% {
-          filter: brightness(1.3);
-        }
-      }
-      .custom-marker-wrapper:hover {
-        transform: scale(1.15) !important;
-      }
-    </style>
   `
 
   return L.divIcon({
@@ -321,26 +165,29 @@ function createMarkerIcon(
   })
 }
 
-export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: MapViewProps) {
+export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: MapComponentProps) {
   const mapRef = useRef<L.Map | null>(null)
-  const markersRef = useRef<L.Marker[]>([])
+  const clusterGroupRef = useRef<any>(null)
+  const mapContainerRef = useRef<HTMLDivElement>(null)
+  const isFirstLoadRef = useRef(true)
   const [showHelp, setShowHelp] = useState(false)
   const [helpDismissed, setHelpDismissed] = useState(false)
-  const universitiesCacheRef = useRef<Map<string, University>>(new Map())
+  const mapIdRef = useRef(`map-${Math.random().toString(36).slice(2, 9)}`)
+
+  const { postCoordinates } = useUniversityCoordinates(posts)
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
+    if (typeof window === 'undefined' || !mapContainerRef.current) return
 
     // 地図の初期化
     if (!mapRef.current) {
-      mapRef.current = L.map('map-container', {
+      mapRef.current = L.map(mapContainerRef.current, {
         zoomControl: true,
         scrollWheelZoom: true,
       }).setView([defaultMapCenter.lat, defaultMapCenter.lng], defaultZoom)
 
-      // モダンなタイルレイヤー（CartoDB Positron）
       L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
         subdomains: 'abcd',
         maxZoom: 19,
       }).addTo(mapRef.current)
@@ -348,267 +195,167 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
 
     const map = mapRef.current
 
-    // 既存のマーカーを削除
-    markersRef.current.forEach(marker => marker.remove())
-    markersRef.current = []
+    // 既存のクラスタグループを削除
+    if (clusterGroupRef.current) {
+      map.removeLayer(clusterGroupRef.current)
+    }
 
-    // 投稿を処理（大学の緯度経度を取得）
-    const processPosts = async () => {
-      const handleMarkerClick = onMarkerClick || (() => {})
-      
-      // マーカーを作成する関数
-      const createMarkerForPost = (
-        map: L.Map,
-        displayPost: Post,
-        coords: { lat: number; lng: number },
-        isSelected: boolean,
-        userData?: UserPostData,
-        locationLabel?: string
-      ) => {
-        // デバッグログ
-        if (displayPost.category === 'chat') {
-          console.log('つぶやきマーカー作成:', {
-            postId: displayPost.id,
-            category: displayPost.category,
-            displayType: userData?.displayType,
-            hasUserData: !!userData
-          })
-        }
+    // マーカークラスタグループを作成
+    const clusterGroup = (L as any).markerClusterGroup({
+      maxClusterRadius: 50,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      zoomToBoundsOnClick: true,
+      iconCreateFunction: (cluster: any) => {
+        const childCount = cluster.getChildCount()
+        // クラスタ内のカテゴリ分布を計算
+        const markers = cluster.getAllChildMarkers()
+        const cats = { question: 0, diary: 0, chat: 0 }
+        markers.forEach((m: any) => {
+          const cat = m.options._postCategory as string
+          if (cat in cats) cats[cat as keyof typeof cats]++
+        })
+        const dominant = Object.entries(cats).sort((a, b) => b[1] - a[1])[0][0]
+        const style = getCategoryStyle(dominant)
 
-        const icon = createMarkerIcon(displayPost, isSelected, userData)
-        const marker = L.marker([coords.lat, coords.lng], { icon }).addTo(map)
+        return L.divIcon({
+          html: `<div style="
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: ${style.bgColor};
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            border: 3px solid white;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+          ">${childCount}</div>`,
+          className: 'custom-cluster-icon',
+          iconSize: L.point(40, 40),
+          iconAnchor: L.point(20, 20),
+        })
+      },
+    })
+    clusterGroupRef.current = clusterGroup
 
-        // ポップアップを作成（displayPostを使用）
-        const style = getCategoryStyle(displayPost.category, displayPost.urgency_level, displayPost.is_resolved)
-        const avatarUrl = displayPost.author?.icon_url
-        const authorName = displayPost.author?.name || '匿名'
-        const initials = authorName.charAt(0).toUpperCase()
-        
-        const popupContent = `
-          <div style="min-width: 200px; padding: 4px;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+    // マーカーを作成
+    postCoordinates.forEach(({ post, coords, locationLabel }) => {
+      const userData = userPostData?.find(data => data.displayPost.id === post.id)
+      const displayPost = userData ? userData.displayPost : post
+      const isSelected = selectedPostId === displayPost.id
+
+      const icon = createMarkerIcon(displayPost, isSelected, userData)
+      const marker = L.marker([coords.lat, coords.lng], {
+        icon,
+        _postCategory: displayPost.category || 'question',
+      } as any)
+
+      // ポップアップ（クリックで表示）
+      const style = getCategoryStyle(displayPost.category, displayPost.urgency_level, displayPost.is_resolved)
+      const avatarUrl = displayPost.author?.icon_url
+      const authorName = displayPost.author?.name || '匿名'
+      const initials = authorName.charAt(0).toUpperCase()
+
+      const popupContent = `
+        <div style="min-width: 200px; padding: 4px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <div style="
+              width: 32px; height: 32px;
+              border-radius: 50%;
+              border: 2px solid ${style.bgColor};
+              overflow: hidden;
+              background: ${style.bgColor};
+              flex-shrink: 0;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            ">
+              ${avatarUrl ? `
+                <img src="${avatarUrl}" alt="${authorName}"
+                  style="width: 100%; height: 100%; object-fit: cover;"
+                  onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                />
+              ` : ''}
               <div style="
-                width: 32px;
-                height: 32px;
-                border-radius: 50%;
-                border: 2px solid ${style.bgColor};
-                overflow: hidden;
-                background: ${style.bgColor};
-                flex-shrink: 0;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-              ">
-                ${avatarUrl ? `
-                  <img 
-                    src="${avatarUrl}" 
-                    alt="${authorName}"
-                    style="width: 100%; height: 100%; object-fit: cover;"
-                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
-                  />
-                ` : ''}
-                <div style="
-                  width: 100%;
-                  height: 100%;
-                  display: ${avatarUrl ? 'none' : 'flex'};
-                  align-items: center;
-                  justify-content: center;
-                  color: white;
-                  font-weight: bold;
-                  font-size: 14px;
-                ">
-                  ${initials}
-                </div>
-              </div>
-              <div style="flex: 1;">
-                <h3 style="font-weight: bold; margin: 0; font-size: 14px; line-height: 1.2;">
-                  ${displayPost.category === 'chat' ? 'つぶやき' : displayPost.title || 'タイトルなし'}
-                </h3>
-                <div style="font-size: 11px; color: #666; margin-top: 2px;">
-                  ${authorName}
-                </div>
-              </div>
+                width: 100%; height: 100%;
+                display: ${avatarUrl ? 'none' : 'flex'};
+                align-items: center; justify-content: center;
+                color: white; font-weight: bold; font-size: 14px;
+              ">${initials}</div>
             </div>
-            ${displayPost.category === 'question' && displayPost.urgency_level && !displayPost.is_resolved ? `
-              <div style="
-                display: inline-block;
-                padding: 2px 8px;
-                border-radius: 12px;
-                background: ${style.ringColor}20;
-                color: ${style.ringColor};
-                font-size: 11px;
-                font-weight: 600;
-                margin-bottom: 8px;
-              ">
-                ${displayPost.urgency_level === 'urgent' ? '緊急' : '通常'}
-              </div>
-            ` : ''}
-            <p style="font-size: 12px; color: #666; margin: 8px 0; line-height: 1.4;">
-              ${displayPost.content.substring(0, 100)}${displayPost.content.length > 100 ? '...' : ''}
-            </p>
-            <div style="font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 8px; margin-top: 8px;">
-              <div>📍 ${locationLabel || '不明'}</div>
-              <a 
-                href="/posts/${displayPost.id}" 
-                style="
-                  display: inline-block;
-                  margin-top: 8px;
-                  padding: 6px 12px;
-                  background: ${style.bgColor};
-                  color: white;
-                  border-radius: 6px;
-                  text-decoration: none;
-                  font-size: 12px;
-                  font-weight: 600;
-                  cursor: pointer;
-                "
-                onclick="
-                  event.preventDefault();
-                  event.stopPropagation();
-                  window.location.href = '/posts/${displayPost.id}';
-                "
-              >
-                詳細を見る →
-              </a>
+            <div style="flex: 1;">
+              <h3 style="font-weight: bold; margin: 0; font-size: 14px; line-height: 1.2;">
+                ${displayPost.category === 'chat' ? 'つぶやき' : displayPost.title || 'タイトルなし'}
+              </h3>
+              <div style="font-size: 11px; color: #666; margin-top: 2px;">${authorName}</div>
             </div>
           </div>
-        `
+          ${displayPost.category === 'question' && displayPost.urgency_level && !displayPost.is_resolved ? `
+            <div style="display: inline-block; padding: 2px 8px; border-radius: 12px;
+              background: ${style.ringColor}20; color: ${style.ringColor};
+              font-size: 11px; font-weight: 600; margin-bottom: 8px;">
+              ${displayPost.urgency_level === 'urgent' ? '緊急' : '通常'}
+            </div>
+          ` : ''}
+          <p style="font-size: 12px; color: #666; margin: 8px 0; line-height: 1.4;">
+            ${displayPost.content.substring(0, 100)}${displayPost.content.length > 100 ? '...' : ''}
+          </p>
+          <div style="font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 8px; margin-top: 8px;">
+            <div style="margin-bottom: 6px;">📍 ${locationLabel || '不明'}</div>
+            <a href="/posts/${displayPost.id}"
+              style="display: inline-block; padding: 6px 12px;
+                background: ${style.bgColor}; color: white; border-radius: 6px;
+                text-decoration: none; font-size: 12px; font-weight: 600; cursor: pointer;"
+              onclick="event.preventDefault(); event.stopPropagation(); window.location.href='/posts/${displayPost.id}';"
+            >詳細を見る →</a>
+          </div>
+        </div>
+      `
 
-        marker.bindPopup(popupContent, {
-          className: 'custom-popup',
-          maxWidth: 250,
-        })
+      marker.bindPopup(popupContent, { className: 'custom-popup', maxWidth: 250 })
 
-        // マーカークリック時の処理（displayPostを使用）- 直接遷移
-        marker.on('click', (e) => {
-          console.log('マーカークリックイベント:', displayPost.id)
-          // クリックイベントで直接遷移
-          if (handleMarkerClick) {
-            console.log('onMarkerClick呼び出し:', displayPost.id)
-            handleMarkerClick(displayPost)
-          }
-        })
-        
-        // マーカーホバー時にポップアップを表示
-        marker.on('mouseover', () => {
-          marker.openPopup()
-          // アイコンを大きく表示
-          marker.setIcon(createMarkerIcon(displayPost, true, userData))
-        })
-        
-        marker.on('mouseout', () => {
-          marker.closePopup()
-          // アイコンを元のサイズに戻す
+      // クリック → ポップアップ表示（Leafletデフォルト動作）
+      // ホバー → アイコン拡大のみ（ポップアップは開かない）
+      marker.on('mouseover', () => {
+        marker.setIcon(createMarkerIcon(displayPost, true, userData))
+      })
+      marker.on('mouseout', () => {
+        if (!marker.isPopupOpen()) {
           marker.setIcon(createMarkerIcon(displayPost, isSelected, userData))
-        })
+        }
+      })
+      marker.on('popupclose', () => {
+        marker.setIcon(createMarkerIcon(displayPost, isSelected, userData))
+      })
 
-        markersRef.current.push(marker)
+      clusterGroup.addLayer(marker)
+    })
+
+    map.addLayer(clusterGroup)
+
+    // 初回のみマーカーに合わせてビューを調整
+    if (isFirstLoadRef.current && postCoordinates.length > 0) {
+      const bounds = clusterGroup.getBounds()
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 5 })
       }
-      
-      // 留学先大学情報を取得（キャッシュを使用）
-      const universityPromises = posts
-        .filter(post => post.author?.study_abroad_university_id)
-        .map(async (post) => {
-          const universityId = post.author?.study_abroad_university_id
-          if (!universityId) return null
-          
-          // キャッシュを確認
-          if (universitiesCacheRef.current.has(universityId)) {
-            return { post, university: universitiesCacheRef.current.get(universityId)! }
-          }
-          
-          // 大学情報を取得
-          const { data: university } = await getUniversityById(universityId)
-          if (university) {
-            universitiesCacheRef.current.set(universityId, university)
-            return { post, university }
-          }
-          
-          return null
-        })
-      
-      const universityData = await Promise.all(universityPromises)
-      const universityMap = new Map(universityData.filter(Boolean).map(item => [item!.post.id, item!.university]))
-
-      // 投稿を国ごとにグループ化（大学の緯度経度がない場合のみ）
-      const postsByCountry = posts.reduce((acc, post) => {
-        const hasUniversityCoords = universityMap.has(post.id) && 
-          universityMap.get(post.id)?.latitude != null && 
-          universityMap.get(post.id)?.longitude != null
-        
-        // 大学の緯度経度がある場合は個別に処理するため、グループ化しない
-        if (hasUniversityCoords) {
-          return acc
-        }
-        
-        const country = post.author?.study_abroad_destination || '不明'
-        if (!acc[country]) {
-          acc[country] = []
-        }
-        acc[country].push(post)
-        return acc
-      }, {} as Record<string, Post[]>)
-
-      // 大学の緯度経度がある投稿を個別に処理
-      posts.forEach((post) => {
-        const university = universityMap.get(post.id)
-        const hasUniversityCoords = university?.latitude != null && university?.longitude != null
-        
-        if (hasUniversityCoords) {
-          // 大学の緯度経度を使用
-          const coords = {
-            lat: university!.latitude!,
-            lng: university!.longitude!
-          }
-          const isSelected = selectedPostId === post.id
-          
-          // ユーザーデータを取得
-          const userData = userPostData?.find(data => data.displayPost.id === post.id)
-          
-          // userPostDataがある場合はdisplayPostを使用（正しいカテゴリを反映）
-          const displayPost = userData ? userData.displayPost : post
-          
-          createMarkerForPost(map, displayPost, coords, isSelected, userData, university!.name_ja || university!.name_en)
-        }
-      })
-
-      // 国ごとにグループ化された投稿を処理
-      Object.entries(postsByCountry).forEach(([country, countryPosts]) => {
-        const baseCoords = getCountryCoordinates(country)
-        if (!baseCoords) return
-
-        countryPosts.forEach((post, index) => {
-          const coords = getOffsetCoordinates(baseCoords, index, countryPosts.length)
-          const isSelected = selectedPostId === post.id
-          
-          // ユーザーデータを取得
-          const userData = userPostData?.find(data => data.displayPost.id === post.id)
-          
-          // userPostDataがある場合はdisplayPostを使用（正しいカテゴリを反映）
-          const displayPost = userData ? userData.displayPost : post
-          
-          createMarkerForPost(map, displayPost, coords, isSelected, userData, country)
-        })
-      })
+      isFirstLoadRef.current = false
     }
-
-    processPosts()
-
-    // 地図のビューは常に世界全体を表示（マーカーに合わせてズームしない）
-    // ユーザーが手動でズーム・パンできるようにする
-    map.setView([defaultMapCenter.lat, defaultMapCenter.lng], defaultZoom)
 
     return () => {
-      // クリーンアップ
-      markersRef.current.forEach(marker => marker.remove())
-      markersRef.current = []
+      if (clusterGroupRef.current) {
+        map.removeLayer(clusterGroupRef.current)
+        clusterGroupRef.current = null
+      }
     }
-  }, [posts, userPostData, onMarkerClick, selectedPostId])
+  }, [postCoordinates, userPostData, onMarkerClick, selectedPostId])
 
   return (
-    <div className="relative w-full h-[600px] rounded-2xl overflow-hidden shadow-lg border-2 border-gray-200">
+    <div className="relative w-full h-[60vh] min-h-[400px] max-h-[800px] rounded-2xl overflow-hidden shadow-lg border-2 border-gray-200">
       <div
-        id="map-container"
+        ref={mapContainerRef}
         style={{
           width: '100%',
           height: '100%',
@@ -618,7 +365,7 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
           zIndex: 1,
         }}
       />
-      
+
       {/* ヘルプボタン */}
       <button
         onClick={() => setShowHelp(!showHelp)}
@@ -630,16 +377,13 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
 
       {/* 操作説明パネル */}
       {showHelp && (
-        <div className="absolute top-16 right-4 z-[1000] bg-white/95 backdrop-blur-md rounded-xl shadow-xl p-5 max-w-xs border border-gray-200 animate-in slide-in-from-right">
+        <div className="absolute top-16 right-4 z-[1000] bg-white/95 backdrop-blur-md rounded-xl shadow-xl p-5 max-w-xs border border-gray-200">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-bold text-gray-900 flex items-center gap-2">
               <Info className="h-4 w-4 text-blue-600" />
               操作方法
             </h3>
-            <button
-              onClick={() => setShowHelp(false)}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
+            <button onClick={() => setShowHelp(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -668,7 +412,7 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
               </div>
               <div>
                 <div className="font-semibold">ピンクリック</div>
-                <div className="text-xs text-gray-600">投稿詳細へ</div>
+                <div className="text-xs text-gray-600">ポップアップ表示 → 詳細へ</div>
               </div>
             </div>
             <div className="flex items-start gap-2">
@@ -677,16 +421,13 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
               </div>
               <div>
                 <div className="font-semibold">ホバー</div>
-                <div className="text-xs text-gray-600">ピンにマウスを合わせると詳細表示</div>
+                <div className="text-xs text-gray-600">ピンにマウスを合わせるとハイライト</div>
               </div>
             </div>
           </div>
           {!helpDismissed && (
             <button
-              onClick={() => {
-                setHelpDismissed(true)
-                setShowHelp(false)
-              }}
+              onClick={() => { setHelpDismissed(true); setShowHelp(false) }}
               className="mt-4 w-full text-xs text-gray-500 hover:text-gray-700 transition-colors"
             >
               次回から非表示にする
@@ -708,6 +449,10 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
           background: transparent !important;
           border: none !important;
         }
+        .custom-cluster-icon {
+          background: transparent !important;
+          border: none !important;
+        }
         .leaflet-container {
           z-index: 1 !important;
         }
@@ -717,6 +462,34 @@ export function MapView({ posts, userPostData, onMarkerClick, selectedPostId }: 
         }
         .leaflet-popup-tip {
           box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+        }
+        .marker-cluster-small,
+        .marker-cluster-medium,
+        .marker-cluster-large {
+          background: transparent !important;
+        }
+        .marker-cluster-small div,
+        .marker-cluster-medium div,
+        .marker-cluster-large div {
+          background: transparent !important;
+        }
+        @keyframes pulse-ring {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.15); opacity: 0.7; }
+        }
+        @keyframes sparkle {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); }
+          50% { box-shadow: 0 0 0 8px rgba(255, 215, 0, 0); }
+        }
+        @keyframes sparkle-glow {
+          0%, 100% { filter: brightness(1); }
+          50% { filter: brightness(1.3); }
+        }
+        .marker-pulse { animation: pulse-ring 2s infinite; }
+        .marker-sparkle { animation: sparkle 2s infinite; }
+        .marker-glow { animation: sparkle-glow 2s infinite; }
+        .custom-marker-wrapper:hover {
+          transform: scale(1.15) !important;
         }
       `}</style>
     </div>

@@ -70,5 +70,14 @@ describe('AccountBadge', () => {
     const badge = container.querySelector('.text-xs')
     expect(badge).toBeInTheDocument()
   })
+
+  it('should show icon only when iconOnly is true', () => {
+    const { container, queryByText } = render(
+      <AccountBadge accountType="educational" verificationStatus="verified" iconOnly />
+    )
+    expect(queryByText('教育機関')).not.toBeInTheDocument()
+    const badge = container.firstChild as HTMLElement
+    expect(badge?.getAttribute('title')).toBe('教育機関')
+  })
 })
 

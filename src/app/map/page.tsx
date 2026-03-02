@@ -3,40 +3,41 @@
 import { useEffect, useState, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '@/lib/supabase'
-import type { Post, User } from '@/lib/supabase'
-import { MapPin, MessageSquare, BookOpen, HelpCircle, Clock, X, Users, MessageCircle, Filter, Search } from 'lucide-react'
+import type { Post } from '@/lib/supabase'
+import { MapPin, BookOpen, HelpCircle, Clock, X, MessageCircle, Filter, Search, List } from 'lucide-react'
 import { UserAvatar } from '@/components/UserAvatar'
 import Link from 'next/link'
 import { useAuth } from '@/components/Providers'
 import { useRouter } from 'next/navigation'
+import type { UserPostData } from '@/lib/mapUtils'
 
 // 地図コンポーネントを動的インポート（SSRを無効化）
 const MapView = dynamic(() => import('@/components/MapView').then(mod => ({ default: mod.MapView })), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center h-[600px]">
+    <div className="flex items-center justify-center h-[60vh] min-h-[400px]">
       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
     </div>
   )
 })
 
-// 3D地球コンポーネントを動的インポート（SSRを無効化）
-const Globe3D = dynamic(() => import('@/components/Globe3D').then(mod => ({ default: mod.Globe3D })), {
+const Globe3D = dynamic(() => import('@/components/GlobeOptionA').then(mod => ({ default: mod.GlobeOptionA })), {
   ssr: false,
   loading: () => (
-    <div className="flex items-center justify-center h-[600px]">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+    <div className="flex items-center justify-center h-[60vh] min-h-[400px] bg-white rounded-2xl">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-500"></div>
     </div>
   )
 })
 
-// ユーザーごとの投稿データ型
-interface UserPostData {
-  user: User
-  posts: Post[]
-  displayPost: Post // 表示する投稿（優先順位に基づく）
-  displayType: 'question' | 'diary' | 'chat' | 'normal'
-}
+const MapListView = dynamic(() => import('@/components/MapListView').then(mod => ({ default: mod.MapListView })), {
+  ssr: false,
+  loading: () => (
+    <div className="flex items-center justify-center h-[60vh] min-h-[400px]">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+    </div>
+  )
+})
 
 export default function MapPage() {
   const { user } = useAuth()
@@ -48,7 +49,7 @@ export default function MapPage() {
   const [selectedCountry, setSelectedCountry] = useState<string>('all')
   const [selectedCommunity, setSelectedCommunity] = useState<string>('all')
   const [selectedUser, setSelectedUser] = useState<UserPostData | null>(null)
-  const [viewMode, setViewMode] = useState<'2D' | '3D'>('2D')
+  const [viewMode, setViewMode] = useState<'2D' | '3D' | 'list'>('2D')
   const [showFilters, setShowFilters] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -59,31 +60,25 @@ export default function MapPage() {
   const fetchPosts = async () => {
     try {
       setLoading(true)
-      
-      // 投稿を取得（位置情報が設定されている投稿のみ）
-      // profilesテーブルから位置情報を取得してフィルタリング
+
       let query = supabase
         .from('posts')
         .select(`
           *,
           author:profiles(id, name, icon_url, account_type, verification_status, organization_name, study_abroad_destination, languages, university_id, study_abroad_university_id)
         `)
-        .is('community_id', null) // コミュニティ限定投稿は除外
+        .is('community_id', null)
         .in('category', ['question', 'diary', 'chat'])
 
-      // カテゴリフィルター
       if (selectedCategory !== 'all') {
         query = query.eq('category', selectedCategory)
       }
 
-      // 緊急度フィルター（質問の場合のみ）
       if (selectedCategory === 'question' || selectedCategory === 'all') {
         if (selectedUrgency !== 'all') {
           query = query.eq('urgency_level', selectedUrgency)
         }
       }
-
-      // 国フィルターは後でJavaScriptで行う（投稿テーブルにはstudy_abroad_destinationがないため）
 
       query = query.order('created_at', { ascending: false }).limit(500)
 
@@ -95,62 +90,25 @@ export default function MapPage() {
         return
       }
 
-      console.log('Raw posts fetched:', data?.length || 0, 'posts')
-      
-      // デバッグ: すべての投稿のカテゴリを確認
-      if (data && data.length > 0) {
-        console.log('投稿のカテゴリ一覧:')
-        data.forEach((post, index) => {
-          console.log(`Post ${index + 1}:`, {
-            id: post.id,
-            category: post.category,
-            title: post.title?.substring(0, 20),
-            content: post.content?.substring(0, 20)
-          })
-        })
-      }
-
-      // 現役留学生のみを表示: student_statusが'current'で、study_abroad_destinationが設定されている（日本も含む）
+      // マップ表示対象:
+      // 1) 現役留学生 → プロフィールに留学先があれば全投稿を表示
+      // 2) 準備中・帰国済み → 投稿自体に留学先 or 大学が紐づいていれば表示
       const filteredPosts = (data || []).filter(post => {
-        // authorの情報を確認
-        const country = post.author?.study_abroad_destination
+        const authorDest = post.author?.study_abroad_destination
         const languages = post.author?.languages || []
-        
-        // 位置情報がない場合は除外
-        if (!country) {
-          return false
-        }
-        
-        // languages配列からstatus:currentを探す（現役留学生の判定）
         const isCurrentStudent = languages.some((lang: string) => lang === 'status:current')
-        
-        // 現役留学生でない場合は除外
-        if (!isCurrentStudent) {
-          return false
+
+        if (isCurrentStudent && authorDest) return true
+
+        const postDest = post.study_abroad_destination
+        const postUniId = post.university_id
+        if (postDest || postUniId) {
+          return !!(authorDest || postDest)
         }
-        
-        return true
+
+        return false
       })
 
-      console.log('Filtered posts (留学生のみ):', filteredPosts.length, 'posts')
-      
-      // デバッグ情報
-      if (filteredPosts.length === 0 && data && data.length > 0) {
-        console.log('フィルタリング結果: 投稿はありますが、留学生の条件を満たすものがありません')
-        console.log('最初の3件の投稿の詳細:')
-        data.slice(0, 3).forEach((post, index) => {
-          console.log(`Post ${index + 1}:`, {
-            id: post.id,
-            category: post.category,
-            author: post.author ? {
-              name: post.author.name,
-              study_abroad_destination: post.author.study_abroad_destination,
-              student_status: post.author.student_status
-            } : 'No author data'
-          })
-        })
-      }
-      
       setAllPosts(filteredPosts)
     } catch (error) {
       console.error('Error fetching posts:', error)
@@ -159,13 +117,26 @@ export default function MapPage() {
     }
   }
 
+  // 投稿の優先度を計算
+  function getPostPriority(post: Post, now: Date): number {
+    const postDate = new Date(post.created_at)
+    const hoursSincePost = (now.getTime() - postDate.getTime()) / (1000 * 60 * 60)
+    const category = post.category || 'question'
+
+    if (category === 'question' && !post.is_resolved) {
+      return 100 + (post.urgency_level === 'urgent' ? 2 : 1)
+    }
+    if (category === 'diary' && hoursSincePost <= 24) return 50
+    if (category === 'chat' && hoursSincePost <= 24) return 30
+    return 10
+  }
+
   // ユーザーごとにグループ化し、表示優先順位に基づいて表示する投稿を決定
   const userPostData = useMemo(() => {
     const userMap = new Map<string, UserPostData>()
 
     allPosts.forEach(post => {
       if (!post.author) return
-
       const userId = post.author.id
 
       if (!userMap.has(userId)) {
@@ -180,127 +151,52 @@ export default function MapPage() {
       const userData = userMap.get(userId)!
       userData.posts.push(post)
 
-      // 表示優先順位: 未解決の質問 > 24時間以内の日記 > 24時間以内のつぶやき
       const now = new Date()
       const currentPriority = getPostPriority(userData.displayPost, now)
       const newPriority = getPostPriority(post, now)
-      
-      // デバッグログ（つぶやきの場合のみ）
-      if (post.category === 'chat') {
-        console.log('つぶやきの優先度計算:', {
-          postId: post.id,
-          category: post.category,
-          newPriority,
-          currentPriority,
-          willUpdate: newPriority > currentPriority,
-          currentDisplayPost: userData.displayPost.id,
-          currentDisplayPostCategory: userData.displayPost.category
-        })
-      }
 
       if (newPriority > currentPriority) {
-        const postCategory = post.category || 'question'
         userData.displayPost = post
-        userData.displayType = postCategory as 'question' | 'diary' | 'chat' | 'normal'
-        // デバッグログ
-        console.log('displayPost更新:', {
-          postId: post.id,
-          category: post.category,
-          postCategory,
-          displayType: userData.displayType,
-          priority: newPriority,
-          previousPriority: currentPriority,
-          previousDisplayPost: userData.displayPost.id,
-          previousDisplayType: userData.displayType
-        })
+        userData.displayType = (post.category || 'question') as 'question' | 'diary' | 'chat' | 'normal'
       }
     })
 
-    const result = Array.from(userMap.values())
-    console.log('ユーザーごとにグループ化:', result.length, 'users')
-    return result
+    return Array.from(userMap.values())
   }, [allPosts])
-
-  // 投稿の優先度を計算（数値が大きいほど優先）
-  // 優先順位: 未解決の質問 > 24時間以内の日記 > 24時間以内のつぶやき
-  function getPostPriority(post: Post, now: Date): number {
-    const postDate = new Date(post.created_at)
-    const hoursSincePost = (now.getTime() - postDate.getTime()) / (1000 * 60 * 60)
-    const category = post.category || 'question' // フォールバック
-
-    // デバッグログ（つぶやきの場合のみ詳細に）
-    if (category === 'chat') {
-      console.log('getPostPriority - つぶやき:', {
-        postId: post.id,
-        category: post.category,
-        categoryVar: category,
-        hoursSincePost,
-        priority: hoursSincePost <= 24 ? 30 : 10
-      })
-    }
-
-    // 未解決の質問: 優先度 100 + 緊急度
-    if (category === 'question' && !post.is_resolved) {
-      const urgencyScore = post.urgency_level === 'urgent' ? 2 : 1
-      return 100 + urgencyScore
-    }
-
-    // 24時間以内の日記: 優先度 50
-    if (category === 'diary' && hoursSincePost <= 24) {
-      return 50
-    }
-
-    // 24時間以内のつぶやき: 優先度 30
-    if (category === 'chat' && hoursSincePost <= 24) {
-      return 30
-    }
-
-    // その他: 優先度 10
-    return 10
-  }
 
   // フィルタリング後のユーザーデータ
   const filteredUserData = useMemo(() => {
     let filtered = userPostData
 
-    // カテゴリフィルター
     if (selectedCategory !== 'all') {
       filtered = filtered.filter(data => data.displayType === selectedCategory)
     }
 
-    // 緊急度フィルター（質問の場合のみ）
     if (selectedCategory === 'question' || selectedCategory === 'all') {
       if (selectedUrgency !== 'all') {
-        filtered = filtered.filter(data => 
-          data.displayType === 'question' && 
+        filtered = filtered.filter(data =>
+          data.displayType === 'question' &&
           data.displayPost.urgency_level === selectedUrgency
         )
       }
     }
 
-    // 国フィルター
     if (selectedCountry !== 'all') {
-      filtered = filtered.filter(data => 
+      filtered = filtered.filter(data =>
         data.user.study_abroad_destination === selectedCountry
       )
     }
 
-    // 検索フィルター
     if (searchTerm.trim()) {
       const searchLower = searchTerm.toLowerCase()
       filtered = filtered.filter(data => {
         const post = data.displayPost
         const user = data.user
-        const title = post.title || ''
-        const content = post.content || ''
-        const userName = user.name || ''
-        const country = user.study_abroad_destination || ''
-        
         return (
-          title.toLowerCase().includes(searchLower) ||
-          content.toLowerCase().includes(searchLower) ||
-          userName.toLowerCase().includes(searchLower) ||
-          country.toLowerCase().includes(searchLower)
+          (post.title || '').toLowerCase().includes(searchLower) ||
+          (post.content || '').toLowerCase().includes(searchLower) ||
+          (user.name || '').toLowerCase().includes(searchLower) ||
+          (user.study_abroad_destination || '').toLowerCase().includes(searchLower)
         )
       })
     }
@@ -308,22 +204,10 @@ export default function MapPage() {
     return filtered
   }, [userPostData, selectedCategory, selectedUrgency, selectedCountry, searchTerm])
 
-  // 表示用の投稿リスト（MapViewに渡す）
   const displayPosts = useMemo(() => {
-    const posts = filteredUserData.map(data => data.displayPost)
-    // デバッグログ
-    const chatPosts = posts.filter(p => p.category === 'chat')
-    if (chatPosts.length > 0) {
-      console.log('displayPosts内のつぶやき:', chatPosts.map(p => ({
-        id: p.id,
-        category: p.category,
-        content: p.content.substring(0, 20)
-      })))
-    }
-    return posts
+    return filteredUserData.map(data => data.displayPost)
   }, [filteredUserData])
 
-  // 国リスト（フィルター用）
   const countries = useMemo(() => {
     const countrySet = new Set<string>()
     userPostData.forEach(data => {
@@ -335,8 +219,6 @@ export default function MapPage() {
   }, [userPostData])
 
   const handleMarkerClick = (post: Post) => {
-    console.log('マーカークリック:', post.id, post.title)
-    // 投稿詳細ページに遷移
     router.push(`/posts/${post.id}`)
   }
 
@@ -362,9 +244,7 @@ export default function MapPage() {
         {/* ヘッダー */}
         <div className="mb-6">
           <div className="mb-2">
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              マップ
-            </h1>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">マップ</h1>
             <p className="text-sm text-gray-600">世界で挑戦している現役留学生の「今」をチェックしよう</p>
           </div>
         </div>
@@ -395,7 +275,7 @@ export default function MapPage() {
           </form>
         </div>
 
-        {/* フィルター表示/非表示ボタンと2D/3D切り替え */}
+        {/* フィルター表示/非表示ボタンとビュー切り替え */}
         <div className="mb-4 flex items-center justify-between gap-3">
           <button
             onClick={() => setShowFilters(!showFilters)}
@@ -412,38 +292,31 @@ export default function MapPage() {
                 <span>フィルターを表示</span>
                 {(selectedCategory !== 'all' || selectedUrgency !== 'all' || selectedCountry !== 'all') && (
                   <span className="ml-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white text-xs px-2.5 py-1 rounded-full font-semibold">
-                    {[
-                      selectedCategory !== 'all' ? 1 : 0,
-                      selectedUrgency !== 'all' ? 1 : 0,
-                      selectedCountry !== 'all' ? 1 : 0
-                    ].reduce((a, b) => a + b, 0)}
+                    {[selectedCategory !== 'all' ? 1 : 0, selectedUrgency !== 'all' ? 1 : 0, selectedCountry !== 'all' ? 1 : 0].reduce((a, b) => a + b, 0)}
                   </span>
                 )}
               </>
             )}
           </button>
-          {/* 2D/3D切り替えボタン */}
-          <div className="flex items-center space-x-2 bg-white rounded-xl p-1 shadow-md border border-gray-200">
-            <button
-              onClick={() => setViewMode('2D')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                viewMode === '2D'
-                  ? 'bg-gray-900 text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              2D
-            </button>
-            <button
-              onClick={() => setViewMode('3D')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                viewMode === '3D'
-                  ? 'bg-gray-900 text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              3D
-            </button>
+          {/* ビュー切り替えボタン */}
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="flex items-center space-x-1 bg-white rounded-xl p-1 shadow-md border border-gray-200">
+              <button
+                onClick={() => setViewMode('2D')}
+                className={`px-3 py-2 rounded-lg font-medium text-sm transition-colors ${viewMode === '2D' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              >2D</button>
+              <button
+                onClick={() => setViewMode('3D')}
+                className={`px-3 py-2 rounded-lg font-medium text-sm transition-colors ${viewMode === '3D' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              >3D</button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-2 rounded-lg font-medium text-sm transition-colors flex items-center gap-1.5 ${viewMode === 'list' ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              >
+                <List className="h-3.5 w-3.5" />
+                リスト
+              </button>
+            </div>
           </div>
         </div>
 
@@ -451,86 +324,51 @@ export default function MapPage() {
         {showFilters && (
           <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* カテゴリフィルター */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  投稿タイプ
-                </label>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value as any)}
-                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
+                <label className="block text-sm font-medium text-gray-700 mb-2">投稿タイプ</label>
+                <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value as any)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
                   <option value="all">すべて</option>
                   <option value="question">質問</option>
                   <option value="diary">日記</option>
                   <option value="chat">つぶやき</option>
                 </select>
               </div>
-
-              {/* 緊急度フィルター（質問の場合のみ表示） */}
               {(selectedCategory === 'question' || selectedCategory === 'all') && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    緊急度
-                  </label>
-                  <select
-                    value={selectedUrgency}
-                    onChange={(e) => setSelectedUrgency(e.target.value as any)}
-                    className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  >
+                  <label className="block text-sm font-medium text-gray-700 mb-2">緊急度</label>
+                  <select value={selectedUrgency} onChange={(e) => setSelectedUrgency(e.target.value as any)}
+                    className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
                     <option value="all">すべて</option>
                     <option value="normal">通常</option>
                     <option value="urgent">緊急</option>
                   </select>
                 </div>
               )}
-
-              {/* 国フィルター */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  国・地域
-                </label>
-                <select
-                  value={selectedCountry}
-                  onChange={(e) => setSelectedCountry(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
+                <label className="block text-sm font-medium text-gray-700 mb-2">国・地域</label>
+                <select value={selectedCountry} onChange={(e) => setSelectedCountry(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent">
                   <option value="all">すべて</option>
                   {countries.map(country => (
                     <option key={country} value={country}>{country}</option>
                   ))}
                 </select>
               </div>
-
-              {/* 所属コミュニティフィルター（将来実装） */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  所属コミュニティ
-                </label>
-                <select
-                  value={selectedCommunity}
-                  onChange={(e) => setSelectedCommunity(e.target.value)}
+                <label className="block text-sm font-medium text-gray-700 mb-2">所属コミュニティ</label>
+                <select value={selectedCommunity} onChange={(e) => setSelectedCommunity(e.target.value)}
                   className="w-full px-4 py-2 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  disabled
-                >
+                  disabled>
                   <option value="all">すべて</option>
                   <option value="coming-soon">準備中</option>
                 </select>
               </div>
             </div>
-
-            {/* フィルターリセット */}
             {(selectedCategory !== 'all' || selectedUrgency !== 'all' || selectedCountry !== 'all') && (
               <div className="mt-4">
-                <button
-                  onClick={() => {
-                    setSelectedCategory('all')
-                    setSelectedUrgency('all')
-                    setSelectedCountry('all')
-                  }}
-                  className="text-sm text-primary-600 hover:text-primary-800 font-semibold transition-colors"
-                >
+                <button onClick={() => { setSelectedCategory('all'); setSelectedUrgency('all'); setSelectedCountry('all') }}
+                  className="text-sm text-primary-600 hover:text-primary-800 font-semibold transition-colors">
                   フィルターをリセット
                 </button>
               </div>
@@ -538,7 +376,7 @@ export default function MapPage() {
           </div>
         )}
 
-        {/* フィルターが非表示でも、フィルターが適用されている場合は簡易表示 */}
+        {/* フィルター簡易表示 */}
         {!showFilters && (selectedCategory !== 'all' || selectedUrgency !== 'all' || selectedCountry !== 'all') && (
           <div className="mb-6 flex flex-wrap gap-2">
             {selectedCategory !== 'all' && (
@@ -571,14 +409,21 @@ export default function MapPage() {
               </div>
             )}
             {viewMode === '2D' ? (
-              <MapView 
+              <MapView
+                posts={displayPosts}
+                userPostData={filteredUserData}
+                onMarkerClick={handleMarkerClick}
+                selectedPostId={selectedUser?.displayPost.id}
+              />
+            ) : viewMode === '3D' ? (
+              <Globe3D
                 posts={displayPosts}
                 userPostData={filteredUserData}
                 onMarkerClick={handleMarkerClick}
                 selectedPostId={selectedUser?.displayPost.id}
               />
             ) : (
-              <Globe3D 
+              <MapListView
                 posts={displayPosts}
                 userPostData={filteredUserData}
                 onMarkerClick={handleMarkerClick}
@@ -603,22 +448,13 @@ export default function MapPage() {
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-gray-900">ユーザー情報</h3>
-                <button
-                  onClick={() => setSelectedUser(null)}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                >
+                <button onClick={() => setSelectedUser(null)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
                   <X className="h-5 w-5 text-gray-500" />
                 </button>
               </div>
-
-              {/* ユーザー情報 */}
               <div className="space-y-4">
                 <div className="flex items-center space-x-3">
-                  <UserAvatar 
-                    iconUrl={selectedUser.user.icon_url} 
-                    name={selectedUser.user.name} 
-                    size="lg"
-                  />
+                  <UserAvatar iconUrl={selectedUser.user.icon_url} name={selectedUser.user.name} size="lg" />
                   <div>
                     <h4 className="font-bold text-gray-900">{selectedUser.user.name}</h4>
                     {selectedUser.user.study_abroad_destination && (
@@ -629,14 +465,9 @@ export default function MapPage() {
                     )}
                   </div>
                 </div>
-
-                {/* 最新投稿（表示タイプ別） */}
                 <div className="border-t border-gray-200 pt-4">
                   <h5 className="text-sm font-semibold text-gray-700 mb-2">最新の活動</h5>
-                  <Link
-                    href={`/posts/${selectedUser.displayPost.id}`}
-                    className="block group"
-                  >
+                  <Link href={`/posts/${selectedUser.displayPost.id}`} className="block group">
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium text-white ${
@@ -644,30 +475,10 @@ export default function MapPage() {
                           selectedUser.displayType === 'diary' ? 'bg-green-500' :
                           selectedUser.displayType === 'chat' ? 'bg-purple-500' : 'bg-gray-500'
                         }`}>
-                          {(() => {
-                            const getIcon = () => {
-                              switch (selectedUser.displayType) {
-                                case 'question': return <HelpCircle className="h-3 w-3 text-white" />
-                                case 'diary': return <BookOpen className="h-3 w-3 text-white" />
-                                case 'chat': return <MessageCircle className="h-3 w-3 text-white" />
-                                default: return null
-                              }
-                            }
-                            const getLabel = () => {
-                              switch (selectedUser.displayType) {
-                                case 'question': return '質問'
-                                case 'diary': return '日記'
-                                case 'chat': return 'つぶやき'
-                                default: return '投稿'
-                              }
-                            }
-                            return (
-                              <>
-                                {getIcon()}
-                                {getLabel()}
-                              </>
-                            )
-                          })()}
+                          {selectedUser.displayType === 'question' && <HelpCircle className="h-3 w-3 text-white inline mr-1" />}
+                          {selectedUser.displayType === 'diary' && <BookOpen className="h-3 w-3 text-white inline mr-1" />}
+                          {selectedUser.displayType === 'chat' && <MessageCircle className="h-3 w-3 text-white inline mr-1" />}
+                          {selectedUser.displayType === 'question' ? '質問' : selectedUser.displayType === 'diary' ? '日記' : selectedUser.displayType === 'chat' ? 'つぶやき' : '投稿'}
                         </span>
                         {selectedUser.displayType === 'question' && selectedUser.displayPost.urgency_level && (
                           <span className={`px-2 py-1 rounded-full text-xs font-medium text-white ${getUrgencyColor(selectedUser.displayPost.urgency_level)}`}>
@@ -680,9 +491,7 @@ export default function MapPage() {
                           {selectedUser.displayPost.title}
                         </h6>
                       )}
-                      <p className="text-xs text-gray-600 line-clamp-3">
-                        {selectedUser.displayPost.content}
-                      </p>
+                      <p className="text-xs text-gray-600 line-clamp-3">{selectedUser.displayPost.content}</p>
                       <div className="flex items-center space-x-1 text-xs text-gray-500">
                         <Clock className="h-3 w-3" />
                         <span>{new Date(selectedUser.displayPost.created_at).toLocaleDateString('ja-JP')}</span>
@@ -690,13 +499,8 @@ export default function MapPage() {
                     </div>
                   </Link>
                 </div>
-
-                {/* プロフィールへのリンク */}
                 <div className="pt-3 border-t border-gray-200">
-                  <Link
-                    href={`/profile/${selectedUser.user.id}`}
-                    className="text-primary-600 hover:text-primary-800 font-semibold text-sm"
-                  >
+                  <Link href={`/profile/${selectedUser.user.id}`} className="text-primary-600 hover:text-primary-800 font-semibold text-sm">
                     プロフィールを見る →
                   </Link>
                 </div>
