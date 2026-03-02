@@ -7,6 +7,7 @@ import { createCommunity } from '@/lib/community'
 import { uploadFile, validateFileType, validateFileSize, FILE_TYPES } from '@/lib/storage'
 import { DEFAULT_COMMUNITY_COVERS } from '@/config/theme-config'
 import { ArrowLeft, Save, X, Image as ImageIcon } from 'lucide-react'
+import { TIMEZONE_GROUPS } from '@/lib/timezone'
 
 export default function NewCommunity() {
   const { user } = useAuth()
@@ -18,7 +19,8 @@ export default function NewCommunity() {
     name: '',
     description: '',
     visibility: 'public' as 'public' | 'private',
-    community_type: (user?.account_type === 'individual' ? 'guild' : 'official') as 'guild' | 'official'
+    community_type: (user?.account_type === 'individual' ? 'guild' : 'official') as 'guild' | 'official',
+    timezone: ''
   })
   const [coverImage, setCoverImage] = useState<File | null>(null)
   const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null)
@@ -147,7 +149,8 @@ export default function NewCommunity() {
         coverImageUrl,
         iconImageUrl,
         formData.visibility,
-        formData.community_type
+        formData.community_type,
+        formData.timezone || undefined
       )
 
       router.push(`/communities/${community.id}`)
@@ -448,6 +451,34 @@ export default function NewCommunity() {
               <option value="public">公開（誰でも検索可能）</option>
               <option value="private">非公開（URLを知っている人のみ）</option>
             </select>
+          </div>
+
+          {/* タイムゾーン */}
+          <div>
+            <label htmlFor="timezone" className="block text-sm font-medium text-gray-700 mb-2">
+              タイムゾーン（任意）
+            </label>
+            <select
+              id="timezone"
+              name="timezone"
+              value={formData.timezone}
+              onChange={handleChange}
+              className="input-field"
+            >
+              <option value="">未設定</option>
+              {TIMEZONE_GROUPS.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.options.map((tz) => (
+                    <option key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              設定すると、コミュニティページに現地時刻が表示されます
+            </p>
           </div>
 
           {/* ボタン */}

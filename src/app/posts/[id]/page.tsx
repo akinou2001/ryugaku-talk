@@ -13,6 +13,7 @@ import { UserAvatar } from '@/components/UserAvatar'
 import { StudentStatusBadge } from '@/components/StudentStatusBadge'
 import ReactMarkdown from 'react-markdown'
 import { MarkdownEditor } from '@/components/MarkdownEditor'
+import { formatPostLocalTime, getTimezoneAbbreviation } from '@/lib/timezone'
 import { uploadFile, validateFileType, validateFileSize, FILE_TYPES } from '@/lib/storage'
 import { ReportModal } from '@/components/ReportModal'
 import { getUniversityById, type University } from '@/lib/universities'
@@ -175,7 +176,7 @@ export default function PostDetail() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, university, university_id, study_abroad_destination, study_abroad_university_id, major, account_type, verification_status, organization_name, icon_url, languages, is_operator)
+          author:profiles(name, university, university_id, study_abroad_destination, study_abroad_university_id, major, account_type, verification_status, organization_name, icon_url, languages, is_operator, timezone)
         `)
         .eq('id', postId)
         .single()
@@ -1002,9 +1003,16 @@ export default function PostDetail() {
                   })()}
                   {getCategoryLabel(post.category)}
                 </span>
-                <div className="flex items-center text-sm text-gray-500 font-medium">
-                  <Clock className="h-4 w-4 mr-1" />
-                  {formatDate(post.created_at)}
+                <div>
+                  <div className="flex items-center text-sm text-gray-500 font-medium">
+                    <Clock className="h-4 w-4 mr-1" />
+                    {formatDate(post.created_at)}
+                  </div>
+                  {post.author?.timezone && formatPostLocalTime(post.created_at, post.author.timezone) && (
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      現地時間: {formatPostLocalTime(post.created_at, post.author.timezone)} {getTimezoneAbbreviation(post.author.timezone)}
+                    </div>
+                  )}
                 </div>
               </div>
 

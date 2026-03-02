@@ -157,7 +157,8 @@ export async function createCommunity(
   coverImageUrl?: string,
   iconUrl?: string,
   visibility: 'public' | 'private' = 'public',
-  communityType: 'guild' | 'official' = 'official'
+  communityType: 'guild' | 'official' = 'official',
+  timezone?: string
 ) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
@@ -192,7 +193,8 @@ export async function createCommunity(
       icon_url: iconUrl,
       owner_id: user.id,
       visibility,
-      community_type: communityType // サークル or 公式コミュニティ
+      community_type: communityType, // サークル or 公式コミュニティ
+      timezone: timezone || null
     })
     .select(`
       *,
@@ -238,6 +240,7 @@ export async function updateCommunity(
     icon_url?: string
     visibility?: 'public' | 'private'
     is_archived?: boolean
+    timezone?: string | null
   }
 ) {
   const { data: { user } } = await supabase.auth.getUser()
@@ -590,7 +593,7 @@ export async function getCommunityPosts(communityId: string, userId?: string) {
     .from('posts')
     .select(`
       *,
-      author:profiles(id, name, account_type, verification_status, organization_name, icon_url)
+      author:profiles(id, name, account_type, verification_status, organization_name, icon_url, timezone)
     `)
     .eq('community_id', communityId)
     .order('created_at', { ascending: false })
