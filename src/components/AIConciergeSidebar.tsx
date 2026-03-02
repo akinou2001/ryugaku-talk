@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, Search, Trash2, MessageSquare, Menu } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { X, Search, Trash2, MessageSquare } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { useDebounce } from "@/hooks/useDebounce";
 
 interface ChatHistory {
   id: string;
@@ -32,9 +33,12 @@ export function AIConciergeSidebar({
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
+  const debouncedSearch = useDebounce(searchQuery, 300);
 
   // チャット履歴を取得
-  const fetchChatHistory = async (search: string = "") => {
+  const fetchChatHistory = useCallback(async (search: string = "") => {
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -58,16 +62,10 @@ export function AIConciergeSidebar({
 
       if (res.ok) {
         const data = await res.json();
-        console.log("Chat history fetched successfully:", data.chats?.length || 0, "chats");
         setChats(data.chats || []);
         setFilteredChats(data.chats || []);
       } else {
-        const errorData = await res.json().catch(() => ({}));
-        console.error("Failed to fetch chat history:", {
-          status: res.status,
-          statusText: res.statusText,
-          error: errorData.error || 'Unknown error'
-        });
+        console.error("Failed to fetch chat history:", res.status);
         setChats([]);
         setFilteredChats([]);
       }
@@ -78,30 +76,22 @@ export function AIConciergeSidebar({
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // 初回ロード時と検索クエリ変更時に履歴を取得
+  // 初回ロード時とデバウンスされた検索クエリ変更時に履歴を取得
   useEffect(() => {
     if (isOpen) {
-      fetchChatHistory(searchQuery);
+      fetchChatHistory(debouncedSearch);
     }
-  }, [isOpen, searchQuery]);
+  }, [isOpen, debouncedSearch, fetchChatHistory]);
 
   // チャット履歴を削除
-  const handleDelete = async (chatId: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // 親要素のクリックイベントを防ぐ
-    
-    if (!confirm("このチャット履歴を削除しますか？")) {
-      return;
-    }
-
+  const handleDelete = async (chatId: string) => {
     setDeletingId(chatId);
+    setDeleteConfirmId(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        alert("ログインが必要です");
-        return;
-      }
+      if (!session) return;
 
       const res = await fetch(`/api/ai/concierge/history?id=${chatId}`, {
         method: "DELETE",
@@ -111,18 +101,13 @@ export function AIConciergeSidebar({
       });
 
       if (res.ok) {
-        // 削除後に履歴を再取得
-        await fetchChatHistory(searchQuery);
-        // 削除したチャットが現在選択されている場合は、サイドバーを閉じる
+        await fetchChatHistory(debouncedSearch);
         if (currentChatId === chatId) {
           onClose();
         }
-      } else {
-        alert("削除に失敗しました");
       }
     } catch (error) {
       console.error("Error deleting chat:", error);
-      alert("削除に失敗しました");
     } finally {
       setDeletingId(null);
     }
@@ -141,7 +126,7 @@ export function AIConciergeSidebar({
     if (diffMins < 60) return `${diffMins}分前`;
     if (diffHours < 24) return `${diffHours}時間前`;
     if (diffDays < 7) return `${diffDays}日前`;
-    
+
     return date.toLocaleDateString("ja-JP", {
       year: "numeric",
       month: "short",
@@ -153,6 +138,15 @@ export function AIConciergeSidebar({
   const truncateText = (text: string, maxLength: number = 50) => {
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + "...";
+  };
+
+  // チャット選択（デスクトップではサイドバーを閉じない）
+  const handleChatClick = (chat: ChatHistory) => {
+    onSelectChat(chat);
+    // モバイルのみ閉じる
+    if (window.innerWidth < 1024) {
+      onClose();
+    }
   };
 
   return (
@@ -199,15 +193,16 @@ export function AIConciergeSidebar({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                aria-label="チャット履歴を検索"
               />
             </div>
           </div>
 
           {/* チャット履歴リスト */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto" role="list" aria-label="チャット履歴">
             {loading ? (
               <div className="flex items-center justify-center h-32">
-                <div className="w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" role="status" aria-label="読み込み中"></div>
               </div>
             ) : filteredChats.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-32 text-gray-400 px-4">
@@ -221,10 +216,8 @@ export function AIConciergeSidebar({
                 {filteredChats.map((chat) => (
                   <div
                     key={chat.id}
-                    onClick={() => {
-                      onSelectChat(chat);
-                      onClose(); // モバイルでは選択後にサイドバーを閉じる
-                    }}
+                    role="listitem"
+                    onClick={() => handleChatClick(chat)}
                     className={`
                       p-4 cursor-pointer hover:bg-gray-50 transition-colors
                       ${currentChatId === chat.id ? "bg-primary-50 border-l-4 border-primary-600" : ""}
@@ -244,18 +237,42 @@ export function AIConciergeSidebar({
                           )}
                         </div>
                       </div>
-                      <button
-                        onClick={(e) => handleDelete(chat.id, e)}
-                        disabled={deletingId === chat.id}
-                        className="flex-shrink-0 p-1.5 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
-                        aria-label="削除"
-                      >
-                        {deletingId === chat.id ? (
-                          <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
+                      <div className="flex-shrink-0 relative">
+                        {deleteConfirmId === chat.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(chat.id);
+                              }}
+                              disabled={deletingId === chat.id}
+                              className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-colors disabled:opacity-50"
+                            >
+                              {deletingId === chat.id ? '...' : '削除'}
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteConfirmId(null);
+                              }}
+                              className="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+                            >
+                              取消
+                            </button>
+                          </div>
                         ) : (
-                          <Trash2 className="h-4 w-4 text-red-600" />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteConfirmId(chat.id);
+                            }}
+                            className="p-1.5 hover:bg-red-100 rounded-lg transition-colors"
+                            aria-label="削除"
+                          >
+                            <Trash2 className="h-4 w-4 text-red-600" />
+                          </button>
                         )}
-                      </button>
+                      </div>
                     </div>
                   </div>
                 ))}

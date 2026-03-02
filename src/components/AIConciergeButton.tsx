@@ -19,7 +19,7 @@ export function AIConciergeButton() {
   }
 
   return (
-    <div className="fixed bottom-24 right-6 z-[9999]">
+    <div className="fixed bottom-24 right-6 z-50">
       <button
         onClick={handleClick}
         className="h-12 rounded-full shadow-xl flex items-center justify-center transition-all duration-200 bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300 hover:scale-110 w-12 lg:w-auto lg:px-4"

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Link as LinkIcon, Menu, Send, Plus } from "lucide-react";
+import { Sparkles, Link as LinkIcon, Menu, Send, Plus, X, AlertTriangle, Shield, BookOpen, Brain } from "lucide-react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { useAuth } from "@/components/Providers";
@@ -42,6 +42,15 @@ interface Message {
   timestamp: Date;
 }
 
+const SAMPLE_QUESTIONS = [
+  "アメリカの大学に留学するにはどんな準備が必要？",
+  "留学先での住居はどうやって探す？",
+  "留学中のアルバイトは可能？",
+  "TOEFL/IELTSのスコアはどのくらい必要？",
+];
+
+const MONTHLY_LIMIT = 10;
+
 export default function AiConciergePage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -52,6 +61,7 @@ export default function AiConciergePage() {
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentChatId, setCurrentChatId] = useState<string | undefined>();
+  const [remainingCount, setRemainingCount] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -74,10 +84,50 @@ export default function AiConciergePage() {
     }
   }, [user, authLoading, router]);
 
+  // 残り回数を取得
+  const fetchRemainingCount = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const res = await fetch("/api/ai/concierge/usage", {
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`
+        }
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setRemainingCount(data.remaining);
+      }
+    } catch (e) {
+      console.error("Failed to fetch usage:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchRemainingCount();
+    }
+  }, [user, fetchRemainingCount]);
+
   // メッセージが更新されたらスクロール
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
+
+  // textareaの高さを自動調整
+  const adjustTextareaHeight = useCallback(() => {
+    const textarea = inputRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 128)}px`;
+    }
+  }, []);
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [input, adjustTextareaHeight]);
 
   // ログイン中または認証確認中の場合は何も表示しない
   if (authLoading) {
@@ -104,27 +154,32 @@ export default function AiConciergePage() {
     setCurrentChatId(undefined);
   };
 
-  async function sendMessage() {
-    if (!input.trim() || loading) return;
+  async function sendMessage(questionOverride?: string) {
+    const messageText = questionOverride || input.trim();
+    if (!messageText || loading) return;
+
+    // レート制限チェック
+    if (remainingCount !== null && remainingCount <= 0) {
+      setError("今月の利用回数の上限（10回）に達しました。来月にリセットされます。");
+      return;
+    }
 
     const userMessage: Message = {
       id: `user-${Date.now()}`,
       role: 'user',
-      content: input.trim(),
+      content: messageText,
       timestamp: new Date()
     };
 
     // ユーザーメッセージを追加
     setMessages(prev => [...prev, userMessage]);
-    const currentInput = input.trim();
     setInput("");
     setLoading(true);
     setError(null);
-    setLoadingStep("投稿を検索中...");
+    setLoadingStep("関連する投稿を検索中...");
 
     try {
       // セッションからアクセストークンを取得
-      setLoadingStep("認証を確認中...");
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         setError("ログインが必要です");
@@ -132,27 +187,29 @@ export default function AiConciergePage() {
         return;
       }
 
-      setLoadingStep("関連する投稿を検索中...");
-      await new Promise(resolve => setTimeout(resolve, 300));
-
       setLoadingStep("AIが回答を生成中...");
       const res = await fetch("/api/ai/search-enhanced", {
         method: "POST",
-        headers: { 
+        headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${session.access_token}`
         },
-        body: JSON.stringify({ question_text: currentInput }),
+        body: JSON.stringify({ question_text: messageText }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
+        if (res.status === 429 && data?.remaining !== undefined) {
+          setRemainingCount(data.remaining);
+        }
         throw new Error(data?.error ?? "AIコンシェルジュへの問い合わせに失敗しました");
       }
 
-      setLoadingStep("回答を整理中...");
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // 残り回数を更新
+      if (data.remaining !== undefined) {
+        setRemainingCount(data.remaining);
+      }
 
       const answerText = data.answer_text ?? "";
       const relatedPosts = data.related_posts || [];
@@ -172,7 +229,7 @@ export default function AiConciergePage() {
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      // チャット履歴を自動保存（会話の最後の質問と回答のみ保存）
+      // チャット履歴を自動保存
       try {
         const saveRes = await fetch("/api/ai/concierge/history", {
           method: "POST",
@@ -181,7 +238,7 @@ export default function AiConciergePage() {
             "Authorization": `Bearer ${session.access_token}`
           },
           body: JSON.stringify({
-            question_text: currentInput,
+            question_text: messageText,
             answer_text: answerText,
             mode: chatMode,
             confidence_level: chatConfidence,
@@ -189,33 +246,17 @@ export default function AiConciergePage() {
           })
         });
 
-        if (!saveRes.ok) {
-          const errorData = await saveRes.json().catch(() => ({}));
-          console.error("Failed to save chat history:", {
-            status: saveRes.status,
-            statusText: saveRes.statusText,
-            error: errorData.error || 'Unknown error'
-          });
-          // エラーは表示しない（非同期処理のため、ユーザー体験を損なわない）
-        } else {
+        if (saveRes.ok) {
           const saveData = await saveRes.json();
           if (saveData.chat?.id) {
             setCurrentChatId(saveData.chat.id);
-            console.log("Chat history saved successfully:", saveData.chat.id);
-          } else {
-            console.warn("Chat history save response missing chat ID:", saveData);
           }
         }
-      } catch (saveError: any) {
-        console.error("Failed to save chat history (exception):", {
-          message: saveError?.message,
-          stack: saveError?.stack,
-          error: saveError
-        });
+      } catch (saveError) {
+        console.error("Failed to save chat history:", saveError);
       }
     } catch (e: any) {
       setError(e?.message ?? "AIコンシェルジュへの問い合わせに失敗しました");
-      // エラー時はユーザーメッセージを残す
     } finally {
       setLoading(false);
       setLoadingStep("");
@@ -263,6 +304,30 @@ export default function AiConciergePage() {
     return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
   };
 
+  const getConfidenceBadge = (level?: string) => {
+    switch (level) {
+      case 'high':
+        return { label: '信頼度: 高', color: 'bg-green-100 text-green-700', icon: Shield };
+      case 'medium':
+        return { label: '信頼度: 中', color: 'bg-yellow-100 text-yellow-700', icon: AlertTriangle };
+      case 'low':
+        return { label: '信頼度: 低', color: 'bg-red-100 text-red-700', icon: AlertTriangle };
+      default:
+        return null;
+    }
+  };
+
+  const getModeBadge = (mode?: string) => {
+    switch (mode) {
+      case 'grounded':
+        return { label: '投稿参照', color: 'bg-blue-100 text-blue-700', icon: BookOpen };
+      case 'reasoning':
+        return { label: '一般知識', color: 'bg-purple-100 text-purple-700', icon: Brain };
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       <div className="flex flex-1 overflow-hidden">
@@ -296,28 +361,53 @@ export default function AiConciergePage() {
                 </div>
               </div>
             </div>
-            <button
-              onClick={handleNewChat}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
-            >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">新しい会話</span>
-            </button>
+            <div className="flex items-center gap-3">
+              {/* 残り回数表示 */}
+              {remainingCount !== null && (
+                <div className={`text-xs px-3 py-1.5 rounded-full font-medium ${
+                  remainingCount <= 0
+                    ? 'bg-red-100 text-red-700'
+                    : remainingCount <= 3
+                      ? 'bg-yellow-100 text-yellow-700'
+                      : 'bg-gray-100 text-gray-600'
+                }`}>
+                  残り {remainingCount}/{MONTHLY_LIMIT} 回
+                </div>
+              )}
+              <button
+                onClick={handleNewChat}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">新しい会話</span>
+              </button>
+            </div>
           </div>
 
           {/* メッセージエリア */}
-          <div className="flex-1 overflow-y-auto bg-gray-50">
+          <div className="flex-1 overflow-y-auto bg-gray-50" role="log" aria-live="polite">
             <div className="max-w-4xl mx-auto px-4 py-6">
               {messages.length === 0 ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center max-w-md">
+                <div className="flex items-center justify-center min-h-[60vh]">
+                  <div className="text-center max-w-lg">
                     <div className="w-20 h-20 bg-gradient-to-br from-primary-100 to-primary-200 rounded-full flex items-center justify-center mx-auto mb-6">
                       <Sparkles className="h-10 w-10 text-primary-600" />
                     </div>
                     <h2 className="text-2xl font-bold text-gray-900 mb-2">AIコンシェルジュへようこそ</h2>
-                    <p className="text-gray-600 mb-6">
+                    <p className="text-gray-600 mb-8">
                       留学に関する質問を入力してください。投稿データベースから関連情報を検索し、要約・引用しながら回答します。
                     </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {SAMPLE_QUESTIONS.map((question, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => sendMessage(question)}
+                          className="text-left px-4 py-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-primary-300 transition-colors text-sm text-gray-700"
+                        >
+                          {question}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -380,7 +470,7 @@ export default function AiConciergePage() {
                                       const href = props.href || '';
                                       const linkText = props.children?.toString() || '';
                                       const isCitation = /^\/posts\/.+$/.test(href) && /^\d+$/.test(linkText);
-                                      
+
                                       if (isCitation) {
                                         const post = message.relatedPosts?.find(p => href.includes(p.post_id));
                                         return (
@@ -407,27 +497,38 @@ export default function AiConciergePage() {
                               </div>
                             )}
                           </div>
-                          
+
+                          {/* モード・信頼度バッジ */}
+                          {!isUser && (message.mode || message.confidenceLevel) && (
+                            <div className="flex items-center gap-2 mt-2 max-w-[85%]">
+                              {(() => {
+                                const modeBadge = getModeBadge(message.mode);
+                                if (!modeBadge) return null;
+                                const ModeIcon = modeBadge.icon;
+                                return (
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${modeBadge.color}`}>
+                                    <ModeIcon className="h-3 w-3" />
+                                    {modeBadge.label}
+                                  </span>
+                                );
+                              })()}
+                              {(() => {
+                                const confBadge = getConfidenceBadge(message.confidenceLevel);
+                                if (!confBadge) return null;
+                                const ConfIcon = confBadge.icon;
+                                return (
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${confBadge.color}`}>
+                                    <ConfIcon className="h-3 w-3" />
+                                    {confBadge.label}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                          )}
+
                           {/* 引用した投稿 */}
                           {!isUser && message.relatedPosts && message.relatedPosts.length > 0 && (
-                            <div className="mt-3 space-y-2 max-w-[85%]">
-                              <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                                <LinkIcon className="h-3 w-3" />
-                                <span>引用した投稿 ({message.relatedPosts.length}件)</span>
-                              </div>
-                              {message.relatedPosts.slice(0, 3).map((post, idx) => (
-                                <Link
-                                  key={post.post_id}
-                                  href={`/posts/${post.post_id}`}
-                                  className="flex items-center gap-2 p-2 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-xs"
-                                >
-                                  <div className="flex-shrink-0 w-6 h-6 bg-primary-500 text-white rounded-full flex items-center justify-center font-bold text-xs">
-                                    {idx + 1}
-                                  </div>
-                                  <span className="truncate text-gray-700">{post.title}</span>
-                                </Link>
-                              ))}
-                            </div>
+                            <RelatedPostsList posts={message.relatedPosts} />
                           )}
 
                           {/* タイムスタンプ */}
@@ -441,7 +542,7 @@ export default function AiConciergePage() {
 
                   {/* ローディング表示 */}
                   {loading && (
-                    <div className="flex items-start gap-4">
+                    <div className="flex items-start gap-4" role="status" aria-label="回答を生成中">
                       <div className="flex-shrink-0">
                         <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center">
                           <Sparkles className="h-5 w-5 text-white" />
@@ -470,8 +571,15 @@ export default function AiConciergePage() {
           <div className="bg-white border-t border-gray-200 px-4 py-4">
             <div className="max-w-4xl mx-auto">
               {error && (
-                <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm">
-                  {error}
+                <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm flex items-center justify-between">
+                  <span>{error}</span>
+                  <button
+                    onClick={() => setError(null)}
+                    className="ml-3 p-1 hover:bg-red-100 rounded transition-colors flex-shrink-0"
+                    aria-label="エラーを閉じる"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
                 </div>
               )}
               <div className="flex items-end gap-3">
@@ -481,7 +589,7 @@ export default function AiConciergePage() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey && !loading) {
+                      if (e.key === 'Enter' && !e.shiftKey && !loading && !e.nativeEvent.isComposing) {
                         e.preventDefault();
                         sendMessage();
                       }
@@ -490,12 +598,14 @@ export default function AiConciergePage() {
                     rows={1}
                     className="w-full px-4 py-3 pr-12 text-sm border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none max-h-32 overflow-y-auto"
                     style={{ minHeight: '48px' }}
+                    aria-label="質問を入力"
                   />
                 </div>
                 <button
-                  onClick={sendMessage}
+                  onClick={() => sendMessage()}
                   disabled={loading || !input.trim()}
                   className="flex-shrink-0 w-12 h-12 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center"
+                  aria-label="送信"
                 >
                   {loading ? (
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
@@ -511,6 +621,42 @@ export default function AiConciergePage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// 引用投稿リスト（展開/折りたたみ対応）
+function RelatedPostsList({ posts }: { posts: RelevantPost[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const displayPosts = expanded ? posts : posts.slice(0, 3);
+  const hasMore = posts.length > 3;
+
+  return (
+    <div className="mt-3 space-y-2 max-w-[85%]">
+      <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+        <LinkIcon className="h-3 w-3" />
+        <span>引用した投稿 ({posts.length}件)</span>
+      </div>
+      {displayPosts.map((post, idx) => (
+        <Link
+          key={post.post_id}
+          href={`/posts/${post.post_id}`}
+          className="flex items-center gap-2 p-2 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-xs"
+        >
+          <div className="flex-shrink-0 w-6 h-6 bg-primary-500 text-white rounded-full flex items-center justify-center font-bold text-xs">
+            {idx + 1}
+          </div>
+          <span className="truncate text-gray-700">{post.title}</span>
+        </Link>
+      ))}
+      {hasMore && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full text-center py-1.5 text-xs text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-lg transition-colors"
+        >
+          {expanded ? '折りたたむ' : `他 ${posts.length - 3} 件を表示`}
+        </button>
+      )}
     </div>
   );
 }
