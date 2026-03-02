@@ -579,17 +579,8 @@ export async function getUserCommunities(userId: string) {
  * コミュニティの統計情報を取得
  */
 export async function getCommunityStats(communityId: string) {
-  const [communityResult, membersResult, announcementsResult, eventsResult] = await Promise.all([
-    supabase
-      .from('communities')
-      .select('owner_id')
-      .eq('id', communityId)
-      .single(),
-    supabase
-      .from('community_members')
-      .select('user_id', { count: 'exact' })
-      .eq('community_id', communityId)
-      .eq('status', 'approved'),
+  const [memberCountResult, announcementsResult, eventsResult] = await Promise.all([
+    supabase.rpc('get_community_member_count', { p_community_id: communityId }),
     supabase
       .from('announcements')
       .select('*', { count: 'exact', head: true })
@@ -600,17 +591,8 @@ export async function getCommunityStats(communityId: string) {
       .eq('community_id', communityId)
   ])
 
-  let memberCount = membersResult.count || 0
-  // オーナーがメンバーテーブルに含まれていない場合は+1
-  if (communityResult.data) {
-    const ownerInMembers = membersResult.data?.some(m => m.user_id === communityResult.data.owner_id)
-    if (!ownerInMembers) {
-      memberCount = Math.max(memberCount + 1, 1)
-    }
-  }
-
   return {
-    member_count: memberCount,
+    member_count: memberCountResult.data ?? 1,
     announcement_count: announcementsResult.count || 0,
     event_count: eventsResult.count || 0
   }
