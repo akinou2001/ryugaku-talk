@@ -430,7 +430,7 @@ export default function MapPage() {
                 selectedPostId={selectedUser?.displayPost.id}
               />
             )}
-            {!loading && displayPosts.length === 0 && (
+            {!loading && displayPosts.length === 0 && viewMode !== 'list' && (
               <div className="absolute inset-0 bg-white bg-opacity-90 z-10 flex items-center justify-center rounded-xl">
                 <div className="text-center">
                   <MapPin className="h-16 w-16 text-gray-300 mx-auto mb-4" />

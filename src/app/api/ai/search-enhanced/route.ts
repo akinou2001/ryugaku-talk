@@ -2,15 +2,18 @@ import { NextResponse } from "next/server";
 import { searchWithGemini } from "@/lib/searchWithGemini";
 import { createClient } from '@supabase/supabase-js';
 
-// サーバーサイド用のSupabaseクライアントを作成
-function getSupabaseServerClient() {
+// サーバーサイド用のSupabaseクライアントを作成（トークン付きでRLS認証コンテキストを設定）
+function getSupabaseServerClient(token?: string) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-  
+
   return createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false
+    },
+    global: {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
     }
   });
 }
@@ -32,7 +35,7 @@ export async function POST(req: Request) {
     }
 
     const token = authHeader.substring(7);
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseServerClient(token);
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
     if (authError || !user) {
@@ -40,6 +43,33 @@ export async function POST(req: Request) {
         { error: "認証が必要です。ログインしてください。" },
         { status: 401 }
       );
+    }
+
+    // 月間利用回数チェック
+    const MONTHLY_LIMIT = 10;
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
+
+    const { count: usageCount, error: usageError } = await supabase
+      .from('ai_concierge_chats')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('created_at', monthStart)
+      .lt('created_at', monthEnd);
+
+    if (!usageError) {
+      const currentUsage = usageCount || 0;
+      if (currentUsage >= MONTHLY_LIMIT) {
+        return NextResponse.json(
+          {
+            error: "今月の利用回数の上限（10回）に達しました。来月にリセットされます。",
+            remaining: 0,
+            limit: MONTHLY_LIMIT
+          },
+          { status: 429 }
+        );
+      }
     }
 
     const { question_text, limit, topK } = await req.json();
@@ -64,12 +94,17 @@ export async function POST(req: Request) {
     // topK: 使用する関連投稿の最大数（デフォルト: 5）
     const result = await searchWithGemini(question_text, topK || 5);
 
+    // 利用後の残り回数を計算
+    const newUsage = (usageCount || 0) + 1; // 履歴保存後に+1される想定
+    const remaining = Math.max(MONTHLY_LIMIT - newUsage, 0);
+
     // 最終回答を返す
     return NextResponse.json({
       answer_text: result.answer,
       related_posts: result.citedPosts,
       mode: result.citedPosts.length > 0 ? "grounded" : "reasoning",
       confidence_level: result.citedPosts.length > 0 ? "high" : "low",
+      remaining,
     });
   } catch (error: any) {
     console.error("Error in AI search-enhanced API:", error);
