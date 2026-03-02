@@ -441,8 +441,25 @@ export async function updateMembershipStatus(
     .eq('id', membershipId)
     .single()
 
-  if (!membership || (membership.community as any).owner_id !== user.id) {
-    throw new Error('コミュニティの所有者のみ承認/拒否できます')
+  const communityId = (membership.community as any).id || membership.community_id
+  const communityOwnerId = (membership.community as any).owner_id
+
+  // owner/admin/moderatorチェック
+  const isOwner = communityOwnerId === user.id
+  let canManage = isOwner
+  if (!canManage) {
+    const { data: currentMember } = await supabase
+      .from('community_members')
+      .select('role')
+      .eq('community_id', communityId)
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .single()
+    canManage = currentMember?.role === 'admin' || currentMember?.role === 'moderator'
+  }
+
+  if (!canManage) {
+    throw new Error('コミュニティの管理者のみ承認/拒否できます')
   }
 
   const updateData: any = { status }
@@ -697,7 +714,7 @@ export async function createEvent(
     throw new Error('ログインが必要です')
   }
 
-  // コミュニティの所有者か確認
+  // コミュニティ情報を取得
   const { data: community } = await supabase
     .from('communities')
     .select('owner_id, community_type')
@@ -708,12 +725,26 @@ export async function createEvent(
     throw new Error('コミュニティが見つかりません')
   }
 
-  if (community.owner_id !== user.id) {
-    throw new Error('コミュニティの所有者のみイベントを作成できます')
-  }
-
   if (community.community_type !== 'official') {
     throw new Error('イベントは公式コミュニティのみ作成できます')
+  }
+
+  // owner/admin/moderatorチェック
+  const isOwner = community.owner_id === user.id
+  let canManage = isOwner
+  if (!canManage) {
+    const { data: member } = await supabase
+      .from('community_members')
+      .select('role')
+      .eq('community_id', communityId)
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .single()
+    canManage = member?.role === 'admin' || member?.role === 'moderator'
+  }
+
+  if (!canManage) {
+    throw new Error('コミュニティの管理者のみイベントを作成できます')
   }
 
   const { data, error } = await supabase
@@ -769,19 +800,6 @@ export async function registerEvent(eventId: string) {
   const deadline = event.deadline || event.registration_deadline
   if (deadline && new Date(deadline) < new Date()) {
     throw new Error('参加登録の締切を過ぎています')
-  }
-
-  // メンバーシップを確認
-  const { data: membership } = await supabase
-    .from('community_members')
-    .select('*')
-    .eq('community_id', event.community_id)
-    .eq('user_id', user.id)
-    .eq('status', 'approved')
-    .single()
-
-  if (!membership) {
-    throw new Error('コミュニティメンバーのみ参加登録できます')
   }
 
   // 定員チェック
@@ -898,11 +916,12 @@ export async function updateEvent(
     throw new Error('ログインが必要です')
   }
 
-  // イベントの作成者またはコミュニティの所有者か確認
+  // イベント情報を取得
   const { data: event } = await supabase
     .from('events')
     .select(`
       created_by,
+      community_id,
       community:communities(owner_id)
     `)
     .eq('id', eventId)
@@ -912,9 +931,23 @@ export async function updateEvent(
     throw new Error('イベントが見つかりません')
   }
 
+  // owner/admin/moderatorチェック
   const community = event.community as any
-  if (event.created_by !== user.id && community.owner_id !== user.id) {
-    throw new Error('イベントの作成者またはコミュニティの所有者のみ更新できます')
+  const isOwner = community.owner_id === user.id
+  let canManage = isOwner || event.created_by === user.id
+  if (!canManage) {
+    const { data: member } = await supabase
+      .from('community_members')
+      .select('role')
+      .eq('community_id', event.community_id)
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .single()
+    canManage = member?.role === 'admin' || member?.role === 'moderator'
+  }
+
+  if (!canManage) {
+    throw new Error('コミュニティの管理者のみイベントを更新できます')
   }
 
   const { data, error } = await supabase
@@ -948,11 +981,12 @@ export async function deleteEvent(eventId: string) {
     throw new Error('ログインが必要です')
   }
 
-  // イベントの作成者またはコミュニティの所有者か確認
+  // イベント情報を取得
   const { data: event } = await supabase
     .from('events')
     .select(`
       created_by,
+      community_id,
       community:communities(owner_id)
     `)
     .eq('id', eventId)
@@ -962,9 +996,23 @@ export async function deleteEvent(eventId: string) {
     throw new Error('イベントが見つかりません')
   }
 
+  // owner/admin/moderatorチェック
   const community = event.community as any
-  if (event.created_by !== user.id && community.owner_id !== user.id) {
-    throw new Error('イベントの作成者またはコミュニティの所有者のみ削除できます')
+  const isOwner = community.owner_id === user.id
+  let canManage = isOwner || event.created_by === user.id
+  if (!canManage) {
+    const { data: member } = await supabase
+      .from('community_members')
+      .select('role')
+      .eq('community_id', event.community_id)
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .single()
+    canManage = member?.role === 'admin' || member?.role === 'moderator'
+  }
+
+  if (!canManage) {
+    throw new Error('コミュニティの管理者のみイベントを削除できます')
   }
 
   const { error } = await supabase
@@ -1033,7 +1081,7 @@ export async function createChannel(
     throw new Error('ログインが必要です')
   }
 
-  // コミュニティのメンバーか確認
+  // コミュニティ情報を取得
   const { data: community } = await supabase
     .from('communities')
     .select('owner_id')
@@ -1044,19 +1092,22 @@ export async function createChannel(
     throw new Error('コミュニティが見つかりません')
   }
 
-  // 所有者でない場合、メンバーシップを確認
-  if (community.owner_id !== user.id) {
+  // owner/admin/moderatorチェック
+  const isOwner = community.owner_id === user.id
+  let canManage = isOwner
+  if (!canManage) {
     const { data: member } = await supabase
       .from('community_members')
-      .select('status')
+      .select('role')
       .eq('community_id', communityId)
       .eq('user_id', user.id)
       .eq('status', 'approved')
       .single()
+    canManage = member?.role === 'admin' || member?.role === 'moderator'
+  }
 
-    if (!member) {
-      throw new Error('コミュニティのメンバーのみチャンネルを作成できます')
-    }
+  if (!canManage) {
+    throw new Error('コミュニティの管理者のみチャンネルを作成できます')
   }
 
   const { data, error } = await supabase
@@ -1105,8 +1156,23 @@ export async function deleteChannel(channelId: string) {
     throw new Error('チャンネルが見つかりません')
   }
 
-  if (channel.community?.owner_id !== user.id) {
-    throw new Error('コミュニティの運営者のみチャンネルを削除できます')
+  // owner/admin/moderatorチェック
+  const isOwner = channel.community?.owner_id === user.id
+  let canManage = isOwner
+  if (!canManage) {
+    const communityId = channel.community_id
+    const { data: member } = await supabase
+      .from('community_members')
+      .select('role')
+      .eq('community_id', communityId)
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .single()
+    canManage = member?.role === 'admin' || member?.role === 'moderator'
+  }
+
+  if (!canManage) {
+    throw new Error('コミュニティの管理者のみチャンネルを削除できます')
   }
 
   const { error } = await supabase

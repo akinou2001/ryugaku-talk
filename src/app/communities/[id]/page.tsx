@@ -238,13 +238,13 @@ export default function CommunityDetail() {
   }, [showKebabMenu])
 
   useEffect(() => {
-    if (community && isMember) {
+    if (community) {
       switch (activeTab) {
         case 'timeline':
           fetchPosts()
           break
         case 'members':
-          fetchMembers()
+          if (isMember || isOwner) fetchMembers()
           break
         case 'events':
           fetchEvents()
@@ -253,12 +253,9 @@ export default function CommunityDetail() {
           fetchQuests()
           break
         case 'channels':
-          fetchChannels()
+          if (isMember || isOwner) fetchChannels()
           break
       }
-    } else if (community && activeTab === 'channels') {
-      // メンバーでなくてもチャンネル一覧は表示可能（閲覧のみ）
-      fetchChannels()
     }
   }, [activeTab, community, isMember])
 
@@ -316,13 +313,10 @@ export default function CommunityDetail() {
         setUserRole(null)
       }
       
-      // コミュニティ情報取得後、統計情報を取得
+      // コミュニティ情報取得後、統計情報とタイムラインを取得
       if (data) {
         await fetchCommunityStats()
-        // メンバーの場合、タイムラインを自動的に読み込む
-        if (owner || data.is_member) {
-          await fetchPosts()
-        }
+        await fetchPosts()
       }
     } catch (error: any) {
       setError(error.message || 'コミュニティの取得に失敗しました')
@@ -341,8 +335,6 @@ export default function CommunityDetail() {
   }
 
   const fetchPosts = async () => {
-    if (!isMember && !isOwner) return
-    
     try {
       setPostsLoading(true)
       
@@ -376,11 +368,12 @@ export default function CommunityDetail() {
   }
 
   const fetchMembers = async () => {
+    const canManageMembers = isOwner || userRole === 'admin' || userRole === 'moderator'
     try {
       setMembersLoading(true)
       const [approvedData, pendingData] = await Promise.all([
         getCommunityMembers(communityId, 'approved'),
-        isOwner ? getCommunityMembers(communityId, 'pending') : Promise.resolve([])
+        canManageMembers ? getCommunityMembers(communityId, 'pending') : Promise.resolve([])
       ])
       setMembers(approvedData || [])
       setPendingMembers(pendingData || [])
@@ -442,11 +435,12 @@ export default function CommunityDetail() {
         setQuestPostAuthors(authorsMap)
       }
       
-      // クエスト作成者の場合、各クエストの完了申請を取得
-      if (isOwner && user && data) {
+      // 管理者またはクエスト作成者の場合、各クエストの完了申請を取得
+      const canManageQuests = isOwner || userRole === 'admin' || userRole === 'moderator'
+      if (canManageQuests && user && data) {
         const completionsMap: Record<string, QuestCompletion[]> = {}
         for (const quest of data) {
-          if (quest.created_by === user.id) {
+          if (quest.created_by === user.id || canManageQuests) {
             try {
               const completions = await getQuestCompletions(quest.id)
               completionsMap[quest.id] = completions
@@ -531,7 +525,7 @@ export default function CommunityDetail() {
 
   const handleCreateQuest = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user || !isOwner) {
+    if (!user || !(isOwner || userRole === 'admin' || userRole === 'moderator')) {
       setError('コミュニティの管理者のみクエストを作成できます')
       return
     }
@@ -576,8 +570,8 @@ export default function CommunityDetail() {
   }
 
   const handleApproveCompletion = async (completionId: string) => {
-    if (!user || !isOwner) {
-      setError('クエスト作成者のみ承認できます')
+    if (!user || !(isOwner || userRole === 'admin' || userRole === 'moderator')) {
+      setError('コミュニティの管理者のみ承認できます')
       return
     }
 
@@ -590,8 +584,8 @@ export default function CommunityDetail() {
   }
 
   const handleRejectCompletion = async (completionId: string) => {
-    if (!user || !isOwner) {
-      setError('クエスト作成者のみ拒否できます')
+    if (!user || !(isOwner || userRole === 'admin' || userRole === 'moderator')) {
+      setError('コミュニティの管理者のみ拒否できます')
       return
     }
 
@@ -605,8 +599,8 @@ export default function CommunityDetail() {
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user || !isOwner) {
-      setError('コミュニティの所有者のみイベントを作成できます')
+    if (!user || !(isOwner || userRole === 'admin' || userRole === 'moderator')) {
+      setError('コミュニティの管理者のみイベントを作成できます')
       return
     }
 
@@ -674,8 +668,8 @@ export default function CommunityDetail() {
   }
 
   const handleRegisterEvent = async (eventId: string) => {
-    if (!user || !isMember) {
-      setError('コミュニティメンバーのみ参加登録できます')
+    if (!user) {
+      router.push('/auth/signin')
       return
     }
 
@@ -998,8 +992,8 @@ export default function CommunityDetail() {
 
   const handleCreateChannel = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user || !isMember) {
-      setError('コミュニティメンバーのみチャンネルを作成できます')
+    if (!user || !(isOwner || userRole === 'admin' || userRole === 'moderator')) {
+      setError('コミュニティの管理者のみチャンネルを作成できます')
       return
     }
 
@@ -1195,7 +1189,9 @@ export default function CommunityDetail() {
   }
 
   const isGuild = community.community_type === 'guild'
-  const canViewContent = isMember || isOwner
+  const canManage = isOwner || userRole === 'admin' || userRole === 'moderator'
+  const canViewChannels = isMember || isOwner
+  const canPost = isMember || isOwner
   const isPublicCommunity = community.is_public !== false // デフォルトはtrue
 
   return (
@@ -1573,7 +1569,7 @@ export default function CommunityDetail() {
           )}
 
           {/* 参加申請ボタン */}
-          {!canViewContent && (
+          {!isMember && !isOwner && (
             <div className="mt-4 pt-4 border-t border-gray-200">
               {membershipStatus === 'pending' ? (
                 <div className="text-center py-4">
@@ -1613,21 +1609,21 @@ export default function CommunityDetail() {
         </div>
 
         {/* タブナビゲーション */}
-        {canViewContent && (
-          <div className="card mb-6">
-            <div className="overflow-x-auto -mx-6 px-6">
-              <div className="flex space-x-1 border-b border-gray-200 min-w-max">
-                <button
-                  onClick={() => setActiveTab('timeline')}
-                  className={`px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
-                    activeTab === 'timeline'
-                      ? 'text-primary-600 border-b-2 border-primary-600'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 inline mr-1.5 sm:mr-2" />
-                  タイムライン
-                </button>
+        <div className="card mb-6">
+          <div className="overflow-x-auto -mx-6 px-6">
+            <div className="flex space-x-1 border-b border-gray-200 min-w-max">
+              <button
+                onClick={() => setActiveTab('timeline')}
+                className={`px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
+                  activeTab === 'timeline'
+                    ? 'text-primary-600 border-b-2 border-primary-600'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 inline mr-1.5 sm:mr-2" />
+                タイムライン
+              </button>
+              {canViewChannels && (
                 <button
                   onClick={() => {
                     setActiveTab('channels')
@@ -1643,6 +1639,8 @@ export default function CommunityDetail() {
                   <Hash className="h-3 w-3 sm:h-4 sm:w-4 inline mr-1.5 sm:mr-2" />
                   チャンネル
                 </button>
+              )}
+              {(isMember || isOwner) && (
                 <button
                   onClick={() => setActiveTab('members')}
                   className={`px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
@@ -1654,48 +1652,49 @@ export default function CommunityDetail() {
                   <Users className="h-3 w-3 sm:h-4 sm:w-4 inline mr-1.5 sm:mr-2" />
                   メンバー
                 </button>
-                {community.community_type === 'official' && (
-                  <button
-                    onClick={() => setActiveTab('events')}
-                    className={`px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
-                      activeTab === 'events'
-                        ? 'text-primary-600 border-b-2 border-primary-600'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    <Calendar className="h-3 w-3 sm:h-4 sm:w-4 inline mr-1.5 sm:mr-2" />
-                    イベント
-                  </button>
-                )}
+              )}
+              {community.community_type === 'official' && (
                 <button
-                  onClick={() => setActiveTab('quests')}
+                  onClick={() => setActiveTab('events')}
                   className={`px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
-                    activeTab === 'quests'
+                    activeTab === 'events'
                       ? 'text-primary-600 border-b-2 border-primary-600'
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
-                  <Award className="h-3 w-3 sm:h-4 sm:w-4 inline mr-1.5 sm:mr-2" />
-                  クエスト
+                  <Calendar className="h-3 w-3 sm:h-4 sm:w-4 inline mr-1.5 sm:mr-2" />
+                  イベント
                 </button>
-              </div>
+              )}
+              <button
+                onClick={() => setActiveTab('quests')}
+                className={`px-3 sm:px-4 py-2 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
+                  activeTab === 'quests'
+                    ? 'text-primary-600 border-b-2 border-primary-600'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <Award className="h-3 w-3 sm:h-4 sm:w-4 inline mr-1.5 sm:mr-2" />
+                クエスト
+              </button>
             </div>
           </div>
-        )}
+        </div>
 
         {/* タブコンテンツ */}
-        {canViewContent && (
-          <>
-            {/* タイムライン */}
-            {activeTab === 'timeline' && (
-              <div className="card">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-semibold text-gray-900">タイムライン</h2>
+        <>
+          {/* タイムライン */}
+          {activeTab === 'timeline' && (
+            <div className="card">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">タイムライン</h2>
+                {canPost && (
                   <Link href={`/posts/new?community_id=${communityId}`} className="btn-primary flex items-center">
                     <Plus className="h-4 w-4 mr-2" />
                     投稿する
                   </Link>
-                </div>
+                )}
+              </div>
 
                 {postsLoading ? (
                   <div className="animate-pulse space-y-4">
@@ -1869,13 +1868,13 @@ export default function CommunityDetail() {
               </div>
             )}
 
-            {/* メンバー */}
-            {activeTab === 'members' && (
-              <div className="card">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">メンバー</h2>
+          {/* メンバー */}
+          {activeTab === 'members' && (isMember || isOwner) && (
+            <div className="card">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">メンバー</h2>
 
-                {/* 承認待ちメンバー（所有者のみ） */}
-                {isOwner && pendingMembers.length > 0 && (
+              {/* 承認待ちメンバー（管理者のみ） */}
+              {canManage && pendingMembers.length > 0 && (
                   <div className="mb-6">
                     <h3 className="text-lg font-medium text-gray-900 mb-3">承認待ち</h3>
                     <div className="space-y-2">
@@ -1942,7 +1941,7 @@ export default function CommunityDetail() {
                         <div className="flex-1">
                           <p className="font-medium text-gray-900">{member.user?.name || '不明'}</p>
                           <p className="text-xs text-gray-500">
-                            {community.owner_id === member.user_id ? '所有者' : member.role === 'admin' ? '管理者' : 'メンバー'} • {formatDate(member.joined_at || member.created_at)}
+                            {community.owner_id === member.user_id ? (isOwner ? '所有者' : '管理者') : member.role === 'admin' ? '管理者' : member.role === 'moderator' ? 'モデレーター' : 'メンバー'} • {formatDate(member.joined_at || member.created_at)}
                           </p>
                         </div>
                       </div>
@@ -1952,24 +1951,24 @@ export default function CommunityDetail() {
               </div>
             )}
 
-            {/* イベント（公式コミュニティのみ） */}
-            {activeTab === 'events' && community.community_type === 'official' && (
-              <div className="card">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-semibold text-gray-900">イベント</h2>
-                  {isOwner && (
-                    <button
-                      onClick={() => setShowCreateEvent(!showCreateEvent)}
-                      className="btn-primary flex items-center"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      イベントを作成
-                    </button>
-                  )}
-                </div>
+          {/* イベント（公式コミュニティのみ） */}
+          {activeTab === 'events' && community.community_type === 'official' && (
+            <div className="card">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">イベント</h2>
+                {canManage && (
+                  <button
+                    onClick={() => setShowCreateEvent(!showCreateEvent)}
+                    className="btn-primary flex items-center"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    イベントを作成
+                  </button>
+                )}
+              </div>
 
-                {/* イベント作成フォーム */}
-                {showCreateEvent && isOwner && (
+              {/* イベント作成フォーム */}
+              {showCreateEvent && canManage && (
                   <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">新しいイベント</h3>
                     <form onSubmit={handleCreateEvent} className="space-y-4">
@@ -2141,7 +2140,7 @@ export default function CommunityDetail() {
                   <div className="text-center py-12">
                     <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-500">イベントがありません</p>
-                    {isOwner && (
+                    {canManage && (
                       <p className="text-sm text-gray-400 mt-2">最初のイベントを作成してみましょう</p>
                     )}
                   </div>
@@ -2264,7 +2263,7 @@ export default function CommunityDetail() {
                           <>
                             <div className="flex items-start justify-between mb-2 gap-2">
                               <h3 className="text-base sm:text-lg font-semibold text-gray-900 break-words flex-1 min-w-0">{event.title}</h3>
-                              {isOwner && (
+                              {canManage && (
                                 <div className="flex items-center space-x-2 flex-shrink-0">
                                   <button
                                     onClick={() => {
@@ -2366,7 +2365,7 @@ export default function CommunityDetail() {
                               参加する
                             </button>
                           )}
-                          {isOwner && (
+                          {canManage && (
                             <button
                               onClick={() => handleViewEventParticipants(event.id)}
                               className="btn-secondary text-sm"
@@ -2375,7 +2374,7 @@ export default function CommunityDetail() {
                             </button>
                           )}
                         </div>
-                        {isOwner && eventParticipants[event.id] && (
+                        {canManage && eventParticipants[event.id] && (
                           <div className="mt-3 pt-3 border-t border-gray-200">
                             <h4 className="text-sm font-medium text-gray-900 mb-2">
                               参加者 ({eventParticipants[event.id].length}名)
@@ -2398,29 +2397,29 @@ export default function CommunityDetail() {
               </div>
             )}
 
-            {/* クエスト */}
-            {activeTab === 'quests' && (
-              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
-                {error && (
-                  <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg">
-                    <p className="text-sm">{error}</p>
-                  </div>
-                )}
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900">クエスト</h2>
-                  {isOwner && (
-                    <button
-                      onClick={() => setShowCreateQuest(!showCreateQuest)}
-                      className="px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center"
-                    >
-                      <Plus className="h-5 w-5 mr-2" />
-                      クエストを作成
-                    </button>
-                  )}
+          {/* クエスト */}
+          {activeTab === 'quests' && (
+            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+              {error && (
+                <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg">
+                  <p className="text-sm">{error}</p>
                 </div>
+              )}
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-900">クエスト</h2>
+                {canManage && (
+                  <button
+                    onClick={() => setShowCreateQuest(!showCreateQuest)}
+                    className="px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center"
+                  >
+                    <Plus className="h-5 w-5 mr-2" />
+                    クエストを作成
+                  </button>
+                )}
+              </div>
 
-                {/* クエスト作成フォーム */}
-                {showCreateQuest && isOwner && (
+              {/* クエスト作成フォーム */}
+              {showCreateQuest && canManage && (
                   <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">新しいクエスト</h3>
                     <form onSubmit={handleCreateQuest} className="space-y-4">
@@ -2504,7 +2503,7 @@ export default function CommunityDetail() {
                   <div className="text-center py-16 bg-gray-50 rounded-xl border border-gray-200">
                     <Award className="h-16 w-16 text-gray-300 mx-auto mb-4" />
                     <p className="text-gray-500 text-lg font-medium mb-2">クエストがありません</p>
-                    {isOwner && (
+                    {canManage && (
                       <p className="text-sm text-gray-400">最初のクエストを作成してみましょう</p>
                     )}
                   </div>
@@ -2592,7 +2591,7 @@ export default function CommunityDetail() {
                                   >
                                     {quest.title}
                                   </Link>
-                                  {quest.created_by === user?.id && (
+                                  {(quest.created_by === user?.id || canManage) && (
                                     <div className="flex items-center space-x-2 flex-shrink-0">
                                       <button
                                         onClick={() => {
@@ -2686,8 +2685,8 @@ export default function CommunityDetail() {
                           </div>
                         )}
 
-                        {/* クエスト作成者向け: 完了申請の承認/拒否 */}
-                        {isOwner && quest.created_by === user?.id && questCompletions[quest.id] && questCompletions[quest.id].length > 0 && (
+                        {/* 管理者またはクエスト作成者向け: 完了申請の承認/拒否 */}
+                        {(canManage || quest.created_by === user?.id) && questCompletions[quest.id] && questCompletions[quest.id].length > 0 && (
                           <div className="mt-3 pt-3 border-t border-gray-200">
                             <h4 className="text-sm font-medium text-gray-900 mb-2">完了申請一覧</h4>
                             <div className="space-y-2">
@@ -2748,7 +2747,7 @@ export default function CommunityDetail() {
                             </div>
                           </div>
                         )}
-                        {isOwner && quest.created_by === user?.id && (
+                        {(canManage || quest.created_by === user?.id) && (
                           <div className="mt-3 pt-3 border-t border-gray-200">
                             <div className="flex items-center space-x-2 flex-wrap">
                               <span className="text-sm font-medium text-gray-900">
@@ -2788,26 +2787,26 @@ export default function CommunityDetail() {
               </div>
             )}
 
-            {/* チャンネル */}
-            {activeTab === 'channels' && (
-              <div className="card">
-                {!selectedChannelId ? (
-                  <>
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-xl font-semibold text-gray-900">チャンネル</h2>
-                      {isMember && (
-                        <button
-                          onClick={() => setShowCreateChannel(true)}
-                          className="btn-primary flex items-center"
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          チャンネルを作成
-                        </button>
-                      )}
-                    </div>
+          {/* チャンネル */}
+          {activeTab === 'channels' && canViewChannels && (
+            <div className="card">
+              {!selectedChannelId ? (
+                <>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-semibold text-gray-900">チャンネル</h2>
+                    {canManage && (
+                      <button
+                        onClick={() => setShowCreateChannel(true)}
+                        className="btn-primary flex items-center"
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        チャンネルを作成
+                      </button>
+                    )}
+                  </div>
 
-                    {/* チャンネル作成フォーム */}
-                    {showCreateChannel && isMember && (
+                  {/* チャンネル作成フォーム */}
+                  {showCreateChannel && canManage && (
                       <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
                         <h3 className="text-lg font-semibold text-gray-900 mb-4">新しいチャンネル</h3>
                         <form onSubmit={handleCreateChannel} className="space-y-4">
@@ -2866,7 +2865,7 @@ export default function CommunityDetail() {
                       <div className="text-center py-12">
                         <Hash className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                         <p className="text-gray-500">チャンネルがありません</p>
-                        {isMember ? (
+                        {canManage ? (
                           <button
                             onClick={() => setShowCreateChannel(true)}
                             className="mt-4 btn-primary inline-flex items-center"
@@ -2875,7 +2874,7 @@ export default function CommunityDetail() {
                             チャンネルを作成
                           </button>
                         ) : (
-                          <p className="text-sm text-gray-400 mt-2">コミュニティに参加してチャンネルを作成しましょう</p>
+                          <p className="text-sm text-gray-400 mt-2">チャンネルはまだありません</p>
                         )}
                       </div>
                     ) : (
@@ -2903,7 +2902,7 @@ export default function CommunityDetail() {
                                 </div>
                               </div>
                             </div>
-                            {isOwner && (
+                            {canManage && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
@@ -3095,8 +3094,7 @@ export default function CommunityDetail() {
                 )}
               </div>
             )}
-          </>
-        )}
+        </>
 
         {/* コミュニティ削除確認モーダル */}
         {showDeleteModal && (

@@ -113,7 +113,7 @@ export async function createQuest(
     throw new Error('ログインが必要です')
   }
 
-  // コミュニティの所有者か確認
+  // コミュニティ情報を取得
   const { data: community } = await supabase
     .from('communities')
     .select('owner_id')
@@ -124,7 +124,21 @@ export async function createQuest(
     throw new Error('コミュニティが見つかりません')
   }
 
-  if (community.owner_id !== user.id) {
+  // owner/admin/moderatorチェック
+  const isOwner = community.owner_id === user.id
+  let canManage = isOwner
+  if (!canManage) {
+    const { data: member } = await supabase
+      .from('community_members')
+      .select('role')
+      .eq('community_id', communityId)
+      .eq('user_id', user.id)
+      .eq('status', 'approved')
+      .single()
+    canManage = member?.role === 'admin' || member?.role === 'moderator'
+  }
+
+  if (!canManage) {
     throw new Error('コミュニティの管理者のみクエストを作成できます')
   }
 
@@ -179,10 +193,10 @@ export async function updateQuest(
     throw new Error('ログインが必要です')
   }
 
-  // クエストの作成者か確認
+  // クエスト情報を取得
   const { data: quest } = await supabase
     .from('quests')
-    .select('created_by')
+    .select('created_by, community_id')
     .eq('id', questId)
     .single()
 
@@ -190,8 +204,31 @@ export async function updateQuest(
     throw new Error('クエストが見つかりません')
   }
 
-  if (quest.created_by !== user.id) {
-    throw new Error('クエストの作成者のみ更新できます')
+  // 作成者 OR owner/admin/moderatorチェック
+  let canEdit = quest.created_by === user.id
+  if (!canEdit && quest.community_id) {
+    const { data: community } = await supabase
+      .from('communities')
+      .select('owner_id')
+      .eq('id', quest.community_id)
+      .single()
+    const isOwner = community?.owner_id === user.id
+    if (isOwner) {
+      canEdit = true
+    } else {
+      const { data: member } = await supabase
+        .from('community_members')
+        .select('role')
+        .eq('community_id', quest.community_id)
+        .eq('user_id', user.id)
+        .eq('status', 'approved')
+        .single()
+      canEdit = member?.role === 'admin' || member?.role === 'moderator'
+    }
+  }
+
+  if (!canEdit) {
+    throw new Error('クエストの作成者またはコミュニティの管理者のみ更新できます')
   }
 
   const { data, error } = await supabase
@@ -272,8 +309,31 @@ export async function deleteQuest(questId: string) {
     throw new Error('クエストが見つかりません')
   }
 
-  if (quest.created_by !== user.id) {
-    throw new Error('クエストの作成者のみ削除できます')
+  // 作成者 OR owner/admin/moderatorチェック
+  let canDelete = quest.created_by === user.id
+  if (!canDelete && quest.community_id) {
+    const { data: community } = await supabase
+      .from('communities')
+      .select('owner_id')
+      .eq('id', quest.community_id)
+      .single()
+    const isOwner = community?.owner_id === user.id
+    if (isOwner) {
+      canDelete = true
+    } else {
+      const { data: member } = await supabase
+        .from('community_members')
+        .select('role')
+        .eq('community_id', quest.community_id)
+        .eq('user_id', user.id)
+        .eq('status', 'approved')
+        .single()
+      canDelete = member?.role === 'admin' || member?.role === 'moderator'
+    }
+  }
+
+  if (!canDelete) {
+    throw new Error('クエストの作成者またはコミュニティの管理者のみ削除できます')
   }
 
   // クエストに関連するquest_completionsを先に削除（CASCADEが設定されていない場合）
