@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-function getSupabaseServerClient() {
+// サーバーサイド用のSupabaseクライアントを作成（トークン付きでRLS認証コンテキストを設定）
+function getSupabaseServerClient(token?: string) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-  
+
   return createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false
+    },
+    global: {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
     }
   });
 }
@@ -20,7 +24,7 @@ function getSupabaseServerClient() {
 export async function GET(req: Request) {
   try {
     const authHeader = req.headers.get('authorization');
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json(
         { error: "認証が必要です。ログインしてください。" },
@@ -29,9 +33,9 @@ export async function GET(req: Request) {
     }
 
     const token = authHeader.substring(7);
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseServerClient(token);
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
+
     if (authError || !user) {
       return NextResponse.json(
         { error: "認証が必要です。ログインしてください。" },
@@ -82,7 +86,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const authHeader = req.headers.get('authorization');
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json(
         { error: "認証が必要です。ログインしてください。" },
@@ -91,9 +95,9 @@ export async function POST(req: Request) {
     }
 
     const token = authHeader.substring(7);
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseServerClient(token);
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
+
     if (authError || !user) {
       return NextResponse.json(
         { error: "認証が必要です。ログインしてください。" },
@@ -111,20 +115,9 @@ export async function POST(req: Request) {
     }
 
     // related_postsをJSONB形式に変換
-    const relatedPostsJson = Array.isArray(related_posts) 
-      ? related_posts 
+    const relatedPostsJson = Array.isArray(related_posts)
+      ? related_posts
       : (related_posts ? [related_posts] : []);
-
-    console.log('Attempting to save chat history:', {
-      user_id: user.id,
-      question_length: question_text?.length || 0,
-      answer_length: answer_text?.length || 0,
-      mode: mode || 'grounded',
-      confidence_level: confidence_level || 'medium',
-      related_posts_count: relatedPostsJson.length,
-      related_posts_type: typeof related_posts,
-      related_posts_is_array: Array.isArray(related_posts)
-    });
 
     const { data, error } = await supabase
       .from('ai_concierge_chats')
@@ -149,7 +142,7 @@ export async function POST(req: Request) {
         user_id: user.id
       });
       return NextResponse.json(
-        { 
+        {
           error: "チャット履歴の保存に失敗しました",
           details: error.message,
           code: error.code
@@ -157,12 +150,6 @@ export async function POST(req: Request) {
         { status: 500 }
       );
     }
-
-    console.log('Chat history saved successfully:', {
-      chat_id: data?.id,
-      user_id: user.id,
-      created_at: data?.created_at
-    });
 
     return NextResponse.json({ chat: data });
   } catch (error: any) {
@@ -181,7 +168,7 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const authHeader = req.headers.get('authorization');
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json(
         { error: "認証が必要です。ログインしてください。" },
@@ -190,9 +177,9 @@ export async function DELETE(req: Request) {
     }
 
     const token = authHeader.substring(7);
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseServerClient(token);
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
+
     if (authError || !user) {
       return NextResponse.json(
         { error: "認証が必要です。ログインしてください。" },
@@ -214,7 +201,7 @@ export async function DELETE(req: Request) {
       .from('ai_concierge_chats')
       .delete()
       .eq('id', id)
-      .eq('user_id', user.id); // 自分のチャットのみ削除可能
+      .eq('user_id', user.id);
 
     if (error) {
       console.error('Error deleting chat history:', error);

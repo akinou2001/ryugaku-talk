@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, Link as LinkIcon, Menu, Send, Plus, X, AlertTriangle, Shield, BookOpen, Brain } from "lucide-react";
-import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { useAuth } from "@/components/Providers";
 import { supabase } from "@/lib/supabase";
@@ -342,45 +341,45 @@ export default function AiConciergePage() {
         {/* メインコンテンツ */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* ヘッダー */}
-          <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                aria-label="サイドバーを開く"
-              >
-                <Menu className="h-5 w-5 text-gray-600" />
-              </button>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center">
-                  <Sparkles className="h-5 w-5 text-white" />
+          <div className="bg-white border-b border-gray-200 px-3 py-2 sm:px-4 sm:py-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <button
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  className="lg:hidden p-1.5 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+                  aria-label="サイドバーを開く"
+                >
+                  <Menu className="h-5 w-5 text-gray-600" />
+                </button>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                 </div>
-                <div>
-                  <h1 className="text-lg font-bold text-gray-900">AIコンシェルジュ</h1>
-                  <p className="text-xs text-gray-500">留学に関する質問にAIが回答します</p>
+                <div className="min-w-0">
+                  <h1 className="text-sm sm:text-lg font-bold text-gray-900 truncate">AIコンシェルジュ</h1>
+                  <p className="text-[10px] sm:text-xs text-gray-500 hidden sm:block">留学に関する質問にAIが回答します</p>
                 </div>
               </div>
-            </div>
-            <div className="flex items-center gap-3">
-              {/* 残り回数表示 */}
-              {remainingCount !== null && (
-                <div className={`text-xs px-3 py-1.5 rounded-full font-medium ${
-                  remainingCount <= 0
-                    ? 'bg-red-100 text-red-700'
-                    : remainingCount <= 3
-                      ? 'bg-yellow-100 text-yellow-700'
-                      : 'bg-gray-100 text-gray-600'
-                }`}>
-                  残り {remainingCount}/{MONTHLY_LIMIT} 回
-                </div>
-              )}
-              <button
-                onClick={handleNewChat}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
-              >
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">新しい会話</span>
-              </button>
+              <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
+                {/* 残り回数表示 */}
+                {remainingCount !== null && (
+                  <div className={`text-[10px] sm:text-xs px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-medium whitespace-nowrap ${
+                    remainingCount <= 0
+                      ? 'bg-red-100 text-red-700'
+                      : remainingCount <= 3
+                        ? 'bg-yellow-100 text-yellow-700'
+                        : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    残り {remainingCount}/{MONTHLY_LIMIT}
+                  </div>
+                )}
+                <button
+                  onClick={handleNewChat}
+                  className="flex items-center gap-1 px-2 sm:px-4 py-1.5 sm:py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-xs sm:text-sm font-medium text-gray-700 flex-shrink-0"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">新しい会話</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -474,17 +473,19 @@ export default function AiConciergePage() {
                                       if (isCitation) {
                                         const post = message.relatedPosts?.find(p => href.includes(p.post_id));
                                         return (
-                                          <Link
+                                          <a
                                             href={href}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
                                             className="inline-flex items-center justify-center w-5 h-5 mx-0.5 text-xs font-semibold text-primary-600 bg-primary-100 rounded-full hover:bg-primary-200 hover:text-primary-700 transition-colors"
                                             title={post ? `投稿: ${post.title}` : '投稿を開く'}
                                           >
                                             {linkText}
-                                          </Link>
+                                          </a>
                                         );
                                       } else {
                                         return (
-                                          <a className="text-primary-600 hover:underline" href={href} {...props}>
+                                          <a className="text-primary-600 hover:underline" href={href} target="_blank" rel="noopener noreferrer" {...props}>
                                             {props.children}
                                           </a>
                                         );
@@ -638,16 +639,18 @@ function RelatedPostsList({ posts }: { posts: RelevantPost[] }) {
         <span>引用した投稿 ({posts.length}件)</span>
       </div>
       {displayPosts.map((post, idx) => (
-        <Link
+        <a
           key={post.post_id}
           href={`/posts/${post.post_id}`}
+          target="_blank"
+          rel="noopener noreferrer"
           className="flex items-center gap-2 p-2 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-xs"
         >
           <div className="flex-shrink-0 w-6 h-6 bg-primary-500 text-white rounded-full flex items-center justify-center font-bold text-xs">
             {idx + 1}
           </div>
           <span className="truncate text-gray-700">{post.title}</span>
-        </Link>
+        </a>
       ))}
       {hasMore && (
         <button

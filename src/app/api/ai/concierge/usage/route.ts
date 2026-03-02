@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-function getSupabaseServerClient() {
+// サーバーサイド用のSupabaseクライアントを作成（トークン付きでRLS認証コンテキストを設定）
+function getSupabaseServerClient(token?: string) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
@@ -9,6 +10,9 @@ function getSupabaseServerClient() {
     auth: {
       autoRefreshToken: false,
       persistSession: false
+    },
+    global: {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
     }
   });
 }
@@ -29,7 +33,7 @@ export async function GET(req: Request) {
     }
 
     const token = authHeader.substring(7);
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseServerClient(token);
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {

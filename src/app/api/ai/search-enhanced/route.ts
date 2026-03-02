@@ -2,15 +2,18 @@ import { NextResponse } from "next/server";
 import { searchWithGemini } from "@/lib/searchWithGemini";
 import { createClient } from '@supabase/supabase-js';
 
-// サーバーサイド用のSupabaseクライアントを作成
-function getSupabaseServerClient() {
+// サーバーサイド用のSupabaseクライアントを作成（トークン付きでRLS認証コンテキストを設定）
+function getSupabaseServerClient(token?: string) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-  
+
   return createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false
+    },
+    global: {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
     }
   });
 }
@@ -32,7 +35,7 @@ export async function POST(req: Request) {
     }
 
     const token = authHeader.substring(7);
-    const supabase = getSupabaseServerClient();
+    const supabase = getSupabaseServerClient(token);
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
     if (authError || !user) {
