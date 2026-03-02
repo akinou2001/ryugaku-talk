@@ -55,21 +55,15 @@ export async function searchCommunities(
     return []
   }
 
-  // 各コミュニティのメンバー数を取得
   const communityIds = data.map(c => c.id)
-  
-  // 承認済みメンバーを取得
-  const { data: approvedMembers } = await supabase
-    .from('community_members')
-    .select('community_id, user_id')
-    .in('community_id', communityIds)
-    .eq('status', 'approved')
 
-  // コミュニティIDごとのメンバー数をカウント
+  // 各コミュニティのメンバー数をRPC関数で取得（RLSバイパス）
+  const memberCountResults = await Promise.all(
+    communityIds.map(id => supabase.rpc('get_community_member_count', { p_community_id: id }))
+  )
   const memberCountMap = new Map<string, number>()
-  approvedMembers?.forEach(m => {
-    const currentCount = memberCountMap.get(m.community_id) || 0
-    memberCountMap.set(m.community_id, currentCount + 1)
+  communityIds.forEach((id, i) => {
+    memberCountMap.set(id, memberCountResults[i].data ?? 1)
   })
 
   // ユーザーがログインしている場合、メンバーシップ状態を取得
@@ -86,25 +80,15 @@ export async function searchCommunities(
     )
   }
 
-  // 各コミュニティのメンバー数を設定
-  // 所有者がメンバーテーブルに含まれていない場合でも、コミュニティには最低1人（所有者）がいる
   return data.map(community => {
-    const approvedCount = memberCountMap.get(community.id) || 0
-    // 所有者がメンバーテーブルに含まれているか確認
-    const ownerInMembers = approvedMembers?.some(m => 
-      m.community_id === community.id && m.user_id === community.owner_id
-    )
-    // メンバー数は承認済みメンバー数（所有者が含まれていない場合は+1）
-    const memberCount = ownerInMembers ? approvedCount : Math.max(approvedCount, 1)
-
     const isMember = user && (
-      community.owner_id === user.id || 
+      community.owner_id === user.id ||
       membershipMap.get(community.id) === 'approved'
     )
 
     return {
       ...community,
-      member_count: memberCount,
+      member_count: memberCountMap.get(community.id) ?? 1,
       is_member: isMember || false,
       member_status: membershipMap.get(community.id) || undefined
     }
