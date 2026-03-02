@@ -176,7 +176,7 @@ export default function PostDetail() {
         .from('posts')
         .select(`
           *,
-          author:profiles(name, university, university_id, study_abroad_destination, study_abroad_university_id, major, account_type, verification_status, organization_name, icon_url, languages, is_operator, timezone)
+          author:profiles(name, university, university_id, study_abroad_destination, study_abroad_university_id, major, account_type, verification_status, organization_name, icon_url, languages, is_operator)
         `)
         .eq('id', postId)
         .single()
@@ -1008,9 +1008,9 @@ export default function PostDetail() {
                     <Clock className="h-4 w-4 mr-1" />
                     {formatDate(post.created_at)}
                   </div>
-                  {post.author?.timezone && formatPostLocalTime(post.created_at, post.author.timezone) && (
+                  {(post.author as any)?.timezone && formatPostLocalTime(post.created_at, (post.author as any).timezone) && (
                     <div className="text-xs text-gray-400 mt-0.5">
-                      現地時間: {formatPostLocalTime(post.created_at, post.author.timezone)} {getTimezoneAbbreviation(post.author.timezone)}
+                      現地時間: {formatPostLocalTime(post.created_at, (post.author as any).timezone)} {getTimezoneAbbreviation((post.author as any).timezone)}
                     </div>
                   )}
                 </div>
